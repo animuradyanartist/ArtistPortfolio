@@ -575,9 +575,15 @@ export default function AdminPage() {
                     name="price"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Price</FormLabel>
+                        <FormLabel>Price ($)</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" />
+                          <Input 
+                            {...field} 
+                            type="number" 
+                            placeholder="2500"
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                            value={field.value || ''}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -650,6 +656,111 @@ export default function AdminPage() {
                           </SelectContent>
                         </Select>
                         <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <FormField
+                  control={artworkForm.control}
+                  name="saatchiUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Saatchi Art URL (optional)</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="https://saatchiart.com/..." />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="space-y-4">
+                  <FormLabel>Images (URLs)</FormLabel>
+                  <FormField
+                    control={artworkForm.control}
+                    name="images"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Main Image URL</FormLabel>
+                        <FormControl>
+                          <Input 
+                            value={field.value?.[0] || ''} 
+                            onChange={(e) => {
+                              const newImages = [...(field.value || [''])];
+                              newImages[0] = e.target.value;
+                              field.onChange(newImages);
+                            }}
+                            placeholder="https://example.com/image1.jpg"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={artworkForm.control}
+                    name="images"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Additional Image URL (optional)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            value={field.value?.[1] || ''} 
+                            onChange={(e) => {
+                              const newImages = [...(field.value || ['', ''])];
+                              newImages[1] = e.target.value;
+                              field.onChange(newImages.filter(img => img !== ''));
+                            }}
+                            placeholder="https://example.com/image2.jpg"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={artworkForm.control}
+                    name="images"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Third Image URL (optional)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            value={field.value?.[2] || ''} 
+                            onChange={(e) => {
+                              const newImages = [...(field.value || ['', '', ''])];
+                              newImages[2] = e.target.value;
+                              field.onChange(newImages.filter(img => img !== ''));
+                            }}
+                            placeholder="https://example.com/image3.jpg"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <FormField
+                    control={artworkForm.control}
+                    name="featured"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value || false}
+                            onChange={field.onChange}
+                            className="h-4 w-4 text-deep-blue"
+                          />
+                        </FormControl>
+                        <FormLabel className="text-sm font-normal">
+                          Featured artwork (show on homepage)
+                        </FormLabel>
                       </FormItem>
                     )}
                   />

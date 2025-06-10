@@ -22,9 +22,9 @@ export default function ArtworksPage() {
 
   const filteredArtworks = useMemo(() => {
     return artworks.filter(artwork => {
-      if (typeFilter && artwork.type !== typeFilter) return false;
-      if (sizeFilter && artwork.size !== sizeFilter) return false;
-      if (availabilityFilter && artwork.availability !== availabilityFilter) return false;
+      if (typeFilter && typeFilter !== "all" && artwork.type !== typeFilter) return false;
+      if (sizeFilter && sizeFilter !== "all" && artwork.size !== sizeFilter) return false;
+      if (availabilityFilter && availabilityFilter !== "all" && artwork.availability !== availabilityFilter) return false;
       
       if (priceFilter) {
         const price = artwork.price;
@@ -93,7 +93,7 @@ export default function ArtworksPage() {
                     <SelectValue placeholder="All Types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Types</SelectItem>
+                    <SelectItem value="all">All Types</SelectItem>
                     <SelectItem value="oil">Oil Painting</SelectItem>
                     <SelectItem value="acrylic">Acrylic</SelectItem>
                     <SelectItem value="mixed">Mixed Media</SelectItem>
@@ -108,7 +108,7 @@ export default function ArtworksPage() {
                     <SelectValue placeholder="All Sizes" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Sizes</SelectItem>
+                    <SelectItem value="all">All Sizes</SelectItem>
                     <SelectItem value="small">Small (under 24")</SelectItem>
                     <SelectItem value="medium">Medium (24"-36")</SelectItem>
                     <SelectItem value="large">Large (over 36")</SelectItem>
@@ -123,7 +123,7 @@ export default function ArtworksPage() {
                     <SelectValue placeholder="All Prices" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Prices</SelectItem>
+                    <SelectItem value="all">All Prices</SelectItem>
                     <SelectItem value="1000-2000">$1,000 - $2,000</SelectItem>
                     <SelectItem value="2000-3000">$2,000 - $3,000</SelectItem>
                     <SelectItem value="3000+">$3,000+</SelectItem>
@@ -138,7 +138,7 @@ export default function ArtworksPage() {
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     <SelectItem value="available">Available</SelectItem>
                     <SelectItem value="sold">Sold</SelectItem>
                   </SelectContent>
