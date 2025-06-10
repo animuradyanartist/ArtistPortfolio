@@ -245,10 +245,27 @@ export default function AdminPage() {
   const openArtworkDialog = (artwork?: Artwork) => {
     if (artwork) {
       setEditingArtwork(artwork);
-      artworkForm.reset(artwork);
+      artworkForm.reset({
+        ...artwork,
+        saatchiUrl: artwork.saatchiUrl || "",
+        featured: artwork.featured || false
+      });
     } else {
       setEditingArtwork(null);
-      artworkForm.reset();
+      artworkForm.reset({
+        title: "",
+        description: "",
+        medium: "",
+        dimensions: "",
+        year: new Date().getFullYear(),
+        price: 0,
+        images: [""],
+        type: "oil",
+        size: "medium",
+        availability: "available",
+        saatchiUrl: "",
+        featured: false,
+      });
     }
     setArtworkDialogOpen(true);
   };
@@ -256,10 +273,26 @@ export default function AdminPage() {
   const openExhibitionDialog = (exhibition?: Exhibition) => {
     if (exhibition) {
       setEditingExhibition(exhibition);
-      exhibitionForm.reset(exhibition);
+      exhibitionForm.reset({
+        ...exhibition,
+        description: exhibition.description || "",
+        startDate: exhibition.startDate || "",
+        endDate: exhibition.endDate || "",
+        image: exhibition.image || ""
+      });
     } else {
       setEditingExhibition(null);
-      exhibitionForm.reset();
+      exhibitionForm.reset({
+        title: "",
+        type: "solo",
+        venue: "",
+        location: "",
+        year: new Date().getFullYear(),
+        startDate: "",
+        endDate: "",
+        description: "",
+        image: "",
+      });
     }
     setExhibitionDialogOpen(true);
   };

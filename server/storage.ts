@@ -204,7 +204,12 @@ export class MemStorage implements IStorage {
 
   async createArtwork(insertArtwork: InsertArtwork): Promise<Artwork> {
     const id = this.currentArtworkId++;
-    const artwork: Artwork = { ...insertArtwork, id };
+    const artwork: Artwork = { 
+      ...insertArtwork, 
+      id,
+      saatchiUrl: insertArtwork.saatchiUrl || null,
+      featured: insertArtwork.featured || false
+    };
     this.artworks.set(id, artwork);
     return artwork;
   }
@@ -237,7 +242,18 @@ export class MemStorage implements IStorage {
 
   async createExhibition(insertExhibition: InsertExhibition): Promise<Exhibition> {
     const id = this.currentExhibitionId++;
-    const exhibition: Exhibition = { ...insertExhibition, id };
+    const exhibition: Exhibition = { 
+      id,
+      title: insertExhibition.title,
+      type: insertExhibition.type,
+      venue: insertExhibition.venue,
+      location: insertExhibition.location,
+      year: insertExhibition.year,
+      description: insertExhibition.description || null,
+      startDate: insertExhibition.startDate || null,
+      endDate: insertExhibition.endDate || null,
+      image: insertExhibition.image || null
+    };
     this.exhibitions.set(id, exhibition);
     return exhibition;
   }
