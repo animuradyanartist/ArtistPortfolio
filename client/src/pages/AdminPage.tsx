@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertArtworkSchema, insertExhibitionSchema, insertHomepageSettingsSchema } from "@shared/schema";
 import type { Artwork, Exhibition, HomepageSettings } from "@shared/schema";
-import { Plus, Edit, Trash, Eye, EyeOff } from "lucide-react";
+import { Plus, Edit, Trash, Eye, EyeOff, Upload, X } from "lucide-react";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -24,9 +24,72 @@ export default function AdminPage() {
   const [editingArtwork, setEditingArtwork] = useState<Artwork | null>(null);
   const [editingExhibition, setEditingExhibition] = useState<Exhibition | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState<boolean[]>([false, false, false]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Helper function to convert file to base64
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  // Handle image upload
+  const handleImageUpload = async (file: File, imageIndex: number) => {
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file type",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      toast({
+        title: "File too large",
+        description: "Please select an image smaller than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingImages(prev => {
+      const newState = [...prev];
+      newState[imageIndex] = true;
+      return newState;
+    });
+
+    try {
+      const base64 = await convertFileToBase64(file);
+      const currentImages = artworkForm.getValues('images') || [];
+      const newImages = [...currentImages];
+      newImages[imageIndex] = base64;
+      artworkForm.setValue('images', newImages.filter(img => img !== ''));
+      
+      toast({
+        title: "Image uploaded successfully",
+        description: "The image has been added to your artwork",
+      });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload image. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingImages(prev => {
+        const newState = [...prev];
+        newState[imageIndex] = false;
+        return newState;
+      });
+    }
+  };
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -330,9 +393,7 @@ export default function AdminPage() {
                 Login
               </Button>
             </form>
-            <p className="text-xs text-soft-gray text-center mt-4">
-              Demo password: artist123
-            </p>
+
           </CardContent>
         </Card>
       </div>
@@ -708,73 +769,263 @@ export default function AdminPage() {
                   )}
                 />
                 
-                <div className="space-y-4">
-                  <FormLabel>Images (URLs)</FormLabel>
+                <div className="space-y-6">
+                  <FormLabel className="text-lg font-semibold">Artwork Images</FormLabel>
+                  
+                  {/* Main Image */}
                   <FormField
                     control={artworkForm.control}
                     name="images"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Main Image URL</FormLabel>
-                        <FormControl>
-                          <Input 
-                            value={field.value?.[0] || ''} 
-                            onChange={(e) => {
-                              const newImages = [...(field.value || [''])];
-                              newImages[0] = e.target.value;
-                              field.onChange(newImages);
-                            }}
-                            placeholder="https://example.com/image1.jpg"
-                          />
-                        </FormControl>
+                        <FormLabel>Main Image *</FormLabel>
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <Input 
+                              value={field.value?.[0] || ''} 
+                              onChange={(e) => {
+                                const newImages = [...(field.value || [''])];
+                                newImages[0] = e.target.value;
+                                field.onChange(newImages);
+                              }}
+                              placeholder="https://example.com/image1.jpg"
+                              className="flex-1"
+                            />
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleImageUpload(file, 0);
+                                  }
+                                }}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                disabled={uploadingImages[0]}
+                              />
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                disabled={uploadingImages[0]}
+                                className="w-[120px]"
+                              >
+                                {uploadingImages[0] ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    <span>Uploading...</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <Upload className="w-4 h-4" />
+                                    <span>Upload</span>
+                                  </div>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          {field.value?.[0] && (
+                            <div className="relative">
+                              <img 
+                                src={field.value[0]} 
+                                alt="Preview" 
+                                className="w-24 h-24 object-cover rounded border"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                className="absolute -top-2 -right-2 w-6 h-6 rounded-full p-0"
+                                onClick={() => {
+                                  const newImages = [...(field.value || [])];
+                                  newImages[0] = '';
+                                  field.onChange(newImages.filter(img => img !== ''));
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   
+                  {/* Additional Image 1 */}
                   <FormField
                     control={artworkForm.control}
                     name="images"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Additional Image URL (optional)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            value={field.value?.[1] || ''} 
-                            onChange={(e) => {
-                              const newImages = [...(field.value || ['', ''])];
-                              newImages[1] = e.target.value;
-                              field.onChange(newImages.filter(img => img !== ''));
-                            }}
-                            placeholder="https://example.com/image2.jpg"
-                          />
-                        </FormControl>
+                        <FormLabel>Additional Image (optional)</FormLabel>
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <Input 
+                              value={field.value?.[1] || ''} 
+                              onChange={(e) => {
+                                const newImages = [...(field.value || ['', ''])];
+                                newImages[1] = e.target.value;
+                                field.onChange(newImages.filter(img => img !== ''));
+                              }}
+                              placeholder="https://example.com/image2.jpg"
+                              className="flex-1"
+                            />
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleImageUpload(file, 1);
+                                  }
+                                }}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                disabled={uploadingImages[1]}
+                              />
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                disabled={uploadingImages[1]}
+                                className="w-[120px]"
+                              >
+                                {uploadingImages[1] ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    <span>Uploading...</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <Upload className="w-4 h-4" />
+                                    <span>Upload</span>
+                                  </div>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          {field.value?.[1] && (
+                            <div className="relative">
+                              <img 
+                                src={field.value[1]} 
+                                alt="Preview" 
+                                className="w-24 h-24 object-cover rounded border"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                className="absolute -top-2 -right-2 w-6 h-6 rounded-full p-0"
+                                onClick={() => {
+                                  const newImages = [...(field.value || [])];
+                                  newImages[1] = '';
+                                  field.onChange(newImages.filter(img => img !== ''));
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   
+                  {/* Additional Image 2 */}
                   <FormField
                     control={artworkForm.control}
                     name="images"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Third Image URL (optional)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            value={field.value?.[2] || ''} 
-                            onChange={(e) => {
-                              const newImages = [...(field.value || ['', '', ''])];
-                              newImages[2] = e.target.value;
-                              field.onChange(newImages.filter(img => img !== ''));
-                            }}
-                            placeholder="https://example.com/image3.jpg"
-                          />
-                        </FormControl>
+                        <FormLabel>Third Image (optional)</FormLabel>
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <Input 
+                              value={field.value?.[2] || ''} 
+                              onChange={(e) => {
+                                const newImages = [...(field.value || ['', '', ''])];
+                                newImages[2] = e.target.value;
+                                field.onChange(newImages.filter(img => img !== ''));
+                              }}
+                              placeholder="https://example.com/image3.jpg"
+                              className="flex-1"
+                            />
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleImageUpload(file, 2);
+                                  }
+                                }}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                disabled={uploadingImages[2]}
+                              />
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                disabled={uploadingImages[2]}
+                                className="w-[120px]"
+                              >
+                                {uploadingImages[2] ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    <span>Uploading...</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <Upload className="w-4 h-4" />
+                                    <span>Upload</span>
+                                  </div>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          {field.value?.[2] && (
+                            <div className="relative">
+                              <img 
+                                src={field.value[2]} 
+                                alt="Preview" 
+                                className="w-24 h-24 object-cover rounded border"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                className="absolute -top-2 -right-2 w-6 h-6 rounded-full p-0"
+                                onClick={() => {
+                                  const newImages = [...(field.value || [])];
+                                  newImages[2] = '';
+                                  field.onChange(newImages.filter(img => img !== ''));
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                  
+                  <div className="text-sm text-soft-gray">
+                    <p>• You can either enter image URLs or upload files from your computer</p>
+                    <p>• Supported formats: JPG, PNG, GIF, WebP</p>
+                    <p>• Maximum file size: 5MB per image</p>
+                  </div>
                 </div>
                 
                 <div className="flex items-center space-x-2">
