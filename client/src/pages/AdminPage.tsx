@@ -204,6 +204,7 @@ export default function AdminPage() {
 
   const createArtworkMutation = useMutation({
     mutationFn: async (data: any) => {
+      console.log('Sending artwork data to API:', data);
       return apiRequest("POST", "/api/artworks", data);
     },
     onSuccess: () => {
@@ -212,6 +213,14 @@ export default function AdminPage() {
       artworkForm.reset();
       toast({
         title: "Artwork created successfully",
+      });
+    },
+    onError: (error) => {
+      console.error('Artwork creation error:', error);
+      toast({
+        title: "Failed to create artwork",
+        description: error.message || "An error occurred while creating the artwork",
+        variant: "destructive",
       });
     },
   });
@@ -290,6 +299,9 @@ export default function AdminPage() {
   };
 
   const handleArtworkSubmit = (data: any) => {
+    console.log('Form submission data:', data);
+    console.log('Form errors:', artworkForm.formState.errors);
+    
     if (editingArtwork) {
       updateArtworkMutation.mutate({ id: editingArtwork.id, data });
     } else {
