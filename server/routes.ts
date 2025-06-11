@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertArtworkSchema, insertExhibitionSchema, insertHomepageSettingsSchema } from "@shared/schema";
+import { insertArtworkSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Artworks routes
@@ -156,6 +156,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(settings);
     } catch (error) {
       res.status(400).json({ message: "Invalid homepage settings data", error });
+    }
+  });
+
+  // Artist bio routes
+  app.get("/api/artist-bio", async (req, res) => {
+    try {
+      const bio = await storage.getArtistBio();
+      res.json(bio);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch artist bio" });
+    }
+  });
+
+  app.put("/api/artist-bio", async (req, res) => {
+    try {
+      const validatedData = insertArtistBioSchema.parse(req.body);
+      const bio = await storage.updateArtistBio(validatedData);
+      res.json(bio);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid artist bio data", error });
     }
   });
 

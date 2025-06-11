@@ -2,96 +2,28 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { insertArtworkSchema, insertExhibitionSchema, insertHomepageSettingsSchema } from "@shared/schema";
-import type { Artwork, Exhibition, HomepageSettings } from "@shared/schema";
-import { Plus, Edit, Trash, Eye, EyeOff, Upload, X } from "lucide-react";
+import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema } from "@shared/schema";
+import type { Artwork, Exhibition, HomepageSettings, ArtistBio } from "@shared/schema";
+import { Plus, Edit, Trash, Eye, EyeOff } from "lucide-react";
 
 export default function AdminPage() {
+  const [, setLocation] = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<'homepage' | 'artworks' | 'exhibitions'>('homepage');
-  const [artworkDialogOpen, setArtworkDialogOpen] = useState(false);
-  const [exhibitionDialogOpen, setExhibitionDialogOpen] = useState(false);
-  const [editingArtwork, setEditingArtwork] = useState<Artwork | null>(null);
-  const [editingExhibition, setEditingExhibition] = useState<Exhibition | null>(null);
+  const [activeTab, setActiveTab] = useState<'homepage' | 'artworks' | 'exhibitions' | 'artist'>('homepage');
   const [showPassword, setShowPassword] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState<boolean[]>([false, false, false]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Helper function to convert file to base64
-  const convertFileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = error => reject(error);
-    });
-  };
-
-  // Handle image upload
-  const handleImageUpload = async (file: File, imageIndex: number) => {
-    if (!file.type.startsWith('image/')) {
-      toast({
-        title: "Invalid file type",
-        description: "Please select an image file",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      toast({
-        title: "File too large",
-        description: "Please select an image smaller than 5MB",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setUploadingImages(prev => {
-      const newState = [...prev];
-      newState[imageIndex] = true;
-      return newState;
-    });
-
-    try {
-      const base64 = await convertFileToBase64(file);
-      const currentImages = artworkForm.getValues('images') || [];
-      const newImages = [...currentImages];
-      newImages[imageIndex] = base64;
-      artworkForm.setValue('images', newImages.filter(img => img !== ''));
-      
-      toast({
-        title: "Image uploaded successfully",
-        description: "The image has been added to your artwork",
-      });
-    } catch (error) {
-      toast({
-        title: "Upload failed",
-        description: "Failed to upload image. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setUploadingImages(prev => {
-        const newState = [...prev];
-        newState[imageIndex] = false;
-        return newState;
-      });
-    }
-  };
-
-  // Check if user is already authenticated
   useEffect(() => {
     const authenticated = localStorage.getItem('admin-authenticated') === 'true';
     setIsAuthenticated(authenticated);
@@ -121,59 +53,53 @@ export default function AdminPage() {
     setPassword("");
   };
 
-  // Queries
-  const { data: artworks = [] } = useQuery<Artwork[]>({
+  // Optimized queries with better caching
+  const { data: artworks = [], isLoading: artworksLoading } = useQuery<Artwork[]>({
     queryKey: ["/api/artworks"],
     enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  const { data: exhibitions = [] } = useQuery<Exhibition[]>({
+  const { data: exhibitions = [], isLoading: exhibitionsLoading } = useQuery<Exhibition[]>({
     queryKey: ["/api/exhibitions"],
     enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
   });
 
-  const { data: homepageSettings } = useQuery<HomepageSettings>({
+  const { data: homepageSettings, isLoading: homepageLoading } = useQuery<HomepageSettings>({
     queryKey: ["/api/homepage-settings"],
     enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Homepage form
+  const { data: artistBio, isLoading: artistBioLoading } = useQuery<ArtistBio>({
+    queryKey: ["/api/artist-bio"],
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Form configurations
   const homepageForm = useForm({
     resolver: zodResolver(insertHomepageSettingsSchema),
     defaultValues: homepageSettings || {
-      heroQuote: "Art must bring hope into people's lives.",
-      heroImage: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080",
-      featuredArtworkIds: ["1", "2", "3"]
+      heroQuote: "",
+      heroImage: "",
+      featuredArtworkIds: []
     },
   });
 
-  // Update form when homepage settings load
-  useEffect(() => {
-    if (homepageSettings) {
-      homepageForm.reset(homepageSettings);
-    }
-  }, [homepageSettings, homepageForm]);
-
-  // Artwork form
-  const artworkForm = useForm({
-    resolver: zodResolver(insertArtworkSchema),
-    defaultValues: {
+  const artistForm = useForm({
+    resolver: zodResolver(insertArtistBioSchema),
+    defaultValues: artistBio || {
       title: "",
       description: "",
-      medium: "",
-      dimensions: "",
-      year: new Date().getFullYear(),
-      price: 0,
-      images: [""],
-      type: "oil",
-      size: "medium",
-      availability: "available",
-      saatchiUrl: "https://saatchiart.com",
-      featured: false,
+      image: "",
+      statement: "",
+      education: "",
+      awards: ""
     },
   });
 
-  // Exhibition form
   const exhibitionForm = useForm({
     resolver: zodResolver(insertExhibitionSchema),
     defaultValues: {
@@ -189,107 +115,73 @@ export default function AdminPage() {
     },
   });
 
-  // Mutations
+  // Update forms when data loads
+  useEffect(() => {
+    if (homepageSettings) {
+      homepageForm.reset(homepageSettings);
+    }
+  }, [homepageSettings, homepageForm]);
+
+  useEffect(() => {
+    if (artistBio) {
+      artistForm.reset(artistBio);
+    }
+  }, [artistBio, artistForm]);
+
+  // Optimized mutations
   const updateHomepageMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return apiRequest("PUT", "/api/homepage-settings", data);
-    },
+    mutationFn: async (data: any) => apiRequest("PUT", "/api/homepage-settings", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/homepage-settings"] });
-      toast({
-        title: "Homepage updated successfully",
-      });
+      toast({ title: "Homepage updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update homepage", variant: "destructive" });
     },
   });
 
-  const createArtworkMutation = useMutation({
-    mutationFn: async (data: any) => {
-      console.log('Sending artwork data to API:', data);
-      return apiRequest("POST", "/api/artworks", data);
-    },
+  const updateArtistBioMutation = useMutation({
+    mutationFn: async (data: any) => apiRequest("PUT", "/api/artist-bio", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
-      setArtworkDialogOpen(false);
-      artworkForm.reset();
-      toast({
-        title: "Artwork created successfully",
-      });
+      queryClient.invalidateQueries({ queryKey: ["/api/artist-bio"] });
+      toast({ title: "Artist bio updated successfully" });
     },
-    onError: (error) => {
-      console.error('Artwork creation error:', error);
-      toast({
-        title: "Failed to create artwork",
-        description: error.message || "An error occurred while creating the artwork",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const updateArtworkMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      return apiRequest("PUT", `/api/artworks/${id}`, data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
-      setArtworkDialogOpen(false);
-      setEditingArtwork(null);
-      artworkForm.reset();
-      toast({
-        title: "Artwork updated successfully",
-      });
+    onError: () => {
+      toast({ title: "Failed to update artist bio", variant: "destructive" });
     },
   });
 
   const deleteArtworkMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return apiRequest("DELETE", `/api/artworks/${id}`);
-    },
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/artworks/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
-      toast({
-        title: "Artwork deleted successfully",
-      });
+      toast({ title: "Artwork deleted successfully" });
     },
-  });
-
-  const createExhibitionMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return apiRequest("POST", "/api/exhibitions", data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/exhibitions"] });
-      setExhibitionDialogOpen(false);
-      exhibitionForm.reset();
-      toast({
-        title: "Exhibition created successfully",
-      });
-    },
-  });
-
-  const updateExhibitionMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      return apiRequest("PUT", `/api/exhibitions/${id}`, data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/exhibitions"] });
-      setExhibitionDialogOpen(false);
-      setEditingExhibition(null);
-      exhibitionForm.reset();
-      toast({
-        title: "Exhibition updated successfully",
-      });
+    onError: () => {
+      toast({ title: "Failed to delete artwork", variant: "destructive" });
     },
   });
 
   const deleteExhibitionMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return apiRequest("DELETE", `/api/exhibitions/${id}`);
-    },
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/exhibitions/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/exhibitions"] });
-      toast({
-        title: "Exhibition deleted successfully",
-      });
+      toast({ title: "Exhibition deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete exhibition", variant: "destructive" });
+    },
+  });
+
+  const createExhibitionMutation = useMutation({
+    mutationFn: async (data: any) => apiRequest("POST", "/api/exhibitions", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/exhibitions"] });
+      exhibitionForm.reset();
+      toast({ title: "Exhibition created successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to create exhibition", variant: "destructive" });
     },
   });
 
@@ -298,78 +190,12 @@ export default function AdminPage() {
     updateHomepageMutation.mutate(data);
   };
 
-  const handleArtworkSubmit = (data: any) => {
-    console.log('Form submission data:', data);
-    console.log('Form errors:', artworkForm.formState.errors);
-    
-    if (editingArtwork) {
-      updateArtworkMutation.mutate({ id: editingArtwork.id, data });
-    } else {
-      createArtworkMutation.mutate(data);
-    }
+  const handleArtistSubmit = (data: any) => {
+    updateArtistBioMutation.mutate(data);
   };
 
   const handleExhibitionSubmit = (data: any) => {
-    if (editingExhibition) {
-      updateExhibitionMutation.mutate({ id: editingExhibition.id, data });
-    } else {
-      createExhibitionMutation.mutate(data);
-    }
-  };
-
-  const openArtworkDialog = (artwork?: Artwork) => {
-    if (artwork) {
-      setEditingArtwork(artwork);
-      artworkForm.reset({
-        ...artwork,
-        saatchiUrl: artwork.saatchiUrl || "",
-        featured: artwork.featured || false
-      });
-    } else {
-      setEditingArtwork(null);
-      artworkForm.reset({
-        title: "",
-        description: "",
-        medium: "",
-        dimensions: "",
-        year: new Date().getFullYear(),
-        price: 0,
-        images: [""],
-        type: "oil",
-        size: "medium",
-        availability: "available",
-        saatchiUrl: "",
-        featured: false,
-      });
-    }
-    setArtworkDialogOpen(true);
-  };
-
-  const openExhibitionDialog = (exhibition?: Exhibition) => {
-    if (exhibition) {
-      setEditingExhibition(exhibition);
-      exhibitionForm.reset({
-        ...exhibition,
-        description: exhibition.description || "",
-        startDate: exhibition.startDate || "",
-        endDate: exhibition.endDate || "",
-        image: exhibition.image || ""
-      });
-    } else {
-      setEditingExhibition(null);
-      exhibitionForm.reset({
-        title: "",
-        type: "solo",
-        venue: "",
-        location: "",
-        year: new Date().getFullYear(),
-        startDate: "",
-        endDate: "",
-        description: "",
-        image: "",
-      });
-    }
-    setExhibitionDialogOpen(true);
+    createExhibitionMutation.mutate(data);
   };
 
   if (!isAuthenticated) {
@@ -405,7 +231,6 @@ export default function AdminPage() {
                 Login
               </Button>
             </form>
-
           </CardContent>
         </Card>
       </div>
@@ -424,9 +249,9 @@ export default function AdminPage() {
           </Button>
         </div>
 
-        {/* Tabs */}
+        {/* Optimized Tabs */}
         <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-sm mb-8">
-          {(['homepage', 'artworks', 'exhibitions'] as const).map((tab) => (
+          {(['homepage', 'artworks', 'exhibitions', 'artist'] as const).map((tab) => (
             <Button
               key={tab}
               variant={activeTab === tab ? 'default' : 'ghost'}
@@ -437,7 +262,7 @@ export default function AdminPage() {
                   : 'text-charcoal hover:bg-gray-100'
               }`}
             >
-              {tab}
+              {tab === 'artist' ? 'About Artist' : tab}
             </Button>
           ))}
         </div>
@@ -451,83 +276,105 @@ export default function AdminPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Form {...homepageForm}>
-                <form onSubmit={homepageForm.handleSubmit(handleHomepageSubmit)} className="space-y-6">
-                  <FormField
-                    control={homepageForm.control}
-                    name="heroQuote"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Hero Quote</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} rows={2} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={homepageForm.control}
-                    name="heroImage"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Hero Background Image URL</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="https://example.com/image.jpg" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <Button 
-                    type="submit" 
-                    disabled={updateHomepageMutation.isPending}
-                    className="bg-deep-blue hover:bg-deep-blue/90"
-                  >
-                    {updateHomepageMutation.isPending ? "Saving..." : "Save Changes"}
-                  </Button>
-                </form>
-              </Form>
+              {homepageLoading ? (
+                <div className="animate-pulse space-y-4">
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-10 bg-gray-200 rounded"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-10 bg-gray-200 rounded"></div>
+                </div>
+              ) : (
+                <Form {...homepageForm}>
+                  <form onSubmit={homepageForm.handleSubmit(handleHomepageSubmit)} className="space-y-6">
+                    <FormField
+                      control={homepageForm.control}
+                      name="heroQuote"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Hero Quote</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} rows={2} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={homepageForm.control}
+                      name="heroImage"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Hero Background Image URL</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="https://example.com/image.jpg" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <Button 
+                      type="submit" 
+                      disabled={updateHomepageMutation.isPending}
+                      className="bg-deep-blue hover:bg-deep-blue/90"
+                    >
+                      {updateHomepageMutation.isPending ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </form>
+                </Form>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {/* Artworks Tab */}
+        {/* Artworks Tab - Optimized */}
         {activeTab === 'artworks' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="font-playfair text-2xl text-deep-blue">Artworks</h2>
-              <Button onClick={() => openArtworkDialog()} className="bg-deep-blue hover:bg-deep-blue/90">
+              <Button
+                onClick={() => setLocation("/admin/create-artwork")}
+                className="bg-deep-blue hover:bg-deep-blue/90"
+              >
                 <Plus className="w-4 h-4 mr-2" />
-                Add Artwork
+                Add New Artwork
               </Button>
             </div>
             
-            <div className="grid gap-4">
-              {artworks.map((artwork) => (
-                <Card key={artwork.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
+            {artworksLoading ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse">
+                    <div className="bg-gray-200 h-48 rounded-lg"></div>
+                    <div className="mt-2 h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div className="mt-1 h-3 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {artworks.map((artwork) => (
+                  <Card key={artwork.id} className="overflow-hidden">
+                    <div className="aspect-video bg-gray-100">
+                      {artwork.images?.[0] && (
                         <img 
                           src={artwork.images[0]} 
                           alt={artwork.title}
-                          className="w-16 h-16 object-cover rounded"
+                          className="w-full h-full object-cover"
+                          loading="lazy"
                         />
-                        <div>
-                          <h3 className="font-semibold">{artwork.title}</h3>
-                          <p className="text-sm text-soft-gray">
-                            {artwork.medium} • ${artwork.price.toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
+                      )}
+                    </div>
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold text-lg mb-1">{artwork.title}</h3>
+                      <p className="text-sm text-soft-gray mb-2">{artwork.year} • ${artwork.price.toLocaleString()}</p>
+                      <p className="text-xs text-charcoal mb-3 line-clamp-2">{artwork.description}</p>
                       <div className="flex space-x-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => openArtworkDialog(artwork)}
+                          onClick={() => setLocation(`/admin/edit-artwork/${artwork.id}`)}
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -535,650 +382,272 @@ export default function AdminPage() {
                           variant="destructive"
                           size="sm"
                           onClick={() => deleteArtworkMutation.mutate(artwork.id)}
+                          disabled={deleteArtworkMutation.isPending}
                         >
                           <Trash className="w-4 h-4" />
                         </Button>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* Exhibitions Tab */}
         {activeTab === 'exhibitions' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="font-playfair text-2xl text-deep-blue">Exhibitions</h2>
-              <Button onClick={() => openExhibitionDialog()} className="bg-deep-blue hover:bg-deep-blue/90">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Exhibition
-              </Button>
-            </div>
-            
-            <div className="grid gap-4">
-              {exhibitions.map((exhibition) => (
-                <Card key={exhibition.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold">{exhibition.title}</h3>
-                        <p className="text-sm text-soft-gray">
-                          {exhibition.venue}, {exhibition.location} • {exhibition.year}
-                        </p>
-                      </div>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openExhibitionDialog(exhibition)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-playfair text-xl text-deep-blue">
+                  Add New Exhibition
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Form {...exhibitionForm}>
+                  <form onSubmit={exhibitionForm.handleSubmit(handleExhibitionSubmit)} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={exhibitionForm.control}
+                        name="title"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Title</FormLabel>
+                            <FormControl>
+                              <Input {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={exhibitionForm.control}
+                        name="year"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Year</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="number" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={exhibitionForm.control}
+                        name="venue"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Venue</FormLabel>
+                            <FormControl>
+                              <Input {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={exhibitionForm.control}
+                        name="location"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Location</FormLabel>
+                            <FormControl>
+                              <Input {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={exhibitionForm.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} rows={3} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <Button 
+                      type="submit" 
+                      disabled={createExhibitionMutation.isPending}
+                      className="bg-deep-blue hover:bg-deep-blue/90"
+                    >
+                      {createExhibitionMutation.isPending ? "Creating..." : "Create Exhibition"}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+
+            {/* Exhibitions List */}
+            {exhibitionsLoading ? (
+              <div className="space-y-4">
+                {[1, 2].map((i) => (
+                  <div key={i} className="animate-pulse bg-white p-4 rounded-lg">
+                    <div className="h-4 bg-gray-200 rounded w-1/3 mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {exhibitions.map((exhibition) => (
+                  <Card key={exhibition.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-semibold">{exhibition.title}</h3>
+                          <p className="text-sm text-soft-gray">
+                            {exhibition.venue}, {exhibition.location} • {exhibition.year}
+                          </p>
+                        </div>
                         <Button
                           variant="destructive"
                           size="sm"
                           onClick={() => deleteExhibitionMutation.mutate(exhibition.id)}
+                          disabled={deleteExhibitionMutation.isPending}
                         >
                           <Trash className="w-4 h-4" />
                         </Button>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Artwork Dialog */}
-        <Dialog open={artworkDialogOpen} onOpenChange={setArtworkDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="font-playfair text-xl text-deep-blue">
-                {editingArtwork ? 'Edit Artwork' : 'Add New Artwork'}
-              </DialogTitle>
-            </DialogHeader>
-            <Form {...artworkForm}>
-              <form onSubmit={artworkForm.handleSubmit(handleArtworkSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={artworkForm.control}
-                    name="title"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Title</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={artworkForm.control}
-                    name="year"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Year</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="number" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+        {/* Artist Bio Tab */}
+        {activeTab === 'artist' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-playfair text-xl text-deep-blue">
+                About Artist
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {artistBioLoading ? (
+                <div className="animate-pulse space-y-4">
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-10 bg-gray-200 rounded"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-20 bg-gray-200 rounded"></div>
                 </div>
-                
-                <FormField
-                  control={artworkForm.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} rows={3} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={artworkForm.control}
-                    name="medium"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Medium</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Oil on canvas" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={artworkForm.control}
-                    name="dimensions"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Dimensions</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="24&quot; × 30&quot;" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={artworkForm.control}
-                    name="price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Price ($)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            type="number" 
-                            placeholder="2500"
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                            value={field.value || ''}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={artworkForm.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+              ) : (
+                <Form {...artistForm}>
+                  <form onSubmit={artistForm.handleSubmit(handleArtistSubmit)} className="space-y-6">
+                    <FormField
+                      control={artistForm.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Title</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
+                            <Input {...field} placeholder="About Ani Muradyan" />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="oil">Oil</SelectItem>
-                            <SelectItem value="acrylic">Acrylic</SelectItem>
-                            <SelectItem value="mixed">Mixed Media</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={artworkForm.control}
-                    name="size"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Size</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={artistForm.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
+                            <Textarea {...field} rows={4} />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="small">Small</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="large">Large</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={artworkForm.control}
-                    name="availability"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Availability</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="available">Available</SelectItem>
-                            <SelectItem value="sold">Sold</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <FormField
-                  control={artworkForm.control}
-                  name="saatchiUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Saatchi Art URL (optional)</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="https://saatchiart.com/..." />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="space-y-6">
-                  <FormLabel className="text-lg font-semibold">Artwork Images</FormLabel>
-                  
-                  {/* Main Image */}
-                  <FormField
-                    control={artworkForm.control}
-                    name="images"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Main Image *</FormLabel>
-                        <div className="space-y-3">
-                          <div className="flex gap-2">
-                            <Input 
-                              value={field.value?.[0] || ''} 
-                              onChange={(e) => {
-                                const newImages = [...(field.value || [''])];
-                                newImages[0] = e.target.value;
-                                field.onChange(newImages);
-                              }}
-                              placeholder="https://example.com/image1.jpg"
-                              className="flex-1"
-                            />
-                            <div className="relative">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    handleImageUpload(file, 0);
-                                  }
-                                }}
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                disabled={uploadingImages[0]}
-                              />
-                              <Button 
-                                type="button" 
-                                variant="outline" 
-                                disabled={uploadingImages[0]}
-                                className="w-[120px]"
-                              >
-                                {uploadingImages[0] ? (
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                    <span>Uploading...</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    <Upload className="w-4 h-4" />
-                                    <span>Upload</span>
-                                  </div>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                          {field.value?.[0] && (
-                            <div className="relative">
-                              <img 
-                                src={field.value[0]} 
-                                alt="Preview" 
-                                className="w-24 h-24 object-cover rounded border"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                className="absolute -top-2 -right-2 w-6 h-6 rounded-full p-0"
-                                onClick={() => {
-                                  const newImages = [...(field.value || [])];
-                                  newImages[0] = '';
-                                  field.onChange(newImages.filter(img => img !== ''));
-                                }}
-                              >
-                                <X className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  {/* Additional Image 1 */}
-                  <FormField
-                    control={artworkForm.control}
-                    name="images"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Additional Image (optional)</FormLabel>
-                        <div className="space-y-3">
-                          <div className="flex gap-2">
-                            <Input 
-                              value={field.value?.[1] || ''} 
-                              onChange={(e) => {
-                                const newImages = [...(field.value || ['', ''])];
-                                newImages[1] = e.target.value;
-                                field.onChange(newImages.filter(img => img !== ''));
-                              }}
-                              placeholder="https://example.com/image2.jpg"
-                              className="flex-1"
-                            />
-                            <div className="relative">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    handleImageUpload(file, 1);
-                                  }
-                                }}
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                disabled={uploadingImages[1]}
-                              />
-                              <Button 
-                                type="button" 
-                                variant="outline" 
-                                disabled={uploadingImages[1]}
-                                className="w-[120px]"
-                              >
-                                {uploadingImages[1] ? (
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                    <span>Uploading...</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    <Upload className="w-4 h-4" />
-                                    <span>Upload</span>
-                                  </div>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                          {field.value?.[1] && (
-                            <div className="relative">
-                              <img 
-                                src={field.value[1]} 
-                                alt="Preview" 
-                                className="w-24 h-24 object-cover rounded border"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                className="absolute -top-2 -right-2 w-6 h-6 rounded-full p-0"
-                                onClick={() => {
-                                  const newImages = [...(field.value || [])];
-                                  newImages[1] = '';
-                                  field.onChange(newImages.filter(img => img !== ''));
-                                }}
-                              >
-                                <X className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  {/* Additional Image 2 */}
-                  <FormField
-                    control={artworkForm.control}
-                    name="images"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Third Image (optional)</FormLabel>
-                        <div className="space-y-3">
-                          <div className="flex gap-2">
-                            <Input 
-                              value={field.value?.[2] || ''} 
-                              onChange={(e) => {
-                                const newImages = [...(field.value || ['', '', ''])];
-                                newImages[2] = e.target.value;
-                                field.onChange(newImages.filter(img => img !== ''));
-                              }}
-                              placeholder="https://example.com/image3.jpg"
-                              className="flex-1"
-                            />
-                            <div className="relative">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    handleImageUpload(file, 2);
-                                  }
-                                }}
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                disabled={uploadingImages[2]}
-                              />
-                              <Button 
-                                type="button" 
-                                variant="outline" 
-                                disabled={uploadingImages[2]}
-                                className="w-[120px]"
-                              >
-                                {uploadingImages[2] ? (
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                    <span>Uploading...</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    <Upload className="w-4 h-4" />
-                                    <span>Upload</span>
-                                  </div>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                          {field.value?.[2] && (
-                            <div className="relative">
-                              <img 
-                                src={field.value[2]} 
-                                alt="Preview" 
-                                className="w-24 h-24 object-cover rounded border"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                className="absolute -top-2 -right-2 w-6 h-6 rounded-full p-0"
-                                onClick={() => {
-                                  const newImages = [...(field.value || [])];
-                                  newImages[2] = '';
-                                  field.onChange(newImages.filter(img => img !== ''));
-                                }}
-                              >
-                                <X className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <div className="text-sm text-soft-gray">
-                    <p>• You can either enter image URLs or upload files from your computer</p>
-                    <p>• Supported formats: JPG, PNG, GIF, WebP</p>
-                    <p>• Maximum file size: 5MB per image</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <FormField
-                    control={artworkForm.control}
-                    name="featured"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                        <FormControl>
-                          <input
-                            type="checkbox"
-                            checked={field.value || false}
-                            onChange={field.onChange}
-                            className="h-4 w-4 text-deep-blue"
-                          />
-                        </FormControl>
-                        <FormLabel className="text-sm font-normal">
-                          Featured artwork (show on homepage)
-                        </FormLabel>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setArtworkDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="bg-deep-blue hover:bg-deep-blue/90">
-                    {editingArtwork ? 'Update' : 'Create'}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-        {/* Exhibition Dialog */}
-        <Dialog open={exhibitionDialogOpen} onOpenChange={setExhibitionDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="font-playfair text-xl text-deep-blue">
-                {editingExhibition ? 'Edit Exhibition' : 'Add New Exhibition'}
-              </DialogTitle>
-            </DialogHeader>
-            <Form {...exhibitionForm}>
-              <form onSubmit={exhibitionForm.handleSubmit(handleExhibitionSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={exhibitionForm.control}
-                    name="title"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Title</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={exhibitionForm.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormField
+                      control={artistForm.control}
+                      name="image"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Artist Photo URL</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
+                            <Input {...field} placeholder="https://example.com/artist-photo.jpg" />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="solo">Solo</SelectItem>
-                            <SelectItem value="group">Group</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={exhibitionForm.control}
-                    name="venue"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Venue</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={exhibitionForm.control}
-                    name="location"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Location</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <FormField
-                  control={exhibitionForm.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} rows={3} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="flex justify-end space-x-2">
-                  <Button type="button" variant="outline" onClick={() => setExhibitionDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="bg-deep-blue hover:bg-deep-blue/90">
-                    {editingExhibition ? 'Update' : 'Create'}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={artistForm.control}
+                      name="statement"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Artist Statement</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} rows={3} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={artistForm.control}
+                      name="education"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Education</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} rows={2} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={artistForm.control}
+                      name="awards"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Awards & Recognition</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} rows={2} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <Button 
+                      type="submit" 
+                      disabled={updateArtistBioMutation.isPending}
+                      className="bg-deep-blue hover:bg-deep-blue/90"
+                    >
+                      {updateArtistBioMutation.isPending ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </form>
+                </Form>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

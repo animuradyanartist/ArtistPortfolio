@@ -57,8 +57,7 @@ export default function HomePage() {
               </Link>
               <Link href="/about">
                 <Button 
-                  variant="outline" 
-                  className="border-2 border-white text-white hover:bg-white hover:text-deep-blue px-8 py-3 text-lg"
+                  className="bg-white text-black hover:bg-gray-100 px-8 py-3 text-lg"
                 >
                   About the Artist
                 </Button>

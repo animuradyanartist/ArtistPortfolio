@@ -10,6 +10,7 @@ import AboutPage from "@/pages/AboutPage";
 import ExhibitionsPage from "@/pages/ExhibitionsPage";
 import ContactPage from "@/pages/ContactPage";
 import AdminPage from "@/pages/AdminPage";
+import CreateArtworkPage from "@/pages/CreateArtworkPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/exhibitions" component={ExhibitionsPage} />
       <Route path="/contact" component={ContactPage} />
       <Route path="/admin" component={AdminPage} />
+      <Route path="/admin/create-artwork" component={CreateArtworkPage} />
       <Route component={NotFound} />
     </Switch>
   );
