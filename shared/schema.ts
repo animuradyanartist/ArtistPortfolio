@@ -21,6 +21,7 @@ export const artworks = pgTable("artworks", {
   size: text("size").notNull(), // small, medium, large
   availability: text("availability").notNull(), // available, sold
   saatchiUrl: text("saatchi_url"),
+  buyLink: text("buy_link"),
   featured: boolean("featured").default(false),
 });
 
@@ -44,6 +45,16 @@ export const homepageSettings = pgTable("homepage_settings", {
   featuredArtworkIds: text("featured_artwork_ids").array().notNull(),
 });
 
+export const artistBio = pgTable("artist_bio", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  image: text("image").notNull(),
+  statement: text("statement"),
+  education: text("education"),
+  awards: text("awards"),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -61,6 +72,10 @@ export const insertHomepageSettingsSchema = createInsertSchema(homepageSettings)
   id: true,
 });
 
+export const insertArtistBioSchema = createInsertSchema(artistBio).omit({
+  id: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertArtwork = z.infer<typeof insertArtworkSchema>;
@@ -69,3 +84,5 @@ export type InsertExhibition = z.infer<typeof insertExhibitionSchema>;
 export type Exhibition = typeof exhibitions.$inferSelect;
 export type InsertHomepageSettings = z.infer<typeof insertHomepageSettingsSchema>;
 export type HomepageSettings = typeof homepageSettings.$inferSelect;
+export type InsertArtistBio = z.infer<typeof insertArtistBioSchema>;
+export type ArtistBio = typeof artistBio.$inferSelect;

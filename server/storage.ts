@@ -1,4 +1,4 @@
-import { users, artworks, exhibitions, homepageSettings, type User, type InsertUser, type Artwork, type InsertArtwork, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings } from "@shared/schema";
+import { users, artworks, exhibitions, homepageSettings, artistBio, type User, type InsertUser, type Artwork, type InsertArtwork, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio } from "@shared/schema";
 
 export interface IStorage {
   // Users
@@ -25,6 +25,10 @@ export interface IStorage {
   // Homepage Settings
   getHomepageSettings(): Promise<HomepageSettings | undefined>;
   updateHomepageSettings(settings: InsertHomepageSettings): Promise<HomepageSettings>;
+
+  // Artist Bio
+  getArtistBio(): Promise<ArtistBio | undefined>;
+  updateArtistBio(bio: InsertArtistBio): Promise<ArtistBio>;
 }
 
 export class MemStorage implements IStorage {
@@ -32,6 +36,7 @@ export class MemStorage implements IStorage {
   private artworks: Map<number, Artwork>;
   private exhibitions: Map<number, Exhibition>;
   private homepageSettings: HomepageSettings | undefined;
+  private artistBio: ArtistBio | undefined;
   private currentUserId: number;
   private currentArtworkId: number;
   private currentExhibitionId: number;
@@ -50,6 +55,17 @@ export class MemStorage implements IStorage {
       heroQuote: "Art must bring hope into people's lives.",
       heroImage: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080",
       featuredArtworkIds: ["1", "2", "3"]
+    };
+
+    // Initialize with default artist bio
+    this.artistBio = {
+      id: 1,
+      title: "About Ani Muradyan",
+      description: "Ani Muradyan is a contemporary abstract realism artist whose work explores the intersection of emotion and form through vibrant compositions and thoughtful use of color.",
+      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600",
+      statement: "My art seeks to capture the essence of human experience through abstract forms that speak to the soul.",
+      education: "MFA in Fine Arts, California College of the Arts",
+      awards: "Best Emerging Artist 2023, Contemporary Art Society"
     };
 
     // Initialize with sample data
@@ -72,6 +88,7 @@ export class MemStorage implements IStorage {
         size: "medium",
         availability: "available",
         saatchiUrl: "https://saatchiart.com",
+        buyLink: null,
         featured: true
       },
       {
@@ -79,47 +96,57 @@ export class MemStorage implements IStorage {
         title: "Geometric Harmony",
         description: "An exploration of balance and rhythm through geometric abstraction, demonstrating the mathematical beauty found in nature.",
         medium: "Acrylic on canvas",
-        dimensions: "24\" × 24\"",
+        dimensions: "36\" × 24\"",
         year: 2024,
-        price: 1800,
-        images: ["https://images.unsplash.com/photo-1549887534-1541e9326642?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"],
+        price: 2200,
+        images: ["https://images.unsplash.com/photo-1549490349-8643362247b5?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"],
         type: "acrylic",
-        size: "small",
+        size: "medium",
         availability: "available",
         saatchiUrl: "https://saatchiart.com",
+        buyLink: null,
         featured: true
       },
       {
         id: 3,
-        title: "Ocean Dreams",
-        description: "Inspired by the endless movement of ocean waves, capturing the fluid nature of water through abstract forms.",
-        medium: "Oil on canvas",
-        dimensions: "30\" × 40\"",
+        title: "Emotional Landscape",
+        description: "A journey through inner terrain, where color and texture merge to create an emotional topography of the human experience.",
+        medium: "Mixed media on canvas",
+        dimensions: "48\" × 36\"",
         year: 2023,
-        price: 2400,
+        price: 3500,
         images: ["https://images.unsplash.com/photo-1541961017774-22349e4a1262?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"],
-        type: "oil",
+        type: "mixed",
         size: "large",
-        availability: "sold",
+        availability: "available",
         saatchiUrl: "https://saatchiart.com",
+        buyLink: null,
         featured: true
       },
       {
         id: 4,
-        title: "Earth's Memory",
-        description: "A textured exploration of natural landscapes through mixed media techniques.",
-        medium: "Mixed media",
-        dimensions: "36\" × 24\"",
+        title: "Urban Reflections",
+        description: "A reflection on city life and modern existence, rendered through dynamic brushstrokes and urban color palettes.",
+        medium: "Oil on canvas",
+        dimensions: "30\" × 24\"",
         year: 2023,
-        price: 2200,
-        images: ["https://images.unsplash.com/photo-1533158326339-7f3cf2404354?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"],
-        type: "mixed",
-        size: "medium",
-        availability: "available",
+        price: 1800,
+        images: ["https://images.unsplash.com/photo-1578321272176-b7bbc0679853?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"],
+        type: "oil",
+        size: "small",
+        availability: "sold",
         saatchiUrl: "https://saatchiart.com",
+        buyLink: null,
         featured: false
       }
     ];
+
+    sampleArtworks.forEach(artwork => {
+      this.artworks.set(artwork.id, artwork);
+      if (artwork.id >= this.currentArtworkId) {
+        this.currentArtworkId = artwork.id + 1;
+      }
+    });
 
     // Sample exhibitions
     const sampleExhibitions: Exhibition[] = [
@@ -127,47 +154,15 @@ export class MemStorage implements IStorage {
         id: 1,
         title: "Whispers of the Soul",
         type: "solo",
-        venue: "Galerie Moderne",
-        location: "Paris, France",
-        year: 2023,
-        startDate: "March 15, 2023",
-        endDate: "April 30, 2023",
-        description: "A comprehensive showcase of recent works exploring themes of hope and resilience.",
-        image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=300"
-      },
-      {
-        id: 2,
-        title: "Contemporary Voices",
-        type: "group",
-        venue: "Museum of Contemporary Art",
-        location: "Yerevan, Armenia",
-        year: 2022,
-        startDate: "May 20, 2022",
-        endDate: "August 30, 2022",
-        description: "Featured alongside 15 prominent Armenian contemporary artists.",
-        image: "https://images.unsplash.com/photo-1545987796-b199d6abb1b4?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=300"
-      },
-      {
-        id: 3,
-        title: "Abstract Emotions",
-        type: "solo",
-        venue: "Chelsea Art Gallery",
-        location: "New York, USA",
-        year: 2021,
-        startDate: "September 10, 2021",
-        endDate: "October 25, 2021",
-        description: "Debut international solo exhibition featuring 25 paintings.",
-        image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=300"
+        venue: "Modern Art Gallery",
+        location: "San Francisco, CA",
+        year: 2024,
+        startDate: "2024-03-15",
+        endDate: "2024-04-30",
+        description: "A solo exhibition featuring Ani's latest abstract realism works exploring themes of inner reflection and emotional landscapes.",
+        image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600"
       }
     ];
-
-    // Add to storage
-    sampleArtworks.forEach(artwork => {
-      this.artworks.set(artwork.id, artwork);
-      if (artwork.id >= this.currentArtworkId) {
-        this.currentArtworkId = artwork.id + 1;
-      }
-    });
 
     sampleExhibitions.forEach(exhibition => {
       this.exhibitions.set(exhibition.id, exhibition);
@@ -177,7 +172,6 @@ export class MemStorage implements IStorage {
     });
   }
 
-  // User methods
   async getUser(id: number): Promise<User | undefined> {
     return this.users.get(id);
   }
@@ -193,9 +187,8 @@ export class MemStorage implements IStorage {
     return user;
   }
 
-  // Artwork methods
   async getAllArtworks(): Promise<Artwork[]> {
-    return Array.from(this.artworks.values()).sort((a, b) => b.year - a.year);
+    return Array.from(this.artworks.values());
   }
 
   async getArtwork(id: number): Promise<Artwork | undefined> {
@@ -208,6 +201,7 @@ export class MemStorage implements IStorage {
       ...insertArtwork, 
       id,
       saatchiUrl: insertArtwork.saatchiUrl || null,
+      buyLink: insertArtwork.buyLink || null,
       featured: insertArtwork.featured || false
     };
     this.artworks.set(id, artwork);
@@ -215,12 +209,19 @@ export class MemStorage implements IStorage {
   }
 
   async updateArtwork(id: number, updateData: Partial<InsertArtwork>): Promise<Artwork | undefined> {
-    const artwork = this.artworks.get(id);
-    if (!artwork) return undefined;
-    
-    const updatedArtwork = { ...artwork, ...updateData };
-    this.artworks.set(id, updatedArtwork);
-    return updatedArtwork;
+    const existing = this.artworks.get(id);
+    if (!existing) return undefined;
+
+    const updated: Artwork = { 
+      ...existing, 
+      ...updateData,
+      id,
+      saatchiUrl: updateData.saatchiUrl !== undefined ? updateData.saatchiUrl : existing.saatchiUrl,
+      buyLink: updateData.buyLink !== undefined ? updateData.buyLink : existing.buyLink,
+      featured: updateData.featured !== undefined ? updateData.featured : existing.featured
+    };
+    this.artworks.set(id, updated);
+    return updated;
   }
 
   async deleteArtwork(id: number): Promise<boolean> {
@@ -231,9 +232,8 @@ export class MemStorage implements IStorage {
     return Array.from(this.artworks.values()).filter(artwork => artwork.featured);
   }
 
-  // Exhibition methods
   async getAllExhibitions(): Promise<Exhibition[]> {
-    return Array.from(this.exhibitions.values()).sort((a, b) => b.year - a.year);
+    return Array.from(this.exhibitions.values());
   }
 
   async getExhibition(id: number): Promise<Exhibition | undefined> {
@@ -243,12 +243,8 @@ export class MemStorage implements IStorage {
   async createExhibition(insertExhibition: InsertExhibition): Promise<Exhibition> {
     const id = this.currentExhibitionId++;
     const exhibition: Exhibition = { 
+      ...insertExhibition, 
       id,
-      title: insertExhibition.title,
-      type: insertExhibition.type,
-      venue: insertExhibition.venue,
-      location: insertExhibition.location,
-      year: insertExhibition.year,
       description: insertExhibition.description || null,
       startDate: insertExhibition.startDate || null,
       endDate: insertExhibition.endDate || null,
@@ -259,12 +255,20 @@ export class MemStorage implements IStorage {
   }
 
   async updateExhibition(id: number, updateData: Partial<InsertExhibition>): Promise<Exhibition | undefined> {
-    const exhibition = this.exhibitions.get(id);
-    if (!exhibition) return undefined;
-    
-    const updatedExhibition = { ...exhibition, ...updateData };
-    this.exhibitions.set(id, updatedExhibition);
-    return updatedExhibition;
+    const existing = this.exhibitions.get(id);
+    if (!existing) return undefined;
+
+    const updated: Exhibition = { 
+      ...existing, 
+      ...updateData,
+      id,
+      description: updateData.description !== undefined ? updateData.description : existing.description,
+      startDate: updateData.startDate !== undefined ? updateData.startDate : existing.startDate,
+      endDate: updateData.endDate !== undefined ? updateData.endDate : existing.endDate,
+      image: updateData.image !== undefined ? updateData.image : existing.image
+    };
+    this.exhibitions.set(id, updated);
+    return updated;
   }
 
   async deleteExhibition(id: number): Promise<boolean> {
@@ -272,12 +276,9 @@ export class MemStorage implements IStorage {
   }
 
   async getExhibitionsByType(type: string): Promise<Exhibition[]> {
-    return Array.from(this.exhibitions.values())
-      .filter(exhibition => exhibition.type === type)
-      .sort((a, b) => b.year - a.year);
+    return Array.from(this.exhibitions.values()).filter(exhibition => exhibition.type === type);
   }
 
-  // Homepage settings methods
   async getHomepageSettings(): Promise<HomepageSettings | undefined> {
     return this.homepageSettings;
   }
@@ -285,6 +286,15 @@ export class MemStorage implements IStorage {
   async updateHomepageSettings(settings: InsertHomepageSettings): Promise<HomepageSettings> {
     this.homepageSettings = { ...settings, id: 1 };
     return this.homepageSettings;
+  }
+
+  async getArtistBio(): Promise<ArtistBio | undefined> {
+    return this.artistBio;
+  }
+
+  async updateArtistBio(bio: InsertArtistBio): Promise<ArtistBio> {
+    this.artistBio = { ...bio, id: 1 };
+    return this.artistBio;
   }
 }
 
