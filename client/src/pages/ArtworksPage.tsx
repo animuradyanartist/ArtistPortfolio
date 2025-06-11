@@ -11,9 +11,6 @@ export default function ArtworksPage() {
   const [modalOpen, setModalOpen] = useState(false);
   
   // Filters
-  const [typeFilter, setTypeFilter] = useState<string>("");
-  const [sizeFilter, setSizeFilter] = useState<string>("");
-  const [priceFilter, setPriceFilter] = useState<string>("");
   const [availabilityFilter, setAvailabilityFilter] = useState<string>("");
 
   const { data: artworks = [], isLoading } = useQuery<Artwork[]>({
@@ -22,28 +19,10 @@ export default function ArtworksPage() {
 
   const filteredArtworks = useMemo(() => {
     return artworks.filter(artwork => {
-      if (typeFilter && typeFilter !== "all" && artwork.type !== typeFilter) return false;
-      if (sizeFilter && sizeFilter !== "all" && artwork.size !== sizeFilter) return false;
       if (availabilityFilter && availabilityFilter !== "all" && artwork.availability !== availabilityFilter) return false;
-      
-      if (priceFilter) {
-        const price = artwork.price;
-        switch (priceFilter) {
-          case "1000-2000":
-            if (price < 1000 || price > 2000) return false;
-            break;
-          case "2000-3000":
-            if (price < 2000 || price > 3000) return false;
-            break;
-          case "3000+":
-            if (price < 3000) return false;
-            break;
-        }
-      }
-      
       return true;
     });
-  }, [artworks, typeFilter, sizeFilter, priceFilter, availabilityFilter]);
+  }, [artworks, availabilityFilter]);
 
   const handleViewDetails = (artwork: Artwork) => {
     setSelectedArtwork(artwork);
@@ -85,65 +64,18 @@ export default function ArtworksPage() {
         {/* Filters */}
         <Card className="mb-12">
           <CardContent className="p-6">
-            <div className="grid md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-charcoal mb-2">Type</label>
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="oil">Oil Painting</SelectItem>
-                    <SelectItem value="acrylic">Acrylic</SelectItem>
-                    <SelectItem value="mixed">Mixed Media</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-charcoal mb-2">Size</label>
-                <Select value={sizeFilter} onValueChange={setSizeFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Sizes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Sizes</SelectItem>
-                    <SelectItem value="small">Small (under 24")</SelectItem>
-                    <SelectItem value="medium">Medium (24"-36")</SelectItem>
-                    <SelectItem value="large">Large (over 36")</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-charcoal mb-2">Price Range</label>
-                <Select value={priceFilter} onValueChange={setPriceFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Prices" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Prices</SelectItem>
-                    <SelectItem value="1000-2000">$1,000 - $2,000</SelectItem>
-                    <SelectItem value="2000-3000">$2,000 - $3,000</SelectItem>
-                    <SelectItem value="3000+">$3,000+</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-charcoal mb-2">Availability</label>
-                <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="available">Available</SelectItem>
-                    <SelectItem value="sold">Sold</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="max-w-sm">
+              <label className="block text-sm font-medium text-charcoal mb-2">Availability</label>
+              <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="available">Available</SelectItem>
+                  <SelectItem value="sold">Sold</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
