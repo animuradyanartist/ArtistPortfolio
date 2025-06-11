@@ -14,7 +14,9 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
   if (!artwork) return null;
 
   const handleBuyNow = () => {
-    if (artwork.saatchiUrl) {
+    if (artwork.buyLink) {
+      window.open(artwork.buyLink, '_blank');
+    } else if (artwork.saatchiUrl) {
       window.open(artwork.saatchiUrl, '_blank');
     }
   };
