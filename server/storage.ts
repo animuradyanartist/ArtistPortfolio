@@ -1,4 +1,6 @@
 import { users, artworks, exhibitions, homepageSettings, artistBio, type User, type InsertUser, type Artwork, type InsertArtwork, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -298,4 +300,146 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async getAllArtworks(): Promise<Artwork[]> {
+    return await db.select().from(artworks);
+  }
+
+  async getArtwork(id: number): Promise<Artwork | undefined> {
+    const [artwork] = await db.select().from(artworks).where(eq(artworks.id, id));
+    return artwork || undefined;
+  }
+
+  async createArtwork(insertArtwork: InsertArtwork): Promise<Artwork> {
+    const [artwork] = await db
+      .insert(artworks)
+      .values(insertArtwork)
+      .returning();
+    return artwork;
+  }
+
+  async updateArtwork(id: number, updateData: Partial<InsertArtwork>): Promise<Artwork | undefined> {
+    const [artwork] = await db
+      .update(artworks)
+      .set(updateData)
+      .where(eq(artworks.id, id))
+      .returning();
+    return artwork || undefined;
+  }
+
+  async deleteArtwork(id: number): Promise<boolean> {
+    const result = await db.delete(artworks).where(eq(artworks.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getFeaturedArtworks(): Promise<Artwork[]> {
+    return await db.select().from(artworks).where(eq(artworks.featured, true));
+  }
+
+  async getAllExhibitions(): Promise<Exhibition[]> {
+    return await db.select().from(exhibitions);
+  }
+
+  async getExhibition(id: number): Promise<Exhibition | undefined> {
+    const [exhibition] = await db.select().from(exhibitions).where(eq(exhibitions.id, id));
+    return exhibition || undefined;
+  }
+
+  async createExhibition(insertExhibition: InsertExhibition): Promise<Exhibition> {
+    const [exhibition] = await db
+      .insert(exhibitions)
+      .values(insertExhibition)
+      .returning();
+    return exhibition;
+  }
+
+  async updateExhibition(id: number, updateData: Partial<InsertExhibition>): Promise<Exhibition | undefined> {
+    const [exhibition] = await db
+      .update(exhibitions)
+      .set(updateData)
+      .where(eq(exhibitions.id, id))
+      .returning();
+    return exhibition || undefined;
+  }
+
+  async deleteExhibition(id: number): Promise<boolean> {
+    const result = await db.delete(exhibitions).where(eq(exhibitions.id, id));
+    return result.rowCount > 0;
+  }
+
+  async getExhibitionsByType(type: string): Promise<Exhibition[]> {
+    return await db.select().from(exhibitions).where(eq(exhibitions.type, type));
+  }
+
+  async getHomepageSettings(): Promise<HomepageSettings | undefined> {
+    const [settings] = await db.select().from(homepageSettings).limit(1);
+    return settings || undefined;
+  }
+
+  async updateHomepageSettings(settings: InsertHomepageSettings): Promise<HomepageSettings> {
+    // First try to update existing record
+    const [existing] = await db.select().from(homepageSettings).limit(1);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(homepageSettings)
+        .set(settings)
+        .where(eq(homepageSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new record if none exists
+      const [created] = await db
+        .insert(homepageSettings)
+        .values(settings)
+        .returning();
+      return created;
+    }
+  }
+
+  async getArtistBio(): Promise<ArtistBio | undefined> {
+    const [bio] = await db.select().from(artistBio).limit(1);
+    return bio || undefined;
+  }
+
+  async updateArtistBio(bio: InsertArtistBio): Promise<ArtistBio> {
+    // First try to update existing record
+    const [existing] = await db.select().from(artistBio).limit(1);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(artistBio)
+        .set(bio)
+        .where(eq(artistBio.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new record if none exists
+      const [created] = await db
+        .insert(artistBio)
+        .values(bio)
+        .returning();
+      return created;
+    }
+  }
+}
+
+export const storage = new DatabaseStorage();
