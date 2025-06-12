@@ -363,6 +363,10 @@ export default function AdminPage() {
                           alt={artwork.title}
                           className="w-full h-full object-cover"
                           loading="lazy"
+                          onError={(e) => {
+                            console.error('Image failed to load:', artwork.images[0]);
+                            e.currentTarget.style.display = 'none';
+                          }}
                         />
                       )}
                     </div>

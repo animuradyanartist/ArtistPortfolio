@@ -4,6 +4,31 @@ import { storage } from "./storage";
 import { insertArtworkSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check and data integrity endpoint
+  app.get("/api/health", async (req, res) => {
+    try {
+      const artworks = await storage.getAllArtworks();
+      const totalImages = artworks.reduce((count, artwork) => count + artwork.images.length, 0);
+      const invalidImages = artworks.filter(artwork => 
+        artwork.images.some(img => !img || (!img.startsWith('data:image/') && !img.startsWith('http')))
+      );
+      
+      res.json({
+        status: "healthy",
+        database: "connected",
+        artworks: artworks.length,
+        totalImages,
+        invalidImages: invalidImages.length,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({
+        status: "unhealthy",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Artworks routes
   app.get("/api/artworks", async (req, res) => {
     try {
