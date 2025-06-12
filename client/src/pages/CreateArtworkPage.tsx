@@ -41,10 +41,45 @@ export default function CreateArtworkPage() {
 
   const convertFileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
+      // Create a canvas to compress the image if it's too large
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // Calculate new dimensions (max 1920x1080 for web optimization)
+        const maxWidth = 1920;
+        const maxHeight = 1080;
+        let { width, height } = img;
+        
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width *= ratio;
+          height *= ratio;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw and compress
+        ctx?.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        resolve(compressedDataUrl);
+      };
+      
+      img.onerror = () => reject(new Error('Failed to load image'));
+      
+      // Fallback to FileReader for very small files or if canvas fails
       const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
+      reader.onload = () => {
+        if (file.size < 100000) { // If less than 100KB, use original
+          resolve(reader.result as string);
+        } else {
+          img.src = reader.result as string;
+        }
+      };
       reader.onerror = error => reject(error);
+      reader.readAsDataURL(file);
     });
   };
 
@@ -58,10 +93,10 @@ export default function CreateArtworkPage() {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > 10 * 1024 * 1024) {
       toast({
         title: "File too large",
-        description: "Please select an image smaller than 5MB",
+        description: "Please select an image smaller than 10MB",
         variant: "destructive",
       });
       return;
@@ -75,19 +110,35 @@ export default function CreateArtworkPage() {
 
     try {
       const base64 = await convertFileToBase64(file);
+      
+      // Validate base64 string
+      if (!base64 || !base64.startsWith('data:image/')) {
+        throw new Error('Invalid image format');
+      }
+
       const currentImages = artworkForm.getValues('images') || [];
       const newImages = [...currentImages];
+      
+      // Ensure we have enough slots
+      while (newImages.length <= imageIndex) {
+        newImages.push('');
+      }
+      
       newImages[imageIndex] = base64;
-      artworkForm.setValue('images', newImages.filter(img => img !== ''));
+      
+      // Only keep non-empty images
+      const filteredImages = newImages.filter(img => img && img.trim() !== '');
+      artworkForm.setValue('images', filteredImages);
       
       toast({
         title: "Image uploaded successfully",
-        description: "The image has been added to your artwork",
+        description: `Image ${imageIndex + 1} has been added to your artwork`,
       });
     } catch (error) {
+      console.error('Image upload error:', error);
       toast({
         title: "Upload failed",
-        description: "Failed to upload image. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to upload image. Please try again.",
         variant: "destructive",
       });
     } finally {

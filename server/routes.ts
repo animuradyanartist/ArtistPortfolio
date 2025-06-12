@@ -30,10 +30,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/artworks", async (req, res) => {
     try {
       const validatedData = insertArtworkSchema.parse(req.body);
+      
+      // Validate images array
+      if (validatedData.images && validatedData.images.length > 0) {
+        for (const image of validatedData.images) {
+          if (!image.startsWith('data:image/') && !image.startsWith('http')) {
+            return res.status(400).json({ message: "Invalid image format detected" });
+          }
+        }
+      }
+      
       const artwork = await storage.createArtwork(validatedData);
+      
+      // Verify the artwork was created with images
+      if (artwork.images.length !== validatedData.images.length) {
+        console.warn('Image count mismatch after creation');
+      }
+      
       res.status(201).json(artwork);
     } catch (error) {
-      res.status(400).json({ message: "Invalid artwork data", error });
+      console.error('Artwork creation error:', error);
+      res.status(400).json({ message: "Invalid artwork data", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
@@ -41,13 +58,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertArtworkSchema.partial().parse(req.body);
+      
+      // Validate images array if present
+      if (validatedData.images && validatedData.images.length > 0) {
+        for (const image of validatedData.images) {
+          if (!image.startsWith('data:image/') && !image.startsWith('http')) {
+            return res.status(400).json({ message: "Invalid image format detected" });
+          }
+        }
+      }
+      
       const artwork = await storage.updateArtwork(id, validatedData);
       if (!artwork) {
         return res.status(404).json({ message: "Artwork not found" });
       }
+      
+      // Verify the artwork was updated with correct images
+      if (validatedData.images && artwork.images.length !== validatedData.images.length) {
+        console.warn('Image count mismatch after update');
+      }
+      
       res.json(artwork);
     } catch (error) {
-      res.status(400).json({ message: "Invalid artwork data", error });
+      console.error('Artwork update error:', error);
+      res.status(400).json({ message: "Invalid artwork data", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 

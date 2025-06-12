@@ -295,7 +295,13 @@ export class MemStorage implements IStorage {
   }
 
   async updateArtistBio(bio: InsertArtistBio): Promise<ArtistBio> {
-    this.artistBio = { ...bio, id: 1 };
+    this.artistBio = { 
+      ...bio, 
+      id: 1,
+      statement: bio.statement ?? null,
+      education: bio.education ?? null,
+      awards: bio.awards ?? null
+    };
     return this.artistBio;
   }
 }
