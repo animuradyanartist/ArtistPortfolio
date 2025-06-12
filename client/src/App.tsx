@@ -11,6 +11,7 @@ import ExhibitionsPage from "@/pages/ExhibitionsPage";
 import ContactPage from "@/pages/ContactPage";
 import AdminPage from "@/pages/AdminPage";
 import CreateArtworkPage from "@/pages/CreateArtworkPage";
+import EditArtworkPage from "@/pages/EditArtworkPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/contact" component={ContactPage} />
       <Route path="/admin" component={AdminPage} />
       <Route path="/admin/create-artwork" component={CreateArtworkPage} />
+      <Route path="/admin/edit-artwork/:id" component={EditArtworkPage} />
       <Route component={NotFound} />
     </Switch>
   );
