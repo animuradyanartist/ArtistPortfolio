@@ -7,8 +7,7 @@ async function seed() {
   // Create admin user
   await db.insert(users).values({
     username: "admin",
-    password: "$2b$12$LQv3c1yqBwEUaepTj/z0EeqJ2OzxbdgTrJdxI3zZ9PQpJ9xQ3vXZO", // admin123
-    isAdmin: true
+    password: "$2b$12$LQv3c1yqBwEUaepTj/z0EeqJ2OzxbdgTrJdxI3zZ9PQpJ9xQ3vXZO" // admin123
   }).onConflictDoNothing();
 
   // Create homepage settings
@@ -36,6 +35,8 @@ async function seed() {
     dimensions: "24\" x 36\"",
     year: 2024,
     price: 2500,
+    type: "oil",
+    size: "medium",
     availability: "available",
     images: [
       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=800&h=600&fit=crop",
@@ -52,19 +53,23 @@ async function seed() {
       title: "Whispers of the Soul",
       description: "A collection of abstract realism works exploring human emotion and connection.",
       type: "solo",
-      startDate: new Date("2024-03-15"),
-      endDate: new Date("2024-04-15"),
-      location: "Modern Art Gallery, Los Angeles",
-      images: ["https://images.unsplash.com/photo-1578321272176-b7bbc0679853?w=800&h=600&fit=crop"]
+      venue: "Modern Art Gallery",
+      location: "Los Angeles",
+      year: 2024,
+      startDate: "2024-03-15",
+      endDate: "2024-04-15",
+      image: "https://images.unsplash.com/photo-1578321272176-b7bbc0679853?w=800&h=600&fit=crop"
     },
     {
       title: "Contemporary Visions",
       description: "Group exhibition featuring emerging contemporary artists.",
       type: "group",
-      startDate: new Date("2024-01-10"),
-      endDate: new Date("2024-02-10"),
-      location: "City Arts Center, New York",
-      images: ["https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=800&h=600&fit=crop"]
+      venue: "City Arts Center",
+      location: "New York",
+      year: 2024,
+      startDate: "2024-01-10",
+      endDate: "2024-02-10",
+      image: "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=800&h=600&fit=crop"
     }
   ]).onConflictDoNothing();
 
