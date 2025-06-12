@@ -19,6 +19,9 @@ export default function EditArtworkPage() {
   const params = useParams();
   const artworkId = parseInt(params.id as string);
   const [, setLocation] = useLocation();
+  
+  console.log('EditArtworkPage rendered with params:', params);
+  console.log('Artwork ID:', artworkId);
   const [uploadingImages, setUploadingImages] = useState<boolean[]>([false, false, false]);
   const { toast } = useToast();
   const queryClient = useQueryClient();

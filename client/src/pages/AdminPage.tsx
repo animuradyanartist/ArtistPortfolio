@@ -378,7 +378,10 @@ export default function AdminPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setLocation(`/admin/edit-artwork/${artwork.id}`)}
+                          onClick={() => {
+                            console.log('Edit button clicked for artwork:', artwork.id);
+                            setLocation(`/admin/edit-artwork/${artwork.id}`);
+                          }}
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
