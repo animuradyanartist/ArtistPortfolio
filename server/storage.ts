@@ -109,7 +109,8 @@ export class MemStorage implements IStorage {
         availability: "available",
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
-        featured: true
+        featured: true,
+        position: 1
       },
       {
         id: 3,
@@ -125,7 +126,8 @@ export class MemStorage implements IStorage {
         availability: "available",
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
-        featured: true
+        featured: true,
+        position: 2
       },
       {
         id: 4,
@@ -141,7 +143,8 @@ export class MemStorage implements IStorage {
         availability: "sold",
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
-        featured: false
+        featured: false,
+        position: 3
       }
     ];
 
@@ -206,7 +209,8 @@ export class MemStorage implements IStorage {
       id,
       saatchiUrl: insertArtwork.saatchiUrl || null,
       buyLink: insertArtwork.buyLink || null,
-      featured: insertArtwork.featured || false
+      featured: insertArtwork.featured || false,
+      position: insertArtwork.position ?? 0
     };
     this.artworks.set(id, artwork);
     return artwork;
