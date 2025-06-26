@@ -22,7 +22,7 @@ export default function ArtworkCard({ artwork, onViewDetails }: ArtworkCardProps
   return (
     <Card className="gallery-item bg-white overflow-hidden">
       <div 
-        className="relative aspect-square cursor-pointer"
+        className="relative aspect-[3/4] cursor-pointer"
         onClick={() => onViewDetails(artwork)}
       >
         <img 

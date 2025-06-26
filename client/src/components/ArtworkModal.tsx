@@ -70,7 +70,7 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                   <img 
                     src={artwork.images[currentImageIndex]} 
                     alt={`${artwork.title} - Image ${currentImageIndex + 1}`}
-                    className="w-full rounded-lg shadow-lg object-cover aspect-[4/3]"
+                    className="w-full rounded-lg shadow-lg object-cover aspect-[3/4]"
                   />
                   
                   {artwork.images.length > 1 && (
