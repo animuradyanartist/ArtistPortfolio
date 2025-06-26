@@ -15,6 +15,7 @@ export interface IStorage {
   updateArtwork(id: number, artwork: Partial<InsertArtwork>): Promise<Artwork | undefined>;
   deleteArtwork(id: number): Promise<boolean>;
   getFeaturedArtworks(): Promise<Artwork[]>;
+  reorderArtwork(id: number, direction: 'up' | 'down'): Promise<Artwork[]>;
 
   // Exhibitions
   getAllExhibitions(): Promise<Exhibition[]>;
@@ -91,7 +92,8 @@ export class MemStorage implements IStorage {
         availability: "available",
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
-        featured: true
+        featured: true,
+        position: 0
       },
       {
         id: 2,
@@ -232,6 +234,34 @@ export class MemStorage implements IStorage {
 
   async getFeaturedArtworks(): Promise<Artwork[]> {
     return Array.from(this.artworks.values()).filter(artwork => artwork.featured);
+  }
+
+  async reorderArtwork(id: number, direction: 'up' | 'down'): Promise<Artwork[]> {
+    const artworksList = Array.from(this.artworks.values()).sort((a, b) => (a.position || 0) - (b.position || 0));
+    const currentIndex = artworksList.findIndex(artwork => artwork.id === id);
+    
+    if (currentIndex === -1) {
+      return artworksList;
+    }
+    
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    
+    if (newIndex < 0 || newIndex >= artworksList.length) {
+      return artworksList;
+    }
+    
+    // Swap positions
+    const currentArtwork = artworksList[currentIndex];
+    const targetArtwork = artworksList[newIndex];
+    
+    const tempPosition = currentArtwork.position || 0;
+    currentArtwork.position = targetArtwork.position || 0;
+    targetArtwork.position = tempPosition;
+    
+    this.artworks.set(currentArtwork.id, currentArtwork);
+    this.artworks.set(targetArtwork.id, targetArtwork);
+    
+    return Array.from(this.artworks.values()).sort((a, b) => (a.position || 0) - (b.position || 0));
   }
 
   async getAllExhibitions(): Promise<Exhibition[]> {

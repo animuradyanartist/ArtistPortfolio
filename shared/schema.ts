@@ -23,6 +23,7 @@ export const artworks = pgTable("artworks", {
   saatchiUrl: text("saatchi_url"),
   buyLink: text("buy_link"),
   featured: boolean("featured").default(false),
+  position: integer("position").default(0),
 });
 
 export const exhibitions = pgTable("exhibitions", {
