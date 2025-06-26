@@ -14,23 +14,30 @@ interface ArtworkModalProps {
 export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
-  if (!artwork) return null;
+  // Reset to first image when modal opens
+  useEffect(() => {
+    if (open && artwork) {
+      setCurrentImageIndex(0);
+    }
+  }, [open, artwork]);
 
   const handleBuyNow = () => {
-    if (artwork.buyLink) {
+    if (artwork?.buyLink) {
       window.open(artwork.buyLink, '_blank');
-    } else if (artwork.saatchiUrl) {
+    } else if (artwork?.saatchiUrl) {
       window.open(artwork.saatchiUrl, '_blank');
     }
   };
 
   const nextImage = () => {
+    if (!artwork) return;
     setCurrentImageIndex((prev) => 
       prev === artwork.images.length - 1 ? 0 : prev + 1
     );
   };
 
   const prevImage = () => {
+    if (!artwork) return;
     setCurrentImageIndex((prev) => 
       prev === 0 ? artwork.images.length - 1 : prev - 1
     );
@@ -40,12 +47,7 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
     setCurrentImageIndex(index);
   };
 
-  // Reset to first image when modal opens
-  useEffect(() => {
-    if (open && artwork) {
-      setCurrentImageIndex(0);
-    }
-  }, [open, artwork]);
+  if (!artwork) return null;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
