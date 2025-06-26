@@ -1,7 +1,8 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, X, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Artwork } from "@shared/schema";
 
 interface ArtworkModalProps {
@@ -11,6 +12,8 @@ interface ArtworkModalProps {
 }
 
 export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalProps) {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
   if (!artwork) return null;
 
   const handleBuyNow = () => {
@@ -20,6 +23,29 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
       window.open(artwork.saatchiUrl, '_blank');
     }
   };
+
+  const nextImage = () => {
+    setCurrentImageIndex((prev) => 
+      prev === artwork.images.length - 1 ? 0 : prev + 1
+    );
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex((prev) => 
+      prev === 0 ? artwork.images.length - 1 : prev - 1
+    );
+  };
+
+  const selectImage = (index: number) => {
+    setCurrentImageIndex(index);
+  };
+
+  // Reset to first image when modal opens
+  useEffect(() => {
+    if (open && artwork) {
+      setCurrentImageIndex(0);
+    }
+  }, [open, artwork]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -37,21 +63,61 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
           <div className="p-6">
             <div className="grid md:grid-cols-2 gap-8">
               <div className="space-y-4">
-                <img 
-                  src={artwork.images[0]} 
-                  alt={artwork.title}
-                  className="w-full rounded-lg shadow-lg object-cover"
-                />
+                {/* Main Image Display with Navigation */}
+                <div className="relative">
+                  <img 
+                    src={artwork.images[currentImageIndex]} 
+                    alt={`${artwork.title} - Image ${currentImageIndex + 1}`}
+                    className="w-full rounded-lg shadow-lg object-cover aspect-[4/3]"
+                  />
+                  
+                  {artwork.images.length > 1 && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={prevImage}
+                        className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white shadow-md"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={nextImage}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white shadow-md"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      
+                      {/* Image Counter */}
+                      <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
+                        {currentImageIndex + 1} / {artwork.images.length}
+                      </div>
+                    </>
+                  )}
+                </div>
                 
+                {/* Thumbnail Navigation */}
                 {artwork.images.length > 1 && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {artwork.images.slice(1).map((image, index) => (
-                      <img 
+                  <div className="grid grid-cols-4 gap-2">
+                    {artwork.images.map((image, index) => (
+                      <button
                         key={index}
-                        src={image} 
-                        alt={`${artwork.title} view ${index + 2}`}
-                        className="w-full h-20 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
-                      />
+                        onClick={() => selectImage(index)}
+                        className={`relative rounded overflow-hidden transition-all ${
+                          index === currentImageIndex 
+                            ? 'ring-2 ring-deep-blue ring-offset-2' 
+                            : 'hover:opacity-80'
+                        }`}
+                      >
+                        <img 
+                          src={image} 
+                          alt={`${artwork.title} thumbnail ${index + 1}`}
+                          className="w-full h-16 object-cover"
+                        />
+                      </button>
                     ))}
                   </div>
                 )}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Images } from "lucide-react";
 import type { Artwork } from "@shared/schema";
 
 interface ArtworkCardProps {
@@ -36,6 +36,21 @@ export default function ArtworkCard({ artwork, onViewDetails }: ArtworkCardProps
         {!imageLoaded && (
           <div className="absolute inset-0 bg-gray-200 animate-pulse" />
         )}
+        
+        {/* Multiple Images Indicator */}
+        {artwork.images.length > 1 && (
+          <div className="absolute top-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs flex items-center gap-1">
+            <Images className="w-3 h-3" />
+            {artwork.images.length}
+          </div>
+        )}
+        
+        {/* View More Overlay */}
+        <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-all duration-300 flex items-center justify-center">
+          <div className="opacity-0 hover:opacity-100 transition-opacity duration-300 bg-white/90 px-3 py-1 rounded text-sm font-medium text-charcoal">
+            View Details
+          </div>
+        </div>
       </div>
       
       <CardContent className="p-4">
