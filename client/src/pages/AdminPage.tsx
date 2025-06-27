@@ -710,10 +710,47 @@ export default function AdminPage() {
                       name="image"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Artist Photo URL</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="https://example.com/artist-photo.jpg" />
-                          </FormControl>
+                          <FormLabel>Artist Photo</FormLabel>
+                          <div className="space-y-2">
+                            <FormControl>
+                              <Input {...field} placeholder="https://example.com/artist-photo.jpg or /uploads/filename.jpg" />
+                            </FormControl>
+                            <div className="flex items-center space-x-2">
+                              <Input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleImageUpload(file, (imagePath) => {
+                                      field.onChange(imagePath);
+                                    });
+                                  }
+                                }}
+                                className="hidden"
+                                id="artist-image-upload"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => document.getElementById('artist-image-upload')?.click()}
+                                disabled={uploadImageMutation.isPending}
+                              >
+                                <Upload className="w-4 h-4 mr-2" />
+                                {uploadImageMutation.isPending ? 'Uploading...' : 'Upload Photo'}
+                              </Button>
+                            </div>
+                            {field.value && (
+                              <div className="mt-2">
+                                <img 
+                                  src={field.value} 
+                                  alt="Artist photo preview" 
+                                  className="w-32 h-32 object-cover rounded border"
+                                />
+                              </div>
+                            )}
+                          </div>
                           <FormMessage />
                         </FormItem>
                       )}
