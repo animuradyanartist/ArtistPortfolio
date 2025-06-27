@@ -108,7 +108,8 @@ The application is configured for deployment on Replit with the following setup:
 
 ## Changelog
 
-- June 26, 2025. Initial setup
+- June 27, 2025: Added comprehensive image upload functionality for admin panel, artwork reordering controls, and fixed About page to display uploaded artist bio photos
+- June 26, 2025: Initial setup
 
 ## User Preferences
 

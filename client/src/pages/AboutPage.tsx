@@ -1,5 +1,19 @@
+import { useQuery } from "@tanstack/react-query";
+import type { ArtistBio, Exhibition } from "@shared/schema";
+
 export default function AboutPage() {
-  const exhibitions = [
+  // Fetch artist bio data from the API
+  const { data: artistBio, isLoading: bioLoading } = useQuery<ArtistBio>({
+    queryKey: ["/api/artist-bio"],
+  });
+
+  // Fetch exhibitions data from the API
+  const { data: exhibitions = [], isLoading: exhibitionsLoading } = useQuery<Exhibition[]>({
+    queryKey: ["/api/exhibitions"],
+  });
+
+  // Fallback exhibitions data if none in database
+  const fallbackExhibitions = [
     {
       title: "Solo Exhibition: \"Whispers of the Soul\"",
       year: "2023",
@@ -44,57 +58,98 @@ export default function AboutPage() {
         <div className="grid lg:grid-cols-2 gap-16 items-start">
           {/* Artist Portrait */}
           <div className="space-y-8">
-            <img 
-              src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800" 
-              alt="Ani Muradyan artist portrait" 
-              className="w-full max-w-md mx-auto rounded-lg shadow-lg"
-            />
-            
-            <img 
-              src="https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=400" 
-              alt="Ani Muradyan in her art studio" 
-              className="w-full max-w-md mx-auto rounded-lg shadow-lg"
-            />
+            {bioLoading ? (
+              <div className="animate-pulse">
+                <div className="w-full max-w-md mx-auto h-96 bg-gray-200 rounded-lg"></div>
+              </div>
+            ) : (
+              <img 
+                src={artistBio?.image || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800"} 
+                alt="Ani Muradyan artist portrait" 
+                className="w-full max-w-md mx-auto rounded-lg shadow-lg aspect-[3/4] object-cover"
+                onError={(e) => {
+                  // Fallback to default image if uploaded image fails to load
+                  e.currentTarget.src = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800";
+                }}
+              />
+            )}
           </div>
 
           {/* Biography and CV */}
           <div className="space-y-8">
             <div>
-              <h2 className="font-playfair text-3xl font-semibold text-deep-blue mb-6">Biography</h2>
-              <div className="prose prose-lg text-soft-gray leading-relaxed space-y-4">
-                <p>
-                  Ani Muradyan is a contemporary abstract realism artist born and raised in Armenia. Her work explores the intersection of emotion and form, creating paintings that speak to the universal human experience through abstracted representations of reality.
-                </p>
-                
-                <p>
-                  Drawing inspiration from her Armenian heritage and the dramatic landscapes of her homeland, Ani's paintings are characterized by their emotional depth, sophisticated color palettes, and masterful use of texture. Her technique combines traditional oil painting methods with contemporary abstract approaches, resulting in works that are both timeless and thoroughly modern.
-                </p>
-                
-                <p>
-                  After completing her formal education at the Yerevan Institute of Fine Arts, Ani spent several years developing her distinctive style, which she describes as "emotional realism." Her work has been featured in numerous solo and group exhibitions across Europe and North America, garnering recognition for its unique ability to convey complex emotions through abstract forms.
-                </p>
-                
-                <p>
-                  Currently based between Yerevan and international art centers, Ani continues to create works that challenge viewers to engage with art on a deeply personal level. Her philosophy that "art must bring hope into people's lives" permeates every piece she creates, making her work both aesthetically compelling and spiritually uplifting.
-                </p>
-              </div>
+              <h2 className="font-playfair text-3xl font-semibold text-deep-blue mb-6">
+                {artistBio?.title || "Biography"}
+              </h2>
+              {bioLoading ? (
+                <div className="animate-pulse space-y-4">
+                  <div className="h-4 bg-gray-200 rounded w-full"></div>
+                  <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                  <div className="h-4 bg-gray-200 rounded w-4/5"></div>
+                  <div className="h-4 bg-gray-200 rounded w-full"></div>
+                </div>
+              ) : (
+                <div className="prose prose-lg text-soft-gray leading-relaxed space-y-4">
+                  {artistBio?.description && (
+                    <div className="whitespace-pre-wrap">{artistBio.description}</div>
+                  )}
+                  
+                  {artistBio?.statement && (
+                    <div>
+                      <h3 className="font-semibold text-deep-blue mt-8 mb-4">Artist Statement</h3>
+                      <div className="whitespace-pre-wrap">{artistBio.statement}</div>
+                    </div>
+                  )}
+                  
+                  {artistBio?.education && (
+                    <div>
+                      <h3 className="font-semibold text-deep-blue mt-8 mb-4">Education</h3>
+                      <div className="whitespace-pre-wrap">{artistBio.education}</div>
+                    </div>
+                  )}
+                  
+                  {artistBio?.awards && (
+                    <div>
+                      <h3 className="font-semibold text-deep-blue mt-8 mb-4">Awards & Recognition</h3>
+                      <div className="whitespace-pre-wrap">{artistBio.awards}</div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* CV Timeline - Exhibitions Only */}
             <div>
               <h2 className="font-playfair text-3xl font-semibold text-deep-blue mb-6">Exhibition History</h2>
-              <div className="space-y-6">
-                {exhibitions.map((exhibition, index) => (
-                  <div key={index} className="border-l-4 border-muted-pink pl-6 pb-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
-                      <h3 className="font-semibold text-lg">{exhibition.title}</h3>
-                      <span className="text-soft-gray text-sm">{exhibition.year}</span>
+              {exhibitionsLoading ? (
+                <div className="animate-pulse space-y-6">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="border-l-4 border-gray-200 pl-6 pb-6">
+                      <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-1"></div>
+                      <div className="h-3 bg-gray-200 rounded w-full"></div>
                     </div>
-                    <p className="text-deep-blue font-medium">{exhibition.venue}</p>
-                    <p className="text-soft-gray text-sm mt-1">{exhibition.description}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {(exhibitions.length > 0 ? exhibitions : fallbackExhibitions).map((exhibition, index) => (
+                    <div key={'id' in exhibition ? exhibition.id : index} className="border-l-4 border-muted-pink pl-6 pb-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
+                        <h3 className="font-semibold text-lg">{exhibition.title}</h3>
+                        <span className="text-soft-gray text-sm">{exhibition.year}</span>
+                      </div>
+                      <p className="text-deep-blue font-medium">
+                        {exhibition.venue}
+                        {'location' in exhibition && exhibition.location && `, ${exhibition.location}`}
+                      </p>
+                      {exhibition.description && (
+                        <p className="text-soft-gray text-sm mt-1">{exhibition.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
