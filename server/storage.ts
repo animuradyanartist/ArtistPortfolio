@@ -394,6 +394,39 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(artworks).where(eq(artworks.featured, true));
   }
 
+  async reorderArtwork(id: number, direction: 'up' | 'down'): Promise<Artwork[]> {
+    // Get all artworks ordered by position
+    const allArtworks = await db.select().from(artworks).orderBy(artworks.position);
+    const currentIndex = allArtworks.findIndex(artwork => artwork.id === id);
+    
+    if (currentIndex === -1) {
+      throw new Error('Artwork not found');
+    }
+    
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    
+    // Check if the move is valid
+    if (newIndex < 0 || newIndex >= allArtworks.length) {
+      return allArtworks; // Return unchanged if invalid move
+    }
+    
+    // Swap positions
+    const currentArtwork = allArtworks[currentIndex];
+    const swapArtwork = allArtworks[newIndex];
+    
+    // Update positions in database
+    await db.update(artworks)
+      .set({ position: swapArtwork.position })
+      .where(eq(artworks.id, currentArtwork.id));
+    
+    await db.update(artworks)
+      .set({ position: currentArtwork.position })
+      .where(eq(artworks.id, swapArtwork.id));
+    
+    // Return updated artwork list
+    return await db.select().from(artworks).orderBy(artworks.position);
+  }
+
   async getAllExhibitions(): Promise<Exhibition[]> {
     return await db.select().from(exhibitions);
   }

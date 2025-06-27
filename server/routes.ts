@@ -1,7 +1,34 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
+import path from "path";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema } from "@shared/schema";
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, 'public/uploads/');
+    },
+    filename: (req, file, cb) => {
+      // Generate unique filename with timestamp
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Only allow image files
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'));
+    }
+  }
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check and data integrity endpoint
@@ -235,6 +262,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(bio);
     } catch (error) {
       res.status(400).json({ message: "Invalid artist bio data", error });
+    }
+  });
+
+  // File upload route
+  app.post("/api/upload", upload.single('image'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      
+      // Return the relative path for use in the frontend
+      const imagePath = `/uploads/${req.file.filename}`;
+      res.json({ imagePath });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to upload image", error });
+    }
+  });
+
+  // Artwork reordering route
+  app.post("/api/artworks/:id/reorder", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { direction } = req.body;
+      
+      if (!direction || !['up', 'down'].includes(direction)) {
+        return res.status(400).json({ message: "Direction must be 'up' or 'down'" });
+      }
+      
+      const artworks = await storage.reorderArtwork(id, direction);
+      res.json(artworks);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to reorder artwork", error });
     }
   });
 

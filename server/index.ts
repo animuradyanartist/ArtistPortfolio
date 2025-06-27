@@ -6,6 +6,9 @@ const app = express();
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: false, limit: '100mb' }));
 
+// Serve uploaded files
+app.use('/uploads', express.static('public/uploads'));
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
