@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema } from "@shared/schema";
 import type { Artwork, Exhibition, HomepageSettings, ArtistBio } from "@shared/schema";
-import { Plus, Edit, Trash, Eye, EyeOff } from "lucide-react";
+import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown } from "lucide-react";
 
 export default function AdminPage() {
   const [, setLocation] = useLocation();
@@ -150,6 +150,64 @@ export default function AdminPage() {
       toast({ title: "Failed to update artist bio", variant: "destructive" });
     },
   });
+
+  // File upload mutation
+  const uploadImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload image');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ 
+        title: "Image uploaded successfully",
+        description: `Image path: ${data.imagePath}` 
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: "Failed to upload image", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // Artwork reordering mutation
+  const reorderArtworkMutation = useMutation({
+    mutationFn: async ({ id, direction }: { id: number; direction: 'up' | 'down' }) => {
+      return apiRequest("POST", `/api/artworks/${id}/reorder`, { direction });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
+      toast({ title: "Artwork order updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update artwork order", variant: "destructive" });
+    },
+  });
+
+  // Helper functions for file uploads
+  const handleImageUpload = (file: File, callback: (imagePath: string) => void) => {
+    uploadImageMutation.mutate(file, {
+      onSuccess: (data) => {
+        callback(data.imagePath);
+      }
+    });
+  };
+
+  const handleReorderArtwork = (artworkId: number, direction: 'up' | 'down') => {
+    reorderArtworkMutation.mutate({ id: artworkId, direction });
+  };
 
   const deleteArtworkMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/artworks/${id}`),
@@ -305,10 +363,47 @@ export default function AdminPage() {
                       name="heroImage"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Hero Background Image URL</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="https://example.com/image.jpg" />
-                          </FormControl>
+                          <FormLabel>Hero Background Image</FormLabel>
+                          <div className="space-y-2">
+                            <FormControl>
+                              <Input {...field} placeholder="https://example.com/image.jpg or /uploads/filename.jpg" />
+                            </FormControl>
+                            <div className="flex items-center space-x-2">
+                              <Input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleImageUpload(file, (imagePath) => {
+                                      field.onChange(imagePath);
+                                    });
+                                  }
+                                }}
+                                className="hidden"
+                                id="hero-image-upload"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => document.getElementById('hero-image-upload')?.click()}
+                                disabled={uploadImageMutation.isPending}
+                              >
+                                <Upload className="w-4 h-4 mr-2" />
+                                {uploadImageMutation.isPending ? 'Uploading...' : 'Upload Image'}
+                              </Button>
+                            </div>
+                            {field.value && (
+                              <div className="mt-2">
+                                <img 
+                                  src={field.value} 
+                                  alt="Hero background preview" 
+                                  className="w-32 h-20 object-cover rounded border"
+                                />
+                              </div>
+                            )}
+                          </div>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -374,25 +469,49 @@ export default function AdminPage() {
                       <h3 className="font-semibold text-lg mb-1">{artwork.title}</h3>
                       <p className="text-sm text-soft-gray mb-2">{artwork.year} • ${artwork.price.toLocaleString()}</p>
                       <p className="text-xs text-charcoal mb-3 line-clamp-2">{artwork.description}</p>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            console.log('Edit button clicked for artwork:', artwork.id);
-                            setLocation(`/admin/edit-artwork/${artwork.id}`);
-                          }}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteArtworkMutation.mutate(artwork.id)}
-                          disabled={deleteArtworkMutation.isPending}
-                        >
-                          <Trash className="w-4 h-4" />
-                        </Button>
+                      <div className="flex justify-between items-center">
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              console.log('Edit button clicked for artwork:', artwork.id);
+                              setLocation(`/admin/edit-artwork/${artwork.id}`);
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => deleteArtworkMutation.mutate(artwork.id)}
+                            disabled={deleteArtworkMutation.isPending}
+                          >
+                            <Trash className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        
+                        {/* Reordering Controls */}
+                        <div className="flex space-x-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleReorderArtwork(artwork.id, 'up')}
+                            disabled={reorderArtworkMutation.isPending}
+                            title="Move Up"
+                          >
+                            <ChevronUp className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleReorderArtwork(artwork.id, 'down')}
+                            disabled={reorderArtworkMutation.isPending}
+                            title="Move Down"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

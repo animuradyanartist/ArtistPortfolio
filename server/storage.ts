@@ -360,7 +360,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllArtworks(): Promise<Artwork[]> {
-    return await db.select().from(artworks);
+    return await db.select().from(artworks).orderBy(artworks.position);
   }
 
   async getArtwork(id: number): Promise<Artwork | undefined> {
