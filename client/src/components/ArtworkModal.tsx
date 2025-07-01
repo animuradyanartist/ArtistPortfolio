@@ -21,14 +21,6 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
     }
   }, [open, artwork]);
 
-  const handleBuyNow = () => {
-    if (artwork?.buyLink) {
-      window.open(artwork.buyLink, '_blank');
-    } else if (artwork?.saatchiUrl) {
-      window.open(artwork.saatchiUrl, '_blank');
-    }
-  };
-
   const nextImage = () => {
     if (!artwork) return;
     setCurrentImageIndex((prev) => 
@@ -151,7 +143,7 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                   </ul>
                 </div>
                 
-                <div className="flex justify-between items-center pt-4 border-t">
+                <div className="space-y-4 pt-4 border-t">
                   <div className="flex items-center gap-4">
                     <span className="text-3xl font-bold text-deep-blue">
                       ${artwork.price.toLocaleString()}
@@ -167,22 +159,38 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                     </Badge>
                   </div>
                   
-                  {artwork.availability === 'available' ? (
-                    <Button 
-                      onClick={handleBuyNow}
-                      className="bg-deep-blue hover:bg-deep-blue/90 text-white px-6 py-3"
-                    >
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      Buy Now
-                    </Button>
-                  ) : (
-                    <Button 
-                      disabled 
-                      className="bg-gray-400 text-white cursor-not-allowed px-6 py-3"
-                    >
-                      Sold
-                    </Button>
-                  )}
+                  {/* Contact Information Box */}
+                  <div className="bg-soft-white/50 border border-muted-pink/30 rounded-lg p-4">
+                    <h4 className="font-semibold text-deep-blue mb-3">
+                      Interested in this artwork?
+                    </h4>
+                    <p className="text-soft-gray mb-3">
+                      Please contact me for purchasing information:
+                    </p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-charcoal">Email:</span>
+                        <a 
+                          href="mailto:your-email@example.com" 
+                          className="text-deep-blue hover:underline"
+                        >
+                          your-email@example.com
+                        </a>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-charcoal">Instagram:</span>
+                        <a 
+                          href="https://www.instagram.com/animuradyan.art/" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-deep-blue hover:underline flex items-center gap-1"
+                        >
+                          @animuradyan.art
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

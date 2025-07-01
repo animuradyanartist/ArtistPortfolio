@@ -271,7 +271,12 @@ export default function EditArtworkPage() {
                       <FormItem>
                         <FormLabel>Year</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" />
+                          <Input 
+                            {...field} 
+                            type="number" 
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                            value={field.value || ''}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
