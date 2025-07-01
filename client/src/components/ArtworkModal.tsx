@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, X, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Artwork } from "@shared/schema";
@@ -44,6 +44,10 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto p-0">
+        <DialogTitle className="sr-only">{artwork.title}</DialogTitle>
+        <DialogDescription className="sr-only">
+          {artwork.description}
+        </DialogDescription>
         <div className="relative">
           <Button
             variant="ghost"

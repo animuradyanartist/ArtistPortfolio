@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ExternalLink, Images } from "lucide-react";
+import { Images } from "lucide-react";
 import type { Artwork } from "@shared/schema";
 
 interface ArtworkCardProps {
@@ -12,12 +11,6 @@ interface ArtworkCardProps {
 
 export default function ArtworkCard({ artwork, onViewDetails }: ArtworkCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
-
-  const handleBuyNow = () => {
-    if (artwork.saatchiUrl) {
-      window.open(artwork.saatchiUrl, '_blank');
-    }
-  };
 
   return (
     <Card className="gallery-item bg-white overflow-hidden">
@@ -75,24 +68,10 @@ export default function ArtworkCard({ artwork, onViewDetails }: ArtworkCardProps
           </Badge>
         </div>
         
-        {artwork.availability === 'available' ? (
-          <Button 
-            onClick={handleBuyNow}
-            className="w-full bg-deep-blue hover:bg-deep-blue/90 text-white"
-            size="sm"
-          >
-            <ExternalLink className="w-4 h-4 mr-2" />
-            Buy Now
-          </Button>
-        ) : (
-          <Button 
-            disabled 
-            className="w-full bg-gray-400 text-white cursor-not-allowed"
-            size="sm"
-          >
-            Sold
-          </Button>
-        )}
+        {/* Contact info available in details modal */}
+        <div className="text-center text-sm text-soft-gray">
+          Click to view details and contact information
+        </div>
       </CardContent>
     </Card>
   );
