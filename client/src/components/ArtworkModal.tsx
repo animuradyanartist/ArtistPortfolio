@@ -175,10 +175,10 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-charcoal">Email:</span>
                         <a 
-                          href="mailto:your-email@example.com" 
+                          href="mailto:animuradyan.artist@gmail.com" 
                           className="text-deep-blue hover:underline"
                         >
-                          your-email@example.com
+                          animuradyan.artist@gmail.com
                         </a>
                       </div>
                       <div className="flex items-center gap-2">

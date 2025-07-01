@@ -67,11 +67,7 @@ export default function ArtworkCard({ artwork, onViewDetails }: ArtworkCardProps
             {artwork.availability === 'available' ? 'Available' : 'Sold'}
           </Badge>
         </div>
-        
-        {/* Contact info available in details modal */}
-        <div className="text-center text-sm text-soft-gray">
-          Click to view details and contact information
-        </div>
+
       </CardContent>
     </Card>
   );
