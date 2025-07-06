@@ -108,7 +108,7 @@ The application is configured for deployment on Replit with the following setup:
 
 ## Changelog
 
-- June 27, 2025: Added comprehensive image upload functionality for admin panel, artwork reordering controls, and fixed About page to display uploaded artist bio photos. Fixed year field validation error in artwork forms and replaced buy buttons with styled contact information boxes. Added Microsoft Clarity analytics tracking to all pages. Removed exhibitions page from navigation menu.
+- June 27, 2025: Added comprehensive image upload functionality for admin panel, artwork reordering controls, and fixed About page to display uploaded artist bio photos. Fixed year field validation error in artwork forms and replaced buy buttons with styled contact information boxes. Added Microsoft Clarity analytics tracking to all pages. Removed exhibitions page from navigation menu. Created new Prints page with 2-column layout featuring artwork grid and live price calculator.
 - June 26, 2025: Initial setup
 
 ## User Preferences
