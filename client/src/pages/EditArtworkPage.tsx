@@ -55,6 +55,8 @@ export default function EditArtworkPage() {
       saatchiUrl: "",
       buyLink: "",
       featured: false,
+      availableForPrint: false,
+      preferredPrintMaterial: "paper",
     },
   });
 
@@ -76,6 +78,8 @@ export default function EditArtworkPage() {
         saatchiUrl: artwork.saatchiUrl || "",
         buyLink: artwork.buyLink || "",
         featured: artwork.featured || false,
+        availableForPrint: artwork.availableForPrint || false,
+        preferredPrintMaterial: artwork.preferredPrintMaterial || "paper",
       };
       console.log('Form data being set:', formData);
       artworkForm.reset(formData);
@@ -477,6 +481,56 @@ export default function EditArtworkPage() {
                     </FormItem>
                   )}
                 />
+                
+                {/* Print Settings Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-charcoal">Print Settings</h3>
+                  
+                  <FormField
+                    control={artworkForm.control}
+                    name="availableForPrint"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center space-x-2">
+                          <FormControl>
+                            <input
+                              type="checkbox"
+                              checked={field.value || false}
+                              onChange={(e) => field.onChange(e.target.checked)}
+                              className="rounded"
+                            />
+                          </FormControl>
+                          <FormLabel className="text-sm font-normal">
+                            Make this artwork available for print purchases
+                          </FormLabel>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={artworkForm.control}
+                    name="preferredPrintMaterial"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Preferred Print Material</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="paper">Paper</SelectItem>
+                            <SelectItem value="canvas">Canvas</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 
                 {/* Images Section */}
                 <div className="space-y-4">

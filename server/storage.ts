@@ -93,7 +93,14 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: true,
-        position: 0
+        position: 0,
+        availableForPrint: true,
+        printSizes: JSON.stringify([
+          { width: 30, height: 40, material: "paper" },
+          { width: 40, height: 50, material: "canvas" },
+          { width: 50, height: 70, material: "paper" }
+        ]),
+        preferredPrintMaterial: "paper"
       },
       {
         id: 2,
@@ -110,7 +117,13 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: true,
-        position: 1
+        position: 1,
+        availableForPrint: true,
+        printSizes: JSON.stringify([
+          { width: 25, height: 35, material: "paper" },
+          { width: 35, height: 45, material: "canvas" }
+        ]),
+        preferredPrintMaterial: "canvas"
       },
       {
         id: 3,
@@ -127,7 +140,10 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: true,
-        position: 2
+        position: 2,
+        availableForPrint: false,
+        printSizes: null,
+        preferredPrintMaterial: "paper"
       },
       {
         id: 4,
@@ -144,7 +160,10 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: false,
-        position: 3
+        position: 3,
+        availableForPrint: false,
+        printSizes: null,
+        preferredPrintMaterial: "paper"
       }
     ];
 
@@ -210,7 +229,10 @@ export class MemStorage implements IStorage {
       saatchiUrl: insertArtwork.saatchiUrl || null,
       buyLink: insertArtwork.buyLink || null,
       featured: insertArtwork.featured || false,
-      position: insertArtwork.position ?? 0
+      position: insertArtwork.position ?? 0,
+      availableForPrint: insertArtwork.availableForPrint ?? false,
+      printSizes: insertArtwork.printSizes ?? null,
+      preferredPrintMaterial: insertArtwork.preferredPrintMaterial ?? "paper"
     };
     this.artworks.set(id, artwork);
     return artwork;

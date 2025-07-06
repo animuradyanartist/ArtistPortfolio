@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -7,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import type { Artwork } from "@shared/schema";
 
 export default function PrintsPage() {
+  const [, setLocation] = useLocation();
+  
   // Price calculator state
   const [width, setWidth] = useState<number>(0);
   const [height, setHeight] = useState<number>(0);
@@ -83,13 +86,22 @@ export default function PrintsPage() {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                 {printAvailableArtworks.map((artwork) => (
-                  <Card key={artwork.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                  <Card 
+                  key={artwork.id} 
+                  className="overflow-hidden hover:shadow-lg transition-shadow duration-300 cursor-pointer"
+                  onClick={() => setLocation(`/prints/artwork/${artwork.id}`)}
+                >
                     <div className="relative aspect-[3/4]">
                       <img 
                         src={artwork.images[0]} 
                         alt={artwork.title}
                         className="w-full h-full object-cover"
                       />
+                      <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-all duration-300 flex items-center justify-center">
+                        <div className="opacity-0 hover:opacity-100 transition-opacity duration-300 bg-white/90 px-3 py-1 rounded text-sm font-medium text-charcoal">
+                          View Print Options
+                        </div>
+                      </div>
                     </div>
                     <CardContent className="p-4">
                       <h3 className="font-medium text-charcoal text-sm mb-1">

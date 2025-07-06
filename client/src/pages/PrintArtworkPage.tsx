@@ -1,0 +1,405 @@
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useParams, useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import type { Artwork } from "@shared/schema";
+
+export default function PrintArtworkPage() {
+  const params = useParams();
+  const [, setLocation] = useLocation();
+  const artworkId = parseInt(params.id as string);
+  
+  // Custom size form state
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customWidth, setCustomWidth] = useState<number>(0);
+  const [customHeight, setCustomHeight] = useState<number>(0);
+  const [customMaterial, setCustomMaterial] = useState<string>("paper");
+  const [customPrice, setCustomPrice] = useState<number | null>(null);
+  
+  // Image carousel state
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // Fetch artwork data
+  const { data: artwork, isLoading, error } = useQuery<Artwork>({
+    queryKey: ['/api/artworks', artworkId],
+    enabled: !!artworkId && !isNaN(artworkId)
+  });
+
+  // Parse print sizes from JSON
+  const printSizes = useMemo(() => {
+    if (!artwork?.printSizes) return [];
+    try {
+      return JSON.parse(artwork.printSizes);
+    } catch {
+      return [];
+    }
+  }, [artwork?.printSizes]);
+
+  // Calculate price for a given size and material
+  const calculatePrice = (width: number, height: number, material: string) => {
+    const area = width * height;
+    const rates = { paper: 0.013, canvas: 0.015 };
+    return area * (rates[material as keyof typeof rates] || rates.paper);
+  };
+
+  // Handle custom size calculation
+  const handleCustomCalculation = () => {
+    if (customWidth < 20 || customWidth > 120 || customHeight < 20 || customHeight > 120) {
+      setCustomPrice(null);
+      return;
+    }
+    
+    const price = calculatePrice(customWidth, customHeight, customMaterial);
+    setCustomPrice(price);
+  };
+
+  // Image navigation
+  const nextImage = () => {
+    if (!artwork) return;
+    setCurrentImageIndex((prev) => 
+      prev === artwork.images.length - 1 ? 0 : prev + 1
+    );
+  };
+
+  const prevImage = () => {
+    if (!artwork) return;
+    setCurrentImageIndex((prev) => 
+      prev === 0 ? artwork.images.length - 1 : prev - 1
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <div className="animate-pulse">
+              <div className="h-8 bg-gray-200 rounded w-64 mx-auto mb-4"></div>
+              <div className="h-4 bg-gray-200 rounded w-96 mx-auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !artwork) {
+    return (
+      <div className="min-h-screen py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-charcoal mb-4">Artwork Not Found</h1>
+            <Button onClick={() => setLocation("/prints")}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Prints
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if artwork is available for print
+  if (!artwork.availableForPrint) {
+    return (
+      <div className="min-h-screen py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-charcoal mb-4">Prints Not Available</h1>
+            <p className="text-soft-gray mb-6">This artwork is not currently available for printing.</p>
+            <Button onClick={() => setLocation("/prints")}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Prints
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen py-20 bg-soft-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Back Button */}
+        <Button
+          variant="ghost"
+          onClick={() => setLocation("/prints")}
+          className="mb-6"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Prints
+        </Button>
+
+        <div className="grid lg:grid-cols-10 gap-8">
+          {/* Left Column - Images (70%) */}
+          <div className="lg:col-span-7">
+            <div className="space-y-6">
+              {/* Main Image */}
+              <div className="relative">
+                <img 
+                  src={artwork.images[currentImageIndex]} 
+                  alt={`${artwork.title} - Image ${currentImageIndex + 1}`}
+                  className="w-full rounded-lg shadow-lg object-cover aspect-[3/4]"
+                />
+                
+                {artwork.images.length > 1 && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={prevImage}
+                      className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white shadow-md"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={nextImage}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white shadow-md"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    
+                    <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
+                      {currentImageIndex + 1} / {artwork.images.length}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Thumbnails */}
+              {artwork.images.length > 1 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {artwork.images.map((image, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentImageIndex(index)}
+                      className={`relative rounded overflow-hidden transition-all ${
+                        index === currentImageIndex 
+                          ? 'ring-2 ring-deep-blue ring-offset-2' 
+                          : 'hover:opacity-80'
+                      }`}
+                    >
+                      <img 
+                        src={image} 
+                        alt={`${artwork.title} thumbnail ${index + 1}`}
+                        className="w-full h-16 object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Artwork Info */}
+              <div className="space-y-4">
+                <div>
+                  <h1 className="font-playfair text-3xl font-semibold text-deep-blue mb-2">
+                    {artwork.title}
+                  </h1>
+                  <p className="text-soft-gray text-lg">
+                    {artwork.year} • {artwork.medium} • {artwork.dimensions}
+                  </p>
+                </div>
+                
+                {artwork.description && (
+                  <div>
+                    <h3 className="font-semibold text-charcoal mb-2">About this artwork</h3>
+                    <p className="text-soft-gray leading-relaxed">
+                      {artwork.description}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Print Options (30%) */}
+          <div className="lg:col-span-3">
+            <div className="space-y-6">
+              {/* Available Sizes */}
+              {printSizes.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-playfair text-xl text-deep-blue">
+                      Available Print Sizes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {printSizes.map((size: any, index: number) => (
+                      <div key={index} className="flex justify-between items-center p-3 border rounded-lg">
+                        <div>
+                          <div className="font-medium text-charcoal">
+                            {size.width} × {size.height} cm
+                          </div>
+                          <div className="text-sm text-soft-gray capitalize">
+                            {size.material}
+                          </div>
+                        </div>
+                        <div className="text-lg font-semibold text-deep-blue">
+                          €{size.price ? size.price.toFixed(2) : calculatePrice(size.width, size.height, size.material).toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Custom Size Calculator */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-playfair text-xl text-deep-blue">
+                    Custom Size
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!showCustomForm ? (
+                    <Button 
+                      onClick={() => setShowCustomForm(true)}
+                      className="w-full bg-deep-blue hover:bg-deep-blue/90"
+                    >
+                      Calculate Custom Size
+                    </Button>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="custom-width" className="text-sm font-medium">
+                            Width (cm)
+                          </Label>
+                          <Input
+                            id="custom-width"
+                            type="number"
+                            min="20"
+                            max="120"
+                            placeholder="20-120"
+                            value={customWidth || ''}
+                            onChange={(e) => setCustomWidth(Number(e.target.value))}
+                            onBlur={handleCustomCalculation}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="custom-height" className="text-sm font-medium">
+                            Height (cm)
+                          </Label>
+                          <Input
+                            id="custom-height"
+                            type="number"
+                            min="20"
+                            max="120"
+                            placeholder="20-120"
+                            value={customHeight || ''}
+                            onChange={(e) => setCustomHeight(Number(e.target.value))}
+                            onBlur={handleCustomCalculation}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Material</Label>
+                        <Select value={customMaterial} onValueChange={setCustomMaterial}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="paper">Paper (€0.013/cm²)</SelectItem>
+                            <SelectItem value="canvas">Canvas (€0.015/cm²)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <Button 
+                        onClick={handleCustomCalculation}
+                        className="w-full bg-deep-blue hover:bg-deep-blue/90"
+                      >
+                        Calculate Price
+                      </Button>
+
+                      {/* Validation warnings */}
+                      {(customWidth > 0 && (customWidth < 20 || customWidth > 120)) && (
+                        <div className="text-red-600 text-sm">
+                          Width must be between 20-120 cm
+                        </div>
+                      )}
+                      {(customHeight > 0 && (customHeight < 20 || customHeight > 120)) && (
+                        <div className="text-red-600 text-sm">
+                          Height must be between 20-120 cm
+                        </div>
+                      )}
+
+                      {/* Price Result */}
+                      {customPrice !== null && (
+                        <div className="text-center p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="text-sm text-soft-gray mb-1">
+                            Area: {(customWidth * customHeight).toLocaleString()} cm²
+                          </div>
+                          <div className="text-xl font-bold text-deep-blue">
+                            Custom Price: €{customPrice.toFixed(2)}
+                          </div>
+                        </div>
+                      )}
+
+                      <Button 
+                        variant="outline"
+                        onClick={() => {
+                          setShowCustomForm(false);
+                          setCustomPrice(null);
+                          setCustomWidth(0);
+                          setCustomHeight(0);
+                        }}
+                        className="w-full"
+                      >
+                        Close Calculator
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Contact Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-playfair text-lg text-deep-blue">
+                    Ready to Order?
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-soft-gray text-sm mb-3">
+                    Contact me with your preferred size and material:
+                  </p>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <a 
+                        href="mailto:animuradyan.artist@gmail.com" 
+                        className="text-deep-blue hover:underline"
+                      >
+                        animuradyan.artist@gmail.com
+                      </a>
+                    </div>
+                    <div>
+                      <a 
+                        href="https://www.instagram.com/animuradyan.art/" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-deep-blue hover:underline"
+                      >
+                        @animuradyan.art
+                      </a>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

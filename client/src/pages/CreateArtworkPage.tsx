@@ -36,6 +36,8 @@ export default function CreateArtworkPage() {
       saatchiUrl: "",
       buyLink: "",
       featured: false,
+      availableForPrint: false,
+      preferredPrintMaterial: "paper",
     },
   });
 
@@ -397,6 +399,56 @@ export default function CreateArtworkPage() {
                         <FormControl>
                           <Input {...field} placeholder="https://store.example.com/..." />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                {/* Print Settings Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-charcoal">Print Settings</h3>
+                  
+                  <FormField
+                    control={artworkForm.control}
+                    name="availableForPrint"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center space-x-2">
+                          <FormControl>
+                            <input
+                              type="checkbox"
+                              checked={field.value || false}
+                              onChange={(e) => field.onChange(e.target.checked)}
+                              className="rounded"
+                            />
+                          </FormControl>
+                          <FormLabel className="text-sm font-normal">
+                            Make this artwork available for print purchases
+                          </FormLabel>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={artworkForm.control}
+                    name="preferredPrintMaterial"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Preferred Print Material</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="paper">Paper</SelectItem>
+                            <SelectItem value="canvas">Canvas</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

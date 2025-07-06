@@ -24,6 +24,10 @@ export const artworks = pgTable("artworks", {
   buyLink: text("buy_link"),
   featured: boolean("featured").default(false),
   position: integer("position").default(0),
+  // Print-specific fields
+  availableForPrint: boolean("available_for_print").default(false),
+  printSizes: text("print_sizes"), // JSON string of {width, height, material, price?}[]
+  preferredPrintMaterial: text("preferred_print_material").default("paper"), // paper, canvas
 });
 
 export const exhibitions = pgTable("exhibitions", {
