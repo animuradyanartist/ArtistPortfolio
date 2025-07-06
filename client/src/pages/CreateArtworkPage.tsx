@@ -12,13 +12,45 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertArtworkSchema } from "@shared/schema";
-import { Upload, X, ArrowLeft } from "lucide-react";
+import { Upload, X, ArrowLeft, Plus, Trash2, Calculator } from "lucide-react";
+
+interface PrintSize {
+  width: number;
+  height: number;
+  material: "paper" | "canvas";
+  priceOverride?: number;
+}
 
 export default function CreateArtworkPage() {
   const [, setLocation] = useLocation();
   const [uploadingImages, setUploadingImages] = useState<boolean[]>([false, false, false]);
+  const [printSizes, setPrintSizes] = useState<PrintSize[]>([]);
+  const [availableForPrint, setAvailableForPrint] = useState(false);
+  const [calcWidth, setCalcWidth] = useState(30);
+  const [calcHeight, setCalcHeight] = useState(40);
+  const [calcMaterial, setCalcMaterial] = useState<"paper" | "canvas">("paper");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Print size management functions
+  const addPrintSize = () => {
+    setPrintSizes([...printSizes, { width: 30, height: 40, material: "paper" }]);
+  };
+
+  const removePrintSize = (index: number) => {
+    setPrintSizes(printSizes.filter((_, i) => i !== index));
+  };
+
+  const updatePrintSize = (index: number, field: keyof PrintSize, value: any) => {
+    const updated = [...printSizes];
+    updated[index] = { ...updated[index], [field]: value };
+    setPrintSizes(updated);
+  };
+
+  const calculatePrice = (width: number, height: number, material: "paper" | "canvas") => {
+    const rate = material === "canvas" ? 0.015 : 0.013;
+    return (width * height * rate).toFixed(2);
+  };
 
   const artworkForm = useForm({
     resolver: zodResolver(insertArtworkSchema),
@@ -174,7 +206,13 @@ export default function CreateArtworkPage() {
   });
 
   const handleSubmit = (data: any) => {
-    createArtworkMutation.mutate(data);
+    // Add print size data to the submission
+    const submissionData = {
+      ...data,
+      availableForPrint,
+      printSizes: availableForPrint ? JSON.stringify(printSizes) : null,
+    };
+    createArtworkMutation.mutate(submissionData);
   };
 
   return (
@@ -405,54 +443,158 @@ export default function CreateArtworkPage() {
                   />
                 </div>
                 
-                {/* Print Settings Section */}
+                {/* Print Options Section */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-charcoal">Print Settings</h3>
+                  <h3 className="text-lg font-semibold text-charcoal">Print Options</h3>
                   
-                  <FormField
-                    control={artworkForm.control}
-                    name="availableForPrint"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center space-x-2">
-                          <FormControl>
-                            <input
-                              type="checkbox"
-                              checked={field.value || false}
-                              onChange={(e) => field.onChange(e.target.checked)}
-                              className="rounded"
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={availableForPrint}
+                      onChange={(e) => setAvailableForPrint(e.target.checked)}
+                      className="rounded"
+                    />
+                    <label className="text-sm font-normal">
+                      Available as Print?
+                    </label>
+                  </div>
+                  
+                  {availableForPrint && (
+                    <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">Print Sizes</h4>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addPrintSize}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Size
+                        </Button>
+                      </div>
+                      
+                      {printSizes.map((size, index) => (
+                        <div key={index} className="grid grid-cols-5 gap-3 p-3 border rounded bg-white">
+                          <div>
+                            <label className="text-xs font-medium text-gray-500">Width (cm)</label>
+                            <Input
+                              type="number"
+                              min="20"
+                              max="120"
+                              value={size.width}
+                              onChange={(e) => updatePrintSize(index, 'width', Number(e.target.value))}
+                              className="mt-1"
                             />
-                          </FormControl>
-                          <FormLabel className="text-sm font-normal">
-                            Make this artwork available for print purchases
-                          </FormLabel>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-500">Height (cm)</label>
+                            <Input
+                              type="number"
+                              min="20"
+                              max="120"
+                              value={size.height}
+                              onChange={(e) => updatePrintSize(index, 'height', Number(e.target.value))}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-500">Material</label>
+                            <Select
+                              value={size.material}
+                              onValueChange={(value) => updatePrintSize(index, 'material', value)}
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="paper">Paper</SelectItem>
+                                <SelectItem value="canvas">Canvas</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-500">Price Override (€)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={size.priceOverride || ''}
+                              onChange={(e) => updatePrintSize(index, 'priceOverride', e.target.value ? Number(e.target.value) : undefined)}
+                              placeholder={`€${calculatePrice(size.width, size.height, size.material)}`}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div className="flex items-end">
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => removePrintSize(index)}
+                              className="w-full"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                      ))}
+                      
+                      {printSizes.length === 0 && (
+                        <p className="text-sm text-gray-500 text-center py-4">
+                          No print sizes added yet. Click "Add Size" to create your first print option.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   
-                  <FormField
-                    control={artworkForm.control}
-                    name="preferredPrintMaterial"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Preferred Print Material</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
+                  {/* Mini Calculator */}
+                  <div className="space-y-3 p-4 border rounded-lg bg-blue-50">
+                    <h4 className="font-medium flex items-center">
+                      <Calculator className="w-4 h-4 mr-2" />
+                      Price Calculator
+                    </h4>
+                    <div className="grid grid-cols-4 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-gray-500">Width (cm)</label>
+                        <Input
+                          type="number"
+                          min="20"
+                          max="120"
+                          value={calcWidth}
+                          onChange={(e) => setCalcWidth(Number(e.target.value))}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-500">Height (cm)</label>
+                        <Input
+                          type="number"
+                          min="20"
+                          max="120"
+                          value={calcHeight}
+                          onChange={(e) => setCalcHeight(Number(e.target.value))}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-500">Material</label>
+                        <Select value={calcMaterial} onValueChange={(value: "paper" | "canvas") => setCalcMaterial(value)}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="paper">Paper</SelectItem>
                             <SelectItem value="canvas">Canvas</SelectItem>
                           </SelectContent>
                         </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-500">Calculated Price</label>
+                        <div className="mt-1 px-3 py-2 bg-white border rounded-md font-medium">
+                          €{calculatePrice(calcWidth, calcHeight, calcMaterial)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 
                 {/* Images Section */}
