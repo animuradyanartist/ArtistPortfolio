@@ -20,9 +20,9 @@ export default function PrintsPage() {
     queryKey: ["/api/artworks"]
   });
 
-  // Filter artworks available for prints (using available artworks as print candidates)
+  // Filter artworks available for prints (including both available and sold artworks)
   const printAvailableArtworks = useMemo(() => {
-    return artworks.filter(artwork => artwork.availability === 'available');
+    return artworks.filter(artwork => artwork.availableForPrint);
   }, [artworks]);
 
   // Price calculation
@@ -115,9 +115,18 @@ export default function PrintsPage() {
                       </div>
                       <CardContent className="p-4 group-hover:bg-gray-50/50 transition-colors duration-300">
                         <div className="transform transition-transform duration-300 group-hover:translate-y-[-2px]">
-                          <h3 className="font-medium text-charcoal text-sm mb-1 transition-colors duration-300 group-hover:text-deep-blue">
-                            {artwork.title}
-                          </h3>
+                          <div className="flex items-start justify-between mb-1">
+                            <h3 className="font-medium text-charcoal text-sm transition-colors duration-300 group-hover:text-deep-blue">
+                              {artwork.title}
+                            </h3>
+                            <div className={`text-xs px-2 py-1 rounded-full font-medium ${
+                              artwork.availability === 'available' 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-red-100 text-red-700'
+                            }`}>
+                              {artwork.availability === 'available' ? 'Available' : 'Sold'}
+                            </div>
+                          </div>
                           <p className="text-soft-gray text-xs transition-colors duration-300 group-hover:text-charcoal/80">
                             {artwork.dimensions}
                           </p>
