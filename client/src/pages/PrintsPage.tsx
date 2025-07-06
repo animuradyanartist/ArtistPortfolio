@@ -179,8 +179,8 @@ export default function PrintsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="paper">Paper (€0.013/cm²)</SelectItem>
-                      <SelectItem value="canvas">Canvas (€0.015/cm²)</SelectItem>
+                      <SelectItem value="paper">Paper</SelectItem>
+                      <SelectItem value="canvas">Canvas</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
