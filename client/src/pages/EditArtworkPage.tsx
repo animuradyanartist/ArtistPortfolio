@@ -32,6 +32,13 @@ export default function EditArtworkPage() {
     enabled: !!artworkId && !isNaN(artworkId)
   });
 
+  console.log('EditArtworkPage Debug:', {
+    artworkId,
+    isLoading,
+    error,
+    artwork: artwork ? { id: artwork.id, title: artwork.title } : null
+  });
+
   const artworkForm = useForm({
     resolver: zodResolver(insertArtworkSchema),
     defaultValues: {
@@ -54,21 +61,24 @@ export default function EditArtworkPage() {
   // Update form when artwork data is loaded
   useEffect(() => {
     if (artwork) {
-      artworkForm.reset({
-        title: artwork.title,
-        description: artwork.description,
-        medium: artwork.medium,
-        dimensions: artwork.dimensions,
-        year: artwork.year,
-        price: artwork.price,
-        images: artwork.images.length > 0 ? artwork.images : [""],
-        type: artwork.type,
-        size: artwork.size,
-        availability: artwork.availability,
+      console.log('Resetting form with artwork data:', artwork);
+      const formData = {
+        title: artwork.title || "",
+        description: artwork.description || "",
+        medium: artwork.medium || "",
+        dimensions: artwork.dimensions || "",
+        year: artwork.year || new Date().getFullYear(),
+        price: artwork.price || 0,
+        images: artwork.images && artwork.images.length > 0 ? artwork.images : [""],
+        type: artwork.type || "oil",
+        size: artwork.size || "medium",
+        availability: artwork.availability || "available",
         saatchiUrl: artwork.saatchiUrl || "",
         buyLink: artwork.buyLink || "",
         featured: artwork.featured || false,
-      });
+      };
+      console.log('Form data being set:', formData);
+      artworkForm.reset(formData);
     }
   }, [artwork, artworkForm]);
 
