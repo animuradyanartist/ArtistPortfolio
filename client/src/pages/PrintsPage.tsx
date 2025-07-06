@@ -95,8 +95,7 @@ export default function PrintsPage() {
                     }}
                   >
                     <Card 
-                      className="overflow-hidden hover:shadow-xl transition-all duration-500 cursor-pointer group transform hover:scale-105"
-                      onClick={() => setLocation(`/prints/artwork/${artwork.id}`)}
+                      className="overflow-hidden hover:shadow-xl transition-all duration-500 group transform hover:scale-105"
                     >
                       <div className="relative aspect-[3/4] overflow-hidden">
                         <div className="absolute inset-0 transform transition-transform duration-700 ease-out group-hover:scale-110">
@@ -106,10 +105,10 @@ export default function PrintsPage() {
                             className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-110"
                           />
                         </div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500">
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500">
                           <div className="absolute bottom-4 left-4 right-4 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 delay-100">
                             <div className="bg-white/95 backdrop-blur-sm px-3 py-2 rounded text-sm font-medium text-charcoal shadow-lg">
-                              View Print Options
+                              Available for Print
                             </div>
                           </div>
                         </div>
