@@ -85,33 +85,47 @@ export default function PrintsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                {printAvailableArtworks.map((artwork) => (
-                  <Card 
-                  key={artwork.id} 
-                  className="overflow-hidden hover:shadow-lg transition-shadow duration-300 cursor-pointer"
-                  onClick={() => setLocation(`/prints/artwork/${artwork.id}`)}
-                >
-                    <div className="relative aspect-[3/4]">
-                      <img 
-                        src={artwork.images[0]} 
-                        alt={artwork.title}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-all duration-300 flex items-center justify-center">
-                        <div className="opacity-0 hover:opacity-100 transition-opacity duration-300 bg-white/90 px-3 py-1 rounded text-sm font-medium text-charcoal">
-                          View Print Options
+                {printAvailableArtworks.map((artwork, index) => (
+                  <div
+                    key={artwork.id}
+                    className="animate-in fade-in-0 slide-in-from-bottom-8 duration-700 ease-out"
+                    style={{ 
+                      animationDelay: `${index * 100}ms`,
+                      animationFillMode: 'both'
+                    }}
+                  >
+                    <Card 
+                      className="overflow-hidden hover:shadow-xl transition-all duration-500 cursor-pointer group transform hover:scale-105"
+                      onClick={() => setLocation(`/prints/artwork/${artwork.id}`)}
+                    >
+                      <div className="relative aspect-[3/4] overflow-hidden">
+                        <div className="absolute inset-0 transform transition-transform duration-700 ease-out group-hover:scale-110">
+                          <img 
+                            src={artwork.images[0]} 
+                            alt={artwork.title}
+                            className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-110"
+                          />
+                        </div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500">
+                          <div className="absolute bottom-4 left-4 right-4 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 delay-100">
+                            <div className="bg-white/95 backdrop-blur-sm px-3 py-2 rounded text-sm font-medium text-charcoal shadow-lg">
+                              View Print Options
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <CardContent className="p-4">
-                      <h3 className="font-medium text-charcoal text-sm mb-1">
-                        {artwork.title}
-                      </h3>
-                      <p className="text-soft-gray text-xs">
-                        {artwork.dimensions}
-                      </p>
-                    </CardContent>
-                  </Card>
+                      <CardContent className="p-4 group-hover:bg-gray-50/50 transition-colors duration-300">
+                        <div className="transform transition-transform duration-300 group-hover:translate-y-[-2px]">
+                          <h3 className="font-medium text-charcoal text-sm mb-1 transition-colors duration-300 group-hover:text-deep-blue">
+                            {artwork.title}
+                          </h3>
+                          <p className="text-soft-gray text-xs transition-colors duration-300 group-hover:text-charcoal/80">
+                            {artwork.dimensions}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
                 ))}
               </div>
             )}

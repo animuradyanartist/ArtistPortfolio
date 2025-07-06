@@ -131,11 +131,22 @@
 
   .gallery-item {
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    will-change: transform, box-shadow;
   }
   
   .gallery-item:hover {
     transform: translateY(-5px);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  }
+
+  /* Enhanced parallax card effects */
+  .parallax-card {
+    transform-style: preserve-3d;
+    transition: transform 0.3s ease-out;
+  }
+
+  .parallax-card:hover {
+    transform: perspective(1000px) rotateX(2deg) rotateY(2deg) translateZ(15px);
   }
   
   .fade-in {
@@ -155,4 +166,93 @@
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(30px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Advanced animation keyframes for artwork gallery */
+@keyframes floatIn {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.9);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translateY(-5px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%) skewX(-12deg);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(200%) skewX(-12deg);
+    opacity: 0;
+  }
+}
+
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.2);
+  }
+}
+
+/* Utility classes for enhanced animations */
+.float-in {
+  animation: floatIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.gentle-float:hover {
+  animation: gentleFloat 3s ease-in-out infinite;
+}
+
+.shimmer-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-effect::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%) skewX(-12deg);
+  transition: transform 0.8s ease-out;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.shimmer-effect:hover::before {
+  animation: shimmer 1.2s ease-out;
+}
+
+.pulse-glow:hover {
+  animation: pulseGlow 2s ease-in-out infinite;
 }

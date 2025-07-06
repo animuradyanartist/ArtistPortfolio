@@ -87,12 +87,20 @@ export default function ArtworksPage() {
           </div>
         ) : (
           <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-8">
-            {filteredArtworks.map((artwork) => (
-              <ArtworkCard
+            {filteredArtworks.map((artwork, index) => (
+              <div
                 key={artwork.id}
-                artwork={artwork}
-                onViewDetails={handleViewDetails}
-              />
+                className="animate-in fade-in-0 slide-in-from-bottom-8 duration-700 ease-out"
+                style={{ 
+                  animationDelay: `${index * 100}ms`,
+                  animationFillMode: 'both'
+                }}
+              >
+                <ArtworkCard
+                  artwork={artwork}
+                  onViewDetails={handleViewDetails}
+                />
+              </div>
             ))}
           </div>
         )}
