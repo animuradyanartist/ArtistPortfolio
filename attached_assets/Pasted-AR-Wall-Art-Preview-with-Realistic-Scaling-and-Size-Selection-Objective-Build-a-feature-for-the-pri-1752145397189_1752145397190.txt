@@ -1,0 +1,65 @@
+AR Wall Art Preview with Realistic Scaling and Size Selection
+Objective:
+Build a feature for the print detail page that lets users preview art on their own wall using their device’s camera. Users can select any available print size, and the artwork is overlaid on the camera feed at true-to-life scale, with a realistic look.
+
+Feature Requirements:
+
+AR Preview Activation:
+
+Add a button labeled “Preview on Your Wall” or “Live AR Preview.”
+
+When clicked, prompt the user for camera access and show a live video feed.
+
+Size Selection During AR:
+
+Display all available print sizes (buttons or dropdown) within the AR view.
+
+When the user selects a size, update the artwork overlay so it appears at the correct real-world dimensions on the camera feed.
+
+Realistic Scaling and Positioning:
+
+Overlay the artwork image as a virtual print, sized to match the selected dimensions (e.g., a 60×80 cm print looks exactly 60×80 cm on the user’s wall in camera).
+
+Allow user to drag/move and place the artwork on the wall.
+
+Optionally: Let user set a reference point for scale (e.g., hold a credit card or A4 sheet against the wall to calibrate).
+
+Realistic Rendering:
+
+Add styling for realism:
+
+Soft drop shadow behind the print
+
+Subtle bevel or frame effect (if selected)
+
+(Optional) Glare, reflection, or slight wall texture blending for advanced realism
+
+UI/UX Details:
+
+User can change size at any time; overlay resizes instantly.
+
+Easy “close AR” button to return to normal page.
+
+Instructions: “Select a size and place the art on your wall to preview.”
+
+Tech Stack Recommendation:
+
+For fast MVP: use getUserMedia for camera + HTML/CSS/Canvas for overlay and scaling.
+
+For advanced/markerless scaling: consider using AR.js, 8th Wall, or Zappar WebAR.
+
+Mobile-First, Desktop-Compatible:
+
+Ensure feature works smoothly on mobile browsers (iOS Safari, Android Chrome), with desktop fallback if possible.
+
+Privacy & Performance:
+
+Only access camera after user allows. Release camera on close. Optimize for low-latency video and fast overlay updates.
+
+Deliverable:
+An “AR Preview” feature where users can turn on their camera, select an art print size, and see the art accurately scaled and realistically rendered on their wall in real-time.
+
+(Optional: For Extra Realism)
+Allow user to set a real-world object as a scale reference (credit card, A4 paper, etc.), and match print overlay size to it.
+
+Use blending and lighting effects to make the artwork appear more naturally integrated into the camera feed.

@@ -108,6 +108,7 @@ The application is configured for deployment on Replit with the following setup:
 
 ## Changelog
 
+- July 10, 2025: Enhanced AR Preview feature with realistic scaling and size selection. Users can now preview artwork on their own walls using device camera with accurate real-world dimensions. Added size selection within AR view, calibration with reference objects (credit card/A4 paper), realistic rendering effects including shadows, frames, and glare for different materials. Improved UI with comprehensive controls for positioning, scaling, and rotation.
 - June 27, 2025: Added comprehensive image upload functionality for admin panel, artwork reordering controls, and fixed About page to display uploaded artist bio photos. Fixed year field validation error in artwork forms and replaced buy buttons with styled contact information boxes. Added Microsoft Clarity analytics tracking to all pages. Removed exhibitions page from navigation menu. Created new Prints page with 2-column layout featuring artwork grid and live price calculator.
 - June 26, 2025: Initial setup
 

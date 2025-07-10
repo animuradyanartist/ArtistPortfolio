@@ -449,6 +449,7 @@ export default function PrintArtworkPage() {
                       images: print.images
                     }}
                     selectedSize={selectedSize}
+                    availableSizes={print.availableSizes}
                   />
                   
                   {!selectedSize && (
