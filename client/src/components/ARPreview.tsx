@@ -37,7 +37,6 @@ export default function ARPreview({ artwork, selectedSize, availableSizes, onSiz
   
   // Size selection in AR
   const [currentARSize, setCurrentARSize] = useState(selectedSize);
-  const [showSizeSelector, setShowSizeSelector] = useState(false);
   const [calibrationMode, setCalibrationMode] = useState(false);
   const [realWorldScale, setRealWorldScale] = useState(1); // pixels per cm
   
@@ -370,18 +369,10 @@ export default function ARPreview({ artwork, selectedSize, availableSizes, onSiz
     cleanup();
     setIsOpen(false);
     setShowInstructions(true);
-    setShowSizeSelector(false);
     setCalibrationMode(false);
   };
 
-  // Handle size change in AR - instant updates
-  const handleSizeChange = (sizeString: string) => {
-    const size = allSizes.find(s => `${s.width}x${s.height}-${s.material}` === sizeString);
-    if (size) {
-      setCurrentARSize(size);
-      setShowSizeSelector(false);
-    }
-  };
+
 
   // Photo capture functionality
   const capturePhoto = async () => {
@@ -501,6 +492,43 @@ export default function ARPreview({ artwork, selectedSize, availableSizes, onSiz
                 </Button>
               </div>
             </div>
+
+            {/* Compact Horizontal Size Selector */}
+            {isInitialized && (
+              <div className="absolute top-20 left-0 right-0 z-20 px-4">
+                <div className="flex items-center justify-center">
+                  <div className="bg-black/30 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg">
+                    <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide max-w-sm">
+                      <div className="flex space-x-2 min-w-max">
+                        {allSizes.map((size, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              setCurrentARSize(size);
+                              if (onSizeSelect) {
+                                onSizeSelect(size.width, size.height, size.material);
+                              }
+                            }}
+                            className={`
+                              px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 whitespace-nowrap touch-friendly
+                              ${currentARSize?.width === size.width && currentARSize?.height === size.height && currentARSize?.material === size.material
+                                ? 'bg-blue-500 text-white shadow-md scale-105 ring-2 ring-blue-300'
+                                : 'bg-white/20 text-white/90 hover:bg-white/30 hover:scale-105 border border-white/30'
+                              }
+                            `}
+                          >
+                            {size.width}×{size.height}
+                            <span className="ml-1 text-xs opacity-75">
+                              {size.material === 'paper' ? 'P' : 'C'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Camera view */}
             <div className="w-full h-full relative">
@@ -629,64 +657,7 @@ export default function ARPreview({ artwork, selectedSize, availableSizes, onSiz
               </div>
             )}
 
-            {/* Size selector overlay - Instant Live Updates */}
-            {showSizeSelector && isInitialized && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
-                <Card className="max-w-md mx-4">
-                  <CardContent className="p-6">
-                    <h3 className="text-lg font-semibold mb-4">Select Print Size</h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Tap any size to instantly see it on your wall
-                    </p>
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      {allSizes.map((size, index) => (
-                        <Button
-                          key={index}
-                          variant={currentARSize?.width === size.width && currentARSize?.height === size.height && currentARSize?.material === size.material ? "default" : "outline"}
-                          className="p-3 h-auto text-left relative"
-                          onClick={() => {
-                            // Instant live update
-                            setCurrentARSize(size);
-                            
-                            // Notify parent component if callback provided
-                            if (onSizeSelect) {
-                              onSizeSelect(size.width, size.height, size.material);
-                            }
-                            
-                            // Visual feedback
-                            const btn = document.querySelector(`[data-size="${size.width}x${size.height}-${size.material}"]`);
-                            if (btn) {
-                              btn.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
-                              setTimeout(() => {
-                                btn.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
-                              }, 300);
-                            }
-                          }}
-                          data-size={`${size.width}x${size.height}-${size.material}`}
-                        >
-                          <div>
-                            <div className="font-medium">{size.width} × {size.height} cm</div>
-                            <div className="text-xs text-gray-500 capitalize">{size.material}</div>
-                            {currentARSize?.width === size.width && currentARSize?.height === size.height && currentARSize?.material === size.material && (
-                              <div className="absolute top-2 right-2">
-                                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                              </div>
-                            )}
-                          </div>
-                        </Button>
-                      ))}
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowSizeSelector(false)}
-                      className="w-full"
-                    >
-                      Done
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
+
 
             {/* Calibration overlay */}
             {calibrationMode && isInitialized && (
@@ -765,16 +736,6 @@ export default function ARPreview({ artwork, selectedSize, availableSizes, onSiz
 
                   {/* Action buttons */}
                   <div className="flex items-center justify-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowSizeSelector(true)}
-                      className="bg-white/20 border-white/30 text-white hover:bg-white/30"
-                    >
-                      <Ruler className="w-4 h-4 mr-2" />
-                      Size
-                    </Button>
-                    
                     <Button
                       variant="outline"
                       size="sm"
