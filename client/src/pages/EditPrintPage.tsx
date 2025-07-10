@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { insertArtworkSchema, type Artwork } from "@shared/schema";
+import { insertPrintSchema, type Print, type Artwork } from "@shared/schema";
 import { Upload, X, ArrowLeft, Loader2, Plus, Trash2, Calculator } from "lucide-react";
 
 interface PrintSize {
@@ -22,20 +22,27 @@ interface PrintSize {
   priceOverride?: number;
 }
 
-export default function EditArtworkPage() {
-  const params = useParams();
-  const artworkId = parseInt(params.id as string);
+export default function EditPrintPage() {
+  const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
-  
-
   const [uploadingImages, setUploadingImages] = useState<boolean[]>([false, false, false]);
   const [printSizes, setPrintSizes] = useState<PrintSize[]>([]);
-  const [availableForPrint, setAvailableForPrint] = useState(false);
   const [calcWidth, setCalcWidth] = useState(30);
   const [calcHeight, setCalcHeight] = useState(40);
   const [calcMaterial, setCalcMaterial] = useState<"paper" | "canvas">("paper");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch print data
+  const { data: print, isLoading: printLoading } = useQuery<Print>({
+    queryKey: ["/api/prints", id],
+    enabled: !!id,
+  });
+
+  // Fetch artworks for optional reference selection
+  const { data: artworks = [] } = useQuery<Artwork[]>({
+    queryKey: ["/api/artworks"],
+  });
 
   // Print size management functions
   const addPrintSize = () => {
@@ -57,79 +64,51 @@ export default function EditArtworkPage() {
     return (width * height * rate).toFixed(2);
   };
 
-  // Fetch existing artwork data
-  const { data: artwork, isLoading, error } = useQuery<Artwork>({
-    queryKey: ['/api/artworks', artworkId],
-    enabled: !!artworkId && !isNaN(artworkId)
-  });
-
-
-
-  const artworkForm = useForm({
-    resolver: zodResolver(insertArtworkSchema),
+  const printForm = useForm({
+    resolver: zodResolver(insertPrintSchema),
     defaultValues: {
       title: "",
       description: "",
-      medium: "",
-      dimensions: "",
-      year: new Date().getFullYear(),
-      price: 0,
       images: [""],
-      type: "oil",
-      size: "medium",
-      availability: "available",
-      saatchiUrl: "",
-      buyLink: "",
+      artworkId: undefined,
+      availableSizes: "",
+      preferredMaterial: "paper",
+      status: "active",
       featured: false,
-      availableForPrint: false,
-      preferredPrintMaterial: "paper",
+      position: 0,
     },
   });
 
-  // Update form and print data when artwork data is loaded
+  // Update form when print data loads
   useEffect(() => {
-    if (artwork) {
+    if (print) {
+      printForm.reset({
+        title: print.title || "",
+        description: print.description || "",
+        images: print.images || [""],
+        artworkId: print.artworkId || undefined,
+        availableSizes: print.availableSizes || "",
+        preferredMaterial: print.preferredMaterial || "paper",
+        status: print.status || "active",
+        featured: print.featured || false,
+        position: print.position || 0,
+      });
 
-      const formData = {
-        title: artwork.title || "",
-        description: artwork.description || "",
-        medium: artwork.medium || "",
-        dimensions: artwork.dimensions || "",
-        year: artwork.year || new Date().getFullYear(),
-        price: artwork.price || 0,
-        images: artwork.images && artwork.images.length > 0 ? artwork.images : [""],
-        type: artwork.type || "oil",
-        size: artwork.size || "medium",
-        availability: artwork.availability || "available",
-        saatchiUrl: artwork.saatchiUrl || "",
-        buyLink: artwork.buyLink || "",
-        featured: artwork.featured || false,
-        availableForPrint: artwork.availableForPrint || false,
-        preferredPrintMaterial: artwork.preferredPrintMaterial || "paper",
-      };
-      
-      // Set print data
-      setAvailableForPrint(artwork.availableForPrint || false);
-      if (artwork.printSizes) {
+      // Parse and set print sizes
+      if (print.availableSizes) {
         try {
-          const parsedSizes = JSON.parse(artwork.printSizes);
-          setPrintSizes(parsedSizes);
+          const sizes = JSON.parse(print.availableSizes);
+          setPrintSizes(sizes);
         } catch (error) {
           console.error('Error parsing print sizes:', error);
-          setPrintSizes([]);
         }
-      } else {
-        setPrintSizes([]);
       }
-      
-
-      artworkForm.reset(formData);
     }
-  }, [artwork, artworkForm]);
+  }, [print, printForm]);
 
-  const updateArtworkMutation = useMutation({
+  const updatePrintMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest(`/api/artworks/${artworkId}`, {
+      return await apiRequest(`/api/prints/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),
       });
@@ -137,16 +116,39 @@ export default function EditArtworkPage() {
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "Artwork updated successfully!",
+        description: "Print edition updated successfully!",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/artworks'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/artworks', artworkId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/prints"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/prints", id] });
       setLocation("/admin");
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update artwork",
+        description: error.message || "Failed to update print edition",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deletePrintMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest(`/api/prints/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Print edition deleted successfully!",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/prints"] });
+      setLocation("/admin");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete print edition",
         variant: "destructive",
       });
     },
@@ -193,7 +195,7 @@ export default function EditArtworkPage() {
 
       const base64 = await convertFileToBase64(file);
       
-      const currentImages = artworkForm.getValues("images") || [];
+      const currentImages = printForm.getValues("images") || [];
       const newImages = [...currentImages];
       
       // Ensure we have enough slots
@@ -202,7 +204,7 @@ export default function EditArtworkPage() {
       }
       
       newImages[imageIndex] = base64;
-      artworkForm.setValue("images", newImages);
+      printForm.setValue("images", newImages);
 
       toast({
         title: "Success",
@@ -225,10 +227,10 @@ export default function EditArtworkPage() {
   };
 
   const removeImage = (imageIndex: number) => {
-    const currentImages = artworkForm.getValues("images") || [];
+    const currentImages = printForm.getValues("images") || [];
     const newImages = [...currentImages];
     newImages[imageIndex] = "";
-    artworkForm.setValue("images", newImages);
+    printForm.setValue("images", newImages);
   };
 
   const handleSubmit = (data: any) => {
@@ -244,34 +246,44 @@ export default function EditArtworkPage() {
       return;
     }
 
+    if (printSizes.length === 0) {
+      toast({
+        title: "Error",
+        description: "At least one print size is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const submissionData = {
       ...data,
       images: filteredImages,
-      availableForPrint,
-      printSizes: availableForPrint ? JSON.stringify(printSizes) : null,
+      availableSizes: JSON.stringify(printSizes),
     };
 
-    updateArtworkMutation.mutate(submissionData);
+    updatePrintMutation.mutate(submissionData);
   };
 
-  if (isLoading) {
+  const handleDelete = () => {
+    if (window.confirm("Are you sure you want to delete this print edition? This action cannot be undone.")) {
+      deletePrintMutation.mutate();
+    }
+  };
+
+  if (printLoading) {
     return (
-      <div className="min-h-screen bg-soft-white flex items-center justify-center">
-        <div className="flex items-center space-x-2">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Loading artwork...</span>
-        </div>
+      <div className="min-h-screen bg-soft-white py-8 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-deep-blue" />
       </div>
     );
   }
 
-  if (error || !artwork) {
+  if (!print) {
     return (
-      <div className="min-h-screen bg-soft-white flex items-center justify-center">
+      <div className="min-h-screen bg-soft-white py-8 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-charcoal mb-4">Artwork Not Found</h1>
-          <Button onClick={() => setLocation("/admin")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
+          <h2 className="text-2xl font-playfair text-deep-blue mb-4">Print Edition Not Found</h2>
+          <Button onClick={() => setLocation("/admin")} className="bg-deep-blue hover:bg-deep-blue/90">
             Back to Admin
           </Button>
         </div>
@@ -292,31 +304,43 @@ export default function EditArtworkPage() {
             Back to Admin
           </Button>
           <h1 className="text-3xl font-playfair text-deep-blue mb-2">
-            Edit Artwork
+            Edit Print Edition
           </h1>
           <p className="text-charcoal">
-            Update the details for "{artwork.title}"
+            Update this print edition's details, images, and sizing options
           </p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-playfair text-xl text-deep-blue">
-              Artwork Details
+            <CardTitle className="font-playfair text-xl text-deep-blue flex items-center justify-between">
+              <span>Print Edition Details</span>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDelete}
+                disabled={deletePrintMutation.isPending}
+              >
+                {deletePrintMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Form {...artworkForm}>
-              <form onSubmit={artworkForm.handleSubmit(handleSubmit)} className="space-y-6">
+            <Form {...printForm}>
+              <form onSubmit={printForm.handleSubmit(handleSubmit)} className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
-                    control={artworkForm.control}
+                    control={printForm.control}
                     name="title"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Title</FormLabel>
+                        <FormLabel>Print Title</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input {...field} placeholder="Limited Edition Print - Artwork Name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -324,19 +348,22 @@ export default function EditArtworkPage() {
                   />
                   
                   <FormField
-                    control={artworkForm.control}
-                    name="year"
+                    control={printForm.control}
+                    name="preferredMaterial"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Year</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            type="number" 
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                            value={field.value || ''}
-                          />
-                        </FormControl>
+                        <FormLabel>Preferred Material</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="paper">Paper</SelectItem>
+                            <SelectItem value="canvas">Canvas</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -344,166 +371,63 @@ export default function EditArtworkPage() {
                 </div>
                 
                 <FormField
-                  control={artworkForm.control}
+                  control={printForm.control}
                   name="description"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Description</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={3} />
+                        <Textarea {...field} rows={3} placeholder="Describe this print edition..." />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={artworkForm.control}
-                    name="medium"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Medium</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Oil on canvas" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={artworkForm.control}
-                    name="dimensions"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Dimensions</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="24&quot; × 30&quot;" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={artworkForm.control}
-                    name="price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Price ($)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            type="number" 
-                            placeholder="2500"
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                            value={field.value || ''}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={artworkForm.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="oil">Oil Painting</SelectItem>
-                            <SelectItem value="watercolor">Watercolor</SelectItem>
-                            <SelectItem value="acrylic">Acrylic</SelectItem>
-                            <SelectItem value="mixed">Mixed Media</SelectItem>
-                            <SelectItem value="digital">Digital Art</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={artworkForm.control}
-                    name="size"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Size</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="small">Small</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="large">Large</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={artworkForm.control}
-                    name="availability"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Availability</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="available">Available</SelectItem>
-                            <SelectItem value="sold">Sold</SelectItem>
-                            <SelectItem value="reserved">Reserved</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
-                    control={artworkForm.control}
-                    name="saatchiUrl"
+                    control={printForm.control}
+                    name="artworkId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Saatchi Art URL (optional)</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="https://saatchiart.com/..." />
-                        </FormControl>
+                        <FormLabel>Reference Artwork (Optional)</FormLabel>
+                        <Select onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)} value={field.value?.toString() || ""}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select original artwork (optional)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="">No reference artwork</SelectItem>
+                            {artworks.map((artwork) => (
+                              <SelectItem key={artwork.id} value={artwork.id.toString()}>
+                                {artwork.title} ({artwork.year})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
-                    control={artworkForm.control}
-                    name="buyLink"
+                    control={printForm.control}
+                    name="status"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Buy Link (optional)</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="https://store.example.com/..." />
-                        </FormControl>
+                        <FormLabel>Status</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="discontinued">Discontinued</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -511,7 +435,7 @@ export default function EditArtworkPage() {
                 </div>
                 
                 <FormField
-                  control={artworkForm.control}
+                  control={printForm.control}
                   name="featured"
                   render={({ field }) => (
                     <FormItem className="flex flex-row items-start space-x-3 space-y-0">
@@ -523,118 +447,97 @@ export default function EditArtworkPage() {
                       </FormControl>
                       <div className="space-y-1 leading-none">
                         <FormLabel>
-                          Featured Artwork
+                          Featured Print Edition
                         </FormLabel>
                         <p className="text-sm text-muted-foreground">
-                          Display this artwork prominently on the homepage
+                          Display this print edition prominently
                         </p>
                       </div>
                     </FormItem>
                   )}
                 />
                 
-                {/* Print Options Section */}
+                {/* Print Sizes Section */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-charcoal">Print Options</h3>
-                  
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={availableForPrint}
-                      onChange={(e) => setAvailableForPrint(e.target.checked)}
-                      className="rounded"
-                    />
-                    <label className="text-sm font-normal">
-                      Available as Print?
-                    </label>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-charcoal">Available Sizes</h3>
+                    <Button type="button" onClick={addPrintSize} variant="outline" size="sm">
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Size
+                    </Button>
                   </div>
                   
-                  {availableForPrint && (
-                    <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium">Print Sizes</h4>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={addPrintSize}
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Add Size
-                        </Button>
-                      </div>
-                      
-                      {printSizes.map((size, index) => (
-                        <div key={index} className="grid grid-cols-5 gap-3 p-3 border rounded bg-white">
-                          <div>
-                            <label className="text-xs font-medium text-gray-500">Width (cm)</label>
-                            <Input
-                              type="number"
-                              min="20"
-                              max="120"
-                              value={size.width}
-                              onChange={(e) => updatePrintSize(index, 'width', Number(e.target.value))}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-500">Height (cm)</label>
-                            <Input
-                              type="number"
-                              min="20"
-                              max="120"
-                              value={size.height}
-                              onChange={(e) => updatePrintSize(index, 'height', Number(e.target.value))}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-500">Material</label>
-                            <Select
-                              value={size.material}
-                              onValueChange={(value) => updatePrintSize(index, 'material', value)}
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="paper">Paper</SelectItem>
-                                <SelectItem value="canvas">Canvas</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-gray-500">Price Override (€)</label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={size.priceOverride || ''}
-                              onChange={(e) => updatePrintSize(index, 'priceOverride', e.target.value ? Number(e.target.value) : undefined)}
-                              placeholder={`€${calculatePrice(size.width, size.height, size.material)}`}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div className="flex items-end">
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => removePrintSize(index)}
-                              className="w-full"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
+                  <div className="space-y-3">
+                    {printSizes.map((size, index) => (
+                      <div key={index} className="grid grid-cols-5 gap-3 items-end p-3 border rounded-lg bg-gray-50">
+                        <div>
+                          <label className="text-xs font-medium text-gray-500">Width (cm)</label>
+                          <Input
+                            type="number"
+                            min="20"
+                            max="120"
+                            value={size.width}
+                            onChange={(e) => updatePrintSize(index, 'width', Number(e.target.value))}
+                            className="mt-1"
+                          />
                         </div>
-                      ))}
-                      
-                      {printSizes.length === 0 && (
-                        <p className="text-sm text-gray-500 text-center py-4">
-                          No print sizes added yet. Click "Add Size" to create your first print option.
-                        </p>
-                      )}
-                    </div>
-                  )}
+                        <div>
+                          <label className="text-xs font-medium text-gray-500">Height (cm)</label>
+                          <Input
+                            type="number"
+                            min="20"
+                            max="120"
+                            value={size.height}
+                            onChange={(e) => updatePrintSize(index, 'height', Number(e.target.value))}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-500">Material</label>
+                          <Select
+                            value={size.material}
+                            onValueChange={(value) => updatePrintSize(index, 'material', value)}
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="paper">Paper</SelectItem>
+                              <SelectItem value="canvas">Canvas</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-500">Price Override (€)</label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={size.priceOverride || ''}
+                            onChange={(e) => updatePrintSize(index, 'priceOverride', e.target.value ? Number(e.target.value) : undefined)}
+                            placeholder={`€${calculatePrice(size.width, size.height, size.material)}`}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => removePrintSize(index)}
+                            className="w-full"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {printSizes.length === 0 && (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        No print sizes added yet. Click "Add Size" to create your first print option.
+                      </p>
+                    )}
+                  </div>
                   
                   {/* Mini Calculator */}
                   <div className="space-y-3 p-4 border rounded-lg bg-blue-50">
@@ -689,17 +592,17 @@ export default function EditArtworkPage() {
                 
                 {/* Images Section */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-charcoal">Artwork Images</h3>
+                  <h3 className="text-lg font-semibold text-charcoal">Print Images</h3>
                   
                   {[0, 1, 2].map((imageIndex) => (
                     <FormField
                       key={imageIndex}
-                      control={artworkForm.control}
+                      control={printForm.control}
                       name="images"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>
-                            {imageIndex === 0 ? "Main Image" : `Additional Image ${imageIndex}`}
+                            {imageIndex === 0 ? "Main Print Image" : `Additional Print Image ${imageIndex}`}
                             {imageIndex === 0 && " (required)"}
                           </FormLabel>
                           <div className="space-y-3">
@@ -792,17 +695,17 @@ export default function EditArtworkPage() {
                     Cancel
                   </Button>
                   <Button 
-                    type="submit" 
-                    disabled={updateArtworkMutation.isPending}
+                    type="submit"
+                    disabled={updatePrintMutation.isPending}
                     className="bg-deep-blue hover:bg-deep-blue/90"
                   >
-                    {updateArtworkMutation.isPending ? (
+                    {updatePrintMutation.isPending ? (
                       <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
                         Updating...
                       </>
                     ) : (
-                      "Update Artwork"
+                      "Update Print Edition"
                     )}
                   </Button>
                 </div>

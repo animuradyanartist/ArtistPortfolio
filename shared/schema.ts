@@ -24,10 +24,21 @@ export const artworks = pgTable("artworks", {
   buyLink: text("buy_link"),
   featured: boolean("featured").default(false),
   position: integer("position").default(0),
-  // Print-specific fields
-  availableForPrint: boolean("available_for_print").default(false),
-  printSizes: text("print_sizes"), // JSON string of {width, height, material, price?}[]
-  preferredPrintMaterial: text("preferred_print_material").default("paper"), // paper, canvas
+});
+
+export const prints = pgTable("prints", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  images: text("images").array().notNull(),
+  artworkId: integer("artwork_id"), // Optional reference to original artwork
+  availableSizes: text("available_sizes").notNull(), // JSON string of {width, height, material, price?}[]
+  preferredMaterial: text("preferred_material").notNull().default("paper"), // paper, canvas
+  status: text("status").notNull().default("active"), // active, discontinued
+  featured: boolean("featured").default(false),
+  position: integer("position").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const exhibitions = pgTable("exhibitions", {
@@ -69,6 +80,12 @@ export const insertArtworkSchema = createInsertSchema(artworks).omit({
   id: true,
 });
 
+export const insertPrintSchema = createInsertSchema(prints).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertExhibitionSchema = createInsertSchema(exhibitions).omit({
   id: true,
 });
@@ -85,6 +102,8 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertArtwork = z.infer<typeof insertArtworkSchema>;
 export type Artwork = typeof artworks.$inferSelect;
+export type InsertPrint = z.infer<typeof insertPrintSchema>;
+export type Print = typeof prints.$inferSelect;
 export type InsertExhibition = z.infer<typeof insertExhibitionSchema>;
 export type Exhibition = typeof exhibitions.$inferSelect;
 export type InsertHomepageSettings = z.infer<typeof insertHomepageSettingsSchema>;

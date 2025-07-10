@@ -14,6 +14,8 @@ import ContactPage from "@/pages/ContactPage";
 import AdminPage from "@/pages/AdminPage";
 import CreateArtworkPage from "@/pages/CreateArtworkPage";
 import EditArtworkPage from "@/pages/EditArtworkPage";
+import CreatePrintPage from "@/pages/CreatePrintPage";
+import EditPrintPage from "@/pages/EditPrintPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -29,6 +31,8 @@ function Router() {
       <Route path="/admin" component={AdminPage} />
       <Route path="/admin/create-artwork" component={CreateArtworkPage} />
       <Route path="/admin/edit-artwork/:id" component={EditArtworkPage} />
+      <Route path="/admin/create-print" component={CreatePrintPage} />
+      <Route path="/admin/edit-print/:id" component={EditPrintPage} />
       <Route component={NotFound} />
     </Switch>
   );

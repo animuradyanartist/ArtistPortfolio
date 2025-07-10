@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import { storage } from "./storage";
-import { insertArtworkSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema } from "@shared/schema";
+import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema } from "@shared/schema";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -159,42 +159,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Bulk print management endpoints
-  app.post("/api/artworks/bulk-print-enable", async (req, res) => {
+  // Prints routes
+  app.get("/api/prints", async (req, res) => {
     try {
-      const artworks = await storage.getAllArtworks();
-      
-      // Update all artworks to enable prints
-      for (const artwork of artworks) {
-        await storage.updateArtwork(artwork.id, {
-          ...artwork,
-          availableForPrint: true
-        });
-      }
-      
-      res.json({ message: "All artworks are now available for prints", count: artworks.length });
+      const prints = await storage.getAllPrints();
+      res.json(prints);
     } catch (error) {
-      console.error('Bulk print enable error:', error);
-      res.status(500).json({ message: "Failed to enable prints for all artworks" });
+      res.status(500).json({ message: "Failed to fetch prints" });
     }
   });
 
-  app.post("/api/artworks/bulk-print-disable", async (req, res) => {
+  app.get("/api/prints/:id", async (req, res) => {
     try {
-      const artworks = await storage.getAllArtworks();
+      const id = parseInt(req.params.id);
+      const print = await storage.getPrint(id);
+      if (!print) {
+        return res.status(404).json({ message: "Print not found" });
+      }
+      res.json(print);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch print" });
+    }
+  });
+
+  app.post("/api/prints", async (req, res) => {
+    try {
+      const validatedData = insertPrintSchema.parse(req.body);
       
-      // Update all artworks to disable prints
-      for (const artwork of artworks) {
-        await storage.updateArtwork(artwork.id, {
-          ...artwork,
-          availableForPrint: false
-        });
+      // Validate images array
+      if (validatedData.images && validatedData.images.length > 0) {
+        for (const image of validatedData.images) {
+          if (!image.startsWith('data:image/') && !image.startsWith('http')) {
+            return res.status(400).json({ message: "Invalid image format detected" });
+          }
+        }
       }
       
-      res.json({ message: "All prints have been disabled", count: artworks.length });
+      const print = await storage.createPrint(validatedData);
+      res.status(201).json(print);
     } catch (error) {
-      console.error('Bulk print disable error:', error);
-      res.status(500).json({ message: "Failed to disable prints for all artworks" });
+      console.error('Print creation error:', error);
+      res.status(400).json({ message: "Invalid print data", error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  app.put("/api/prints/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertPrintSchema.partial().parse(req.body);
+      
+      // Validate images array if present
+      if (validatedData.images && validatedData.images.length > 0) {
+        for (const image of validatedData.images) {
+          if (!image.startsWith('data:image/') && !image.startsWith('http')) {
+            return res.status(400).json({ message: "Invalid image format detected" });
+          }
+        }
+      }
+      
+      const print = await storage.updatePrint(id, validatedData);
+      if (!print) {
+        return res.status(404).json({ message: "Print not found" });
+      }
+      
+      res.json(print);
+    } catch (error) {
+      console.error('Print update error:', error);
+      res.status(400).json({ message: "Invalid print data", error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  app.delete("/api/prints/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deletePrint(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Print not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete print" });
+    }
+  });
+
+  app.get("/api/prints/featured", async (req, res) => {
+    try {
+      const prints = await storage.getFeaturedPrints();
+      res.json(prints);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch featured prints" });
     }
   });
 

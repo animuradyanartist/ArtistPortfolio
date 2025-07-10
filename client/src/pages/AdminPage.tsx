@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema } from "@shared/schema";
-import type { Artwork, Exhibition, HomepageSettings, ArtistBio } from "@shared/schema";
+import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio } from "@shared/schema";
 import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown } from "lucide-react";
 
 export default function AdminPage() {
@@ -658,183 +658,9 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Prints Tab */}
+        {/* Prints Tab - Independent Print Management */}
         {activeTab === 'prints' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="font-playfair text-2xl text-deep-blue">Print Management</h2>
-            </div>
-            
-            {artworksLoading ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="animate-pulse">
-                    <div className="bg-gray-200 h-48 rounded-lg"></div>
-                    <div className="mt-2 h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="mt-1 h-3 bg-gray-200 rounded w-1/2"></div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {artworks.map((artwork) => (
-                  <Card key={artwork.id} className="overflow-hidden">
-                    <div className="aspect-video bg-gray-100">
-                      {artwork.images?.[0] && (
-                        <img 
-                          src={artwork.images[0]} 
-                          alt={artwork.title}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                    </div>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-semibold text-charcoal text-sm truncate">
-                          {artwork.title}
-                        </h3>
-                        <div className={`text-xs px-2 py-1 rounded-full font-medium ${
-                          artwork.availableForPrint 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {artwork.availableForPrint ? 'Print Available' : 'No Prints'}
-                        </div>
-                      </div>
-                      <p className="text-soft-gray text-xs mb-3">
-                        {artwork.year} • {artwork.medium}
-                      </p>
-                      
-                      {/* Print Status and Controls */}
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant={artwork.availableForPrint ? "default" : "outline"}
-                            onClick={async () => {
-                              const newStatus = !artwork.availableForPrint;
-                              try {
-                                await apiRequest(`/api/artworks/${artwork.id}`, {
-                                  method: "PUT",
-                                  body: JSON.stringify({
-                                    ...artwork,
-                                    availableForPrint: newStatus
-                                  })
-                                });
-                                queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
-                                toast({
-                                  title: "Print status updated",
-                                  description: `${artwork.title} is now ${newStatus ? 'available' : 'unavailable'} for prints`,
-                                });
-                              } catch (error) {
-                                toast({
-                                  title: "Error",
-                                  description: "Failed to update print status",
-                                  variant: "destructive",
-                                });
-                              }
-                            }}
-                            className="text-xs"
-                          >
-                            {artwork.availableForPrint ? 'Disable Prints' : 'Enable Prints'}
-                          </Button>
-                        </div>
-                        
-                        {artwork.availableForPrint && (
-                          <div className="text-xs text-soft-gray">
-                            Material: {artwork.preferredPrintMaterial || 'paper'}
-                            {artwork.printSizes && (() => {
-                              try {
-                                const sizes = JSON.parse(artwork.printSizes);
-                                return sizes.length > 0 ? ` • ${sizes.length} size(s)` : ' • No sizes set';
-                              } catch {
-                                return ' • No sizes set';
-                              }
-                            })()}
-                          </div>
-                        )}
-                        
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setLocation(`/admin/edit-artwork/${artwork.id}`)}
-                          className="w-full text-xs"
-                        >
-                          <Edit className="w-3 h-3 mr-1" />
-                          Edit Print Settings
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-            
-            {/* Bulk Print Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-playfair text-lg text-deep-blue">
-                  Bulk Print Actions
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-2">
-                  <Button
-                    onClick={async () => {
-                      try {
-                        await apiRequest('/api/artworks/bulk-print-enable', {
-                          method: 'POST',
-                        });
-                        queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
-                        toast({
-                          title: "Success",
-                          description: "All artworks are now available for prints",
-                        });
-                      } catch (error) {
-                        toast({
-                          title: "Error", 
-                          description: "Failed to enable prints for all artworks",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    Enable All Prints
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        await apiRequest('/api/artworks/bulk-print-disable', {
-                          method: 'POST',
-                        });
-                        queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
-                        toast({
-                          title: "Success",
-                          description: "All prints have been disabled",
-                        });
-                      } catch (error) {
-                        toast({
-                          title: "Error",
-                          description: "Failed to disable prints for all artworks", 
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                  >
-                    Disable All Prints
-                  </Button>
-                </div>
-                
-                <p className="text-sm text-soft-gray">
-                  Use these actions to quickly enable or disable print availability for all artworks at once.
-                  Individual print settings like sizes and materials can be configured per artwork.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <PrintsManagement />
         )}
 
         {/* Artist Bio Tab */}
@@ -991,6 +817,160 @@ export default function AdminPage() {
           </Card>
         )}
       </div>
+    </div>
+  );
+}
+
+function PrintsManagement() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  
+  const { data: prints = [], isLoading: printsLoading } = useQuery<Print[]>({
+    queryKey: ["/api/prints"],
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="font-playfair text-2xl text-deep-blue">Print Editions Management</h2>
+        <Button
+          onClick={() => setLocation("/admin/create-print")}
+          className="bg-deep-blue hover:bg-deep-blue/90"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add New Print Edition
+        </Button>
+      </div>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-playfair text-lg text-deep-blue">
+            About Print Editions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-soft-gray mb-4">
+            Print editions are completely separate from original artworks. Each print edition has its own images, 
+            pricing, sizes, and materials. You can optionally reference an original artwork, but prints have 
+            independent management and data.
+          </p>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <h3 className="font-semibold text-deep-blue mb-2">Independent Data</h3>
+              <p className="text-xs text-soft-gray">
+                Prints have their own images, descriptions, and pricing separate from original artworks.
+              </p>
+            </div>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <h3 className="font-semibold text-deep-blue mb-2">Custom Sizes</h3>
+              <p className="text-xs text-soft-gray">
+                Configure multiple size options with different materials and custom pricing per print edition.
+              </p>
+            </div>
+            <div className="text-center p-4 bg-purple-50 rounded-lg">
+              <h3 className="font-semibold text-deep-blue mb-2">Optional Reference</h3>
+              <p className="text-xs text-soft-gray">
+                Optionally link to an original artwork for reference, but prints remain independently managed.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {printsLoading ? (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="animate-pulse">
+              <div className="bg-gray-200 h-48 rounded-lg"></div>
+              <div className="mt-2 h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="mt-1 h-3 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
+      ) : prints.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <div className="text-soft-gray">
+              <h3 className="font-semibold text-lg mb-2">No Print Editions Yet</h3>
+              <p className="text-sm mb-4">
+                Start by creating your first print edition. Each print edition is independent with its own images, 
+                sizes, and pricing.
+              </p>
+              <Button
+                onClick={() => setLocation("/admin/create-print")}
+                className="bg-deep-blue hover:bg-deep-blue/90"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create First Print Edition
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {prints.map((print) => (
+            <Card key={print.id} className="overflow-hidden">
+              <div className="aspect-video bg-gray-100">
+                {print.images?.[0] && (
+                  <img 
+                    src={print.images[0]} 
+                    alt={print.title}
+                    className="w-full h-full object-cover"
+                  />
+                )}
+              </div>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="font-semibold text-charcoal text-sm truncate">
+                    {print.title}
+                  </h3>
+                  <div className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    print.status === 'active' 
+                      ? 'bg-green-100 text-green-700' 
+                      : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    {print.status === 'active' ? 'Active' : 'Discontinued'}
+                  </div>
+                </div>
+                <p className="text-soft-gray text-xs mb-3">
+                  {print.preferredMaterial} • {(() => {
+                    try {
+                      const sizes = JSON.parse(print.availableSizes);
+                      return `${sizes.length} size${sizes.length !== 1 ? 's' : ''}`;
+                    } catch {
+                      return 'No sizes';
+                    }
+                  })()}
+                </p>
+                
+                {print.description && (
+                  <p className="text-xs text-soft-gray mb-3 line-clamp-2">
+                    {print.description}
+                  </p>
+                )}
+                
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setLocation(`/admin/edit-print/${print.id}`)}
+                    className="flex-1 text-xs"
+                  >
+                    <Edit className="w-3 h-3 mr-1" />
+                    Edit
+                  </Button>
+                  
+                  {print.featured && (
+                    <div className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full font-medium">
+                      Featured
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

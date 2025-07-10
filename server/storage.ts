@@ -1,4 +1,4 @@
-import { users, artworks, exhibitions, homepageSettings, artistBio, type User, type InsertUser, type Artwork, type InsertArtwork, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio } from "@shared/schema";
+import { users, artworks, prints, exhibitions, homepageSettings, artistBio, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -16,6 +16,15 @@ export interface IStorage {
   deleteArtwork(id: number): Promise<boolean>;
   getFeaturedArtworks(): Promise<Artwork[]>;
   reorderArtwork(id: number, direction: 'up' | 'down'): Promise<Artwork[]>;
+
+  // Prints
+  getAllPrints(): Promise<Print[]>;
+  getPrint(id: number): Promise<Print | undefined>;
+  createPrint(print: InsertPrint): Promise<Print>;
+  updatePrint(id: number, print: Partial<InsertPrint>): Promise<Print | undefined>;
+  deletePrint(id: number): Promise<boolean>;
+  getFeaturedPrints(): Promise<Print[]>;
+  reorderPrint(id: number, direction: 'up' | 'down'): Promise<Print[]>;
 
   // Exhibitions
   getAllExhibitions(): Promise<Exhibition[]>;
@@ -37,19 +46,23 @@ export interface IStorage {
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private artworks: Map<number, Artwork>;
+  private prints: Map<number, Print>;
   private exhibitions: Map<number, Exhibition>;
   private homepageSettings: HomepageSettings | undefined;
   private artistBio: ArtistBio | undefined;
   private currentUserId: number;
   private currentArtworkId: number;
+  private currentPrintId: number;
   private currentExhibitionId: number;
 
   constructor() {
     this.users = new Map();
     this.artworks = new Map();
+    this.prints = new Map();
     this.exhibitions = new Map();
     this.currentUserId = 1;
     this.currentArtworkId = 1;
+    this.currentPrintId = 1;
     this.currentExhibitionId = 1;
     
     // Initialize with default homepage settings
@@ -290,6 +303,80 @@ export class MemStorage implements IStorage {
     return Array.from(this.artworks.values()).sort((a, b) => (a.position || 0) - (b.position || 0));
   }
 
+  // Prints methods
+  async getAllPrints(): Promise<Print[]> {
+    return Array.from(this.prints.values());
+  }
+
+  async getPrint(id: number): Promise<Print | undefined> {
+    return this.prints.get(id);
+  }
+
+  async createPrint(insertPrint: InsertPrint): Promise<Print> {
+    const id = this.currentPrintId++;
+    const print: Print = { 
+      ...insertPrint, 
+      id,
+      status: insertPrint.status || "active",
+      featured: insertPrint.featured || false,
+      position: insertPrint.position ?? 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.prints.set(id, print);
+    return print;
+  }
+
+  async updatePrint(id: number, updateData: Partial<InsertPrint>): Promise<Print | undefined> {
+    const existing = this.prints.get(id);
+    if (!existing) return undefined;
+
+    const updated: Print = { 
+      ...existing, 
+      ...updateData,
+      id,
+      updatedAt: new Date()
+    };
+    this.prints.set(id, updated);
+    return updated;
+  }
+
+  async deletePrint(id: number): Promise<boolean> {
+    return this.prints.delete(id);
+  }
+
+  async getFeaturedPrints(): Promise<Print[]> {
+    return Array.from(this.prints.values()).filter(print => print.featured);
+  }
+
+  async reorderPrint(id: number, direction: 'up' | 'down'): Promise<Print[]> {
+    const printsList = Array.from(this.prints.values()).sort((a, b) => (a.position || 0) - (b.position || 0));
+    const currentIndex = printsList.findIndex(print => print.id === id);
+    
+    if (currentIndex === -1) {
+      return printsList;
+    }
+    
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    
+    if (newIndex < 0 || newIndex >= printsList.length) {
+      return printsList;
+    }
+    
+    // Swap positions
+    const currentPrint = printsList[currentIndex];
+    const targetPrint = printsList[newIndex];
+    
+    const tempPosition = currentPrint.position || 0;
+    currentPrint.position = targetPrint.position || 0;
+    targetPrint.position = tempPosition;
+    
+    this.prints.set(currentPrint.id, currentPrint);
+    this.prints.set(targetPrint.id, targetPrint);
+    
+    return printsList;
+  }
+
   async getAllExhibitions(): Promise<Exhibition[]> {
     return Array.from(this.exhibitions.values());
   }
@@ -447,6 +534,75 @@ export class DatabaseStorage implements IStorage {
     
     // Return updated artwork list
     return await db.select().from(artworks).orderBy(artworks.position);
+  }
+
+  // Prints methods
+  async getAllPrints(): Promise<Print[]> {
+    return await db.select().from(prints).orderBy(prints.position);
+  }
+
+  async getPrint(id: number): Promise<Print | undefined> {
+    const [print] = await db.select().from(prints).where(eq(prints.id, id));
+    return print || undefined;
+  }
+
+  async createPrint(insertPrint: InsertPrint): Promise<Print> {
+    const [print] = await db
+      .insert(prints)
+      .values(insertPrint)
+      .returning();
+    return print;
+  }
+
+  async updatePrint(id: number, updateData: Partial<InsertPrint>): Promise<Print | undefined> {
+    const [print] = await db
+      .update(prints)
+      .set(updateData)
+      .where(eq(prints.id, id))
+      .returning();
+    return print || undefined;
+  }
+
+  async deletePrint(id: number): Promise<boolean> {
+    const result = await db.delete(prints).where(eq(prints.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getFeaturedPrints(): Promise<Print[]> {
+    return await db.select().from(prints).where(eq(prints.featured, true));
+  }
+
+  async reorderPrint(id: number, direction: 'up' | 'down'): Promise<Print[]> {
+    // Get all prints ordered by position
+    const allPrints = await db.select().from(prints).orderBy(prints.position);
+    const currentIndex = allPrints.findIndex(print => print.id === id);
+    
+    if (currentIndex === -1) {
+      throw new Error('Print not found');
+    }
+    
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    
+    // Check if the move is valid
+    if (newIndex < 0 || newIndex >= allPrints.length) {
+      return allPrints; // Return unchanged if invalid move
+    }
+    
+    // Swap positions
+    const currentPrint = allPrints[currentIndex];
+    const swapPrint = allPrints[newIndex];
+    
+    // Update positions in database
+    await db.update(prints)
+      .set({ position: swapPrint.position })
+      .where(eq(prints.id, currentPrint.id));
+    
+    await db.update(prints)
+      .set({ position: currentPrint.position })
+      .where(eq(prints.id, swapPrint.id));
+    
+    // Return updated print list
+    return await db.select().from(prints).orderBy(prints.position);
   }
 
   async getAllExhibitions(): Promise<Exhibition[]> {
