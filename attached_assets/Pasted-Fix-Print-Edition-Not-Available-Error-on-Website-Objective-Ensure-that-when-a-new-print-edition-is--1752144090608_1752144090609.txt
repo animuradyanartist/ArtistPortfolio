@@ -1,0 +1,61 @@
+Fix Print Edition Not Available Error on Website
+Objective:
+Ensure that when a new print edition is added in the admin panel (with all necessary data filled in), it is always visible and accessible on the public website. The message “Print Edition Not Available” should only appear if the print truly does not exist or is set as unavailable.
+
+Required Steps:
+
+Check Admin Data:
+
+Confirm that the new print edition appears in the admin panel list and all required fields (title, images, sizes, prices, materials, status/visibility) are filled out and saved.
+
+Database Verification:
+
+Confirm that the new print edition record exists in the database and has the correct values for visibility, status, and all relevant fields.
+
+API/Backend:
+
+Verify that the API endpoint or backend logic responsible for serving print edition data to the website includes the new print in its results.
+
+Ensure there are no filters (such as "published", "active", "in stock", etc.) that might accidentally exclude the new print.
+
+Frontend Logic:
+
+Make sure the frontend correctly fetches and renders all available print editions.
+
+The “Print Edition Not Available” message should only be shown when:
+
+The print edition does not exist in the database,
+
+OR the print edition is explicitly set as unavailable.
+
+If the print exists and is available, display the print details page as intended (with images, sizes, materials, price, add-to-cart/contact, etc.).
+
+Debugging:
+
+Add temporary console logs or error messages to determine if the print data is being fetched from the backend.
+
+If using client-side routing (React, Next.js, etc.), ensure the print ID or slug in the URL matches the database/API.
+
+Cache/CDN Issues:
+
+If the website uses caching, CDN, or is statically generated, clear cache and redeploy the website to ensure the new data is reflected.
+
+Testing:
+
+Test by creating a new print edition in admin with all required fields.
+
+Confirm it appears on the website as soon as it is created and set as available.
+
+Technical Requirements:
+
+Use proper error handling so that users only see “Print Edition Not Available” if the print edition really does not exist or is intentionally hidden.
+
+Ensure separation of prints and artworks as previously requested.
+
+Maintain all design and user experience standards on the print detail page.
+
+Deliverable:
+
+After this fix, when a new print edition is added in the admin tool with all necessary info, it is immediately visible and accessible on the website for users.
+
+The “Print Edition Not Available” page never appears unless the print edition is truly missing or disabled.

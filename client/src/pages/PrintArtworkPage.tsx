@@ -33,6 +33,15 @@ export default function PrintArtworkPage() {
     enabled: !!printId && !isNaN(printId)
   });
 
+  // Debug logging
+  console.log('PrintArtworkPage Debug:', {
+    printId,
+    print,
+    isLoading,
+    error,
+    enabled: !!printId && !isNaN(printId)
+  });
+
 
 
   // Parse print sizes from JSON
