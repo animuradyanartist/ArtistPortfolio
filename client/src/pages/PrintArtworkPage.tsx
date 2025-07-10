@@ -9,12 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import PreviewOnWall from "@/components/PreviewOnWall";
-import type { Artwork } from "@shared/schema";
+import type { Print } from "@shared/schema";
 
 export default function PrintArtworkPage() {
   const params = useParams();
   const [, setLocation] = useLocation();
-  const artworkId = parseInt(params.id as string);
+  const printId = parseInt(params.id as string);
   
   // Custom size form state
   const [showCustomForm, setShowCustomForm] = useState(false);
@@ -27,23 +27,23 @@ export default function PrintArtworkPage() {
   // Image carousel state
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // Fetch artwork data
-  const { data: artwork, isLoading, error } = useQuery<Artwork>({
-    queryKey: ['/api/artworks', artworkId],
-    enabled: !!artworkId && !isNaN(artworkId)
+  // Fetch print data
+  const { data: print, isLoading, error } = useQuery<Print>({
+    queryKey: ['/api/prints', printId],
+    enabled: !!printId && !isNaN(printId)
   });
 
 
 
   // Parse print sizes from JSON
   const printSizes = useMemo(() => {
-    if (!artwork?.printSizes) return [];
+    if (!print?.availableSizes) return [];
     try {
-      return JSON.parse(artwork.printSizes);
+      return JSON.parse(print.availableSizes);
     } catch {
       return [];
     }
-  }, [artwork?.printSizes]);
+  }, [print?.availableSizes]);
 
   // Calculate price for a given size and material
   const calculatePrice = (width: number, height: number, material: string) => {
@@ -94,16 +94,16 @@ export default function PrintArtworkPage() {
 
   // Image navigation
   const nextImage = () => {
-    if (!artwork) return;
+    if (!print) return;
     setCurrentImageIndex((prev) => 
-      prev === artwork.images.length - 1 ? 0 : prev + 1
+      prev === print.images.length - 1 ? 0 : prev + 1
     );
   };
 
   const prevImage = () => {
-    if (!artwork) return;
+    if (!print) return;
     setCurrentImageIndex((prev) => 
-      prev === 0 ? artwork.images.length - 1 : prev - 1
+      prev === 0 ? print.images.length - 1 : prev - 1
     );
   };
 
@@ -122,12 +122,12 @@ export default function PrintArtworkPage() {
     );
   }
 
-  if (error || !artwork) {
+  if (error || !print) {
     return (
       <div className="min-h-screen py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-charcoal mb-4">Artwork Not Found</h1>
+            <h1 className="text-2xl font-bold text-charcoal mb-4">Print Edition Not Found</h1>
             <Button onClick={() => setLocation("/prints")}>
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Prints
@@ -138,14 +138,14 @@ export default function PrintArtworkPage() {
     );
   }
 
-  // Check if artwork is available for print
-  if (!artwork.availableForPrint) {
+  // Check if print is active
+  if (print.status !== 'active') {
     return (
       <div className="min-h-screen py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-charcoal mb-4">Prints Not Available</h1>
-            <p className="text-soft-gray mb-6">This artwork is not currently available for printing.</p>
+            <h1 className="text-2xl font-bold text-charcoal mb-4">Print Edition Not Available</h1>
+            <p className="text-soft-gray mb-6">This print edition is not currently available.</p>
             <Button onClick={() => setLocation("/prints")}>
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Prints
@@ -176,12 +176,12 @@ export default function PrintArtworkPage() {
               {/* Main Image */}
               <div className="relative">
                 <img 
-                  src={artwork.images[currentImageIndex]} 
-                  alt={`${artwork.title} - Image ${currentImageIndex + 1}`}
+                  src={print.images[currentImageIndex]} 
+                  alt={`${print.title} - Image ${currentImageIndex + 1}`}
                   className="w-full rounded-lg shadow-lg object-cover aspect-[3/4]"
                 />
                 
-                {artwork.images.length > 1 && (
+                {print.images.length > 1 && (
                   <>
                     <Button
                       variant="ghost"
@@ -202,16 +202,16 @@ export default function PrintArtworkPage() {
                     </Button>
                     
                     <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
-                      {currentImageIndex + 1} / {artwork.images.length}
+                      {currentImageIndex + 1} / {print.images.length}
                     </div>
                   </>
                 )}
               </div>
 
               {/* Thumbnails */}
-              {artwork.images.length > 1 && (
+              {print.images.length > 1 && (
                 <div className="grid grid-cols-4 gap-2">
-                  {artwork.images.map((image, index) => (
+                  {print.images.map((image, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentImageIndex(index)}
@@ -223,7 +223,7 @@ export default function PrintArtworkPage() {
                     >
                       <img 
                         src={image} 
-                        alt={`${artwork.title} thumbnail ${index + 1}`}
+                        alt={`${print.title} thumbnail ${index + 1}`}
                         className="w-full h-16 object-cover"
                       />
                     </button>
@@ -231,22 +231,22 @@ export default function PrintArtworkPage() {
                 </div>
               )}
 
-              {/* Artwork Info */}
+              {/* Print Info */}
               <div className="space-y-4">
                 <div>
                   <h1 className="font-playfair text-3xl font-semibold text-deep-blue mb-2">
-                    {artwork.title}
+                    {print.title}
                   </h1>
                   <p className="text-soft-gray text-lg">
-                    {artwork.year} • {artwork.medium} • {artwork.dimensions}
+                    Print Edition • Preferred Material: {print.preferredMaterial}
                   </p>
                 </div>
                 
-                {artwork.description && (
+                {print.description && (
                   <div>
-                    <h3 className="font-semibold text-charcoal mb-2">About this artwork</h3>
+                    <h3 className="font-semibold text-charcoal mb-2">About this print edition</h3>
                     <p className="text-soft-gray leading-relaxed">
-                      {artwork.description}
+                      {print.description}
                     </p>
                   </div>
                 )}
@@ -418,7 +418,12 @@ export default function PrintArtworkPage() {
                     See how this artwork looks in different rooms and sizes before ordering.
                   </p>
                   <PreviewOnWall 
-                    artwork={artwork}
+                    artwork={{
+                      id: print.id,
+                      title: print.title,
+                      images: print.images,
+                      printSizes: print.availableSizes
+                    }}
                     onSizeSelect={(width, height, material) => {
                       setCustomWidth(width);
                       setCustomHeight(height);

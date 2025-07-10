@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import type { Artwork } from "@shared/schema";
+import type { Print } from "@shared/schema";
 
 export default function PrintsPage() {
   const [, setLocation] = useLocation();
@@ -15,15 +15,15 @@ export default function PrintsPage() {
   const [height, setHeight] = useState<number>(0);
   const [material, setMaterial] = useState<string>("paper");
 
-  // Fetch all artworks
-  const { data: artworks = [], isLoading } = useQuery<Artwork[]>({
-    queryKey: ["/api/artworks"]
+  // Fetch all prints
+  const { data: prints = [], isLoading } = useQuery<Print[]>({
+    queryKey: ["/api/prints"]
   });
 
-  // Filter artworks available for prints (including both available and sold artworks)
-  const printAvailableArtworks = useMemo(() => {
-    return artworks.filter(artwork => artwork.availableForPrint);
-  }, [artworks]);
+  // Filter active prints
+  const activePrints = useMemo(() => {
+    return prints.filter(print => print.status === 'active');
+  }, [prints]);
 
   // Price calculation
   const calculatedPrice = useMemo(() => {
@@ -73,21 +73,21 @@ export default function PrintsPage() {
         </div>
 
         <div className="grid lg:grid-cols-10 gap-8">
-          {/* Left Column - Artwork Grid (70%) */}
+          {/* Left Column - Prints Grid (70%) */}
           <div className="lg:col-span-7">
             <h2 className="font-playfair text-2xl font-semibold text-deep-blue mb-6">
-              Available Artworks
+              Available Print Editions
             </h2>
             
-            {printAvailableArtworks.length === 0 ? (
+            {activePrints.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-soft-gray text-lg">No artworks available for prints at the moment.</p>
+                <p className="text-soft-gray text-lg">No print editions available at the moment.</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                {printAvailableArtworks.map((artwork, index) => (
+                {activePrints.map((print, index) => (
                   <div
-                    key={artwork.id}
+                    key={print.id}
                     className="animate-in fade-in-0 slide-in-from-bottom-8 duration-700 ease-out"
                     style={{ 
                       animationDelay: `${index * 100}ms`,
@@ -96,20 +96,20 @@ export default function PrintsPage() {
                   >
                     <Card 
                       className="overflow-hidden hover:shadow-xl transition-all duration-500 group transform hover:scale-105 cursor-pointer"
-                      onClick={() => setLocation(`/prints/${artwork.id}`)}
+                      onClick={() => setLocation(`/prints/${print.id}`)}
                     >
                       <div className="relative aspect-[3/4] overflow-hidden">
                         <div className="absolute inset-0 transform transition-transform duration-700 ease-out group-hover:scale-110">
                           <img 
-                            src={artwork.images[0]} 
-                            alt={artwork.title}
+                            src={print.images[0]} 
+                            alt={print.title}
                             className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-110"
                           />
                         </div>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500">
                           <div className="absolute bottom-4 left-4 right-4 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 delay-100">
                             <div className="bg-white/95 backdrop-blur-sm px-3 py-2 rounded text-sm font-medium text-charcoal shadow-lg">
-                              Available for Print
+                              Print Edition
                             </div>
                           </div>
                         </div>
@@ -118,18 +118,14 @@ export default function PrintsPage() {
                         <div className="transform transition-transform duration-300 group-hover:translate-y-[-2px]">
                           <div className="flex items-start justify-between mb-1">
                             <h3 className="font-medium text-charcoal text-sm transition-colors duration-300 group-hover:text-deep-blue">
-                              {artwork.title}
+                              {print.title}
                             </h3>
-                            <div className={`text-xs px-2 py-1 rounded-full font-medium ${
-                              artwork.availability === 'available' 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-red-100 text-red-700'
-                            }`}>
-                              {artwork.availability === 'available' ? 'Available' : 'Sold'}
+                            <div className="text-xs px-2 py-1 rounded-full font-medium bg-blue-100 text-blue-700">
+                              {print.preferredMaterial}
                             </div>
                           </div>
                           <p className="text-soft-gray text-xs transition-colors duration-300 group-hover:text-charcoal/80">
-                            {artwork.dimensions}
+                            Multiple sizes available
                           </p>
                         </div>
                       </CardContent>
