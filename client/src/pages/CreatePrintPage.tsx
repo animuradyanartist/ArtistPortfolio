@@ -74,10 +74,8 @@ export default function CreatePrintPage() {
 
   const createPrintMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest("/api/prints", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      const response = await apiRequest("POST", "/api/prints", data);
+      return response.json();
     },
     onSuccess: () => {
       toast({

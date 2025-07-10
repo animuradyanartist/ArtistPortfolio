@@ -108,10 +108,8 @@ export default function EditPrintPage() {
 
   const updatePrintMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest(`/api/prints/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      });
+      const response = await apiRequest("PUT", `/api/prints/${id}`, data);
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -133,9 +131,8 @@ export default function EditPrintPage() {
 
   const deletePrintMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest(`/api/prints/${id}`, {
-        method: "DELETE",
-      });
+      const response = await apiRequest("DELETE", `/api/prints/${id}`);
+      return response.json();
     },
     onSuccess: () => {
       toast({
