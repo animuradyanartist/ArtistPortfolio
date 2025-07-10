@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ export default function PrintArtworkPage() {
   const [customHeight, setCustomHeight] = useState<number>(0);
   const [customMaterial, setCustomMaterial] = useState<string>("paper");
   const [customPrice, setCustomPrice] = useState<number | null>(null);
+  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
   
   // Image carousel state
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -58,6 +59,35 @@ export default function PrintArtworkPage() {
     const price = calculatePrice(customWidth, customHeight, customMaterial);
     setCustomPrice(price);
   };
+
+  // Debounced calculation handler
+  const handleDebouncedCalculation = () => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    
+    const timer = setTimeout(() => {
+      handleCustomCalculation();
+    }, 500);
+    
+    setDebounceTimer(timer);
+  };
+
+  // Auto-recalculate price when material changes
+  useEffect(() => {
+    if (customWidth > 0 && customHeight > 0 && showCustomForm) {
+      handleCustomCalculation();
+    }
+  }, [customMaterial]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+    };
+  }, [debounceTimer]);
 
   // Image navigation
   const nextImage = () => {
@@ -281,7 +311,10 @@ export default function PrintArtworkPage() {
                             max="120"
                             placeholder="20-120"
                             value={customWidth || ''}
-                            onChange={(e) => setCustomWidth(Number(e.target.value))}
+                            onChange={(e) => {
+                              setCustomWidth(Number(e.target.value));
+                              handleDebouncedCalculation();
+                            }}
                             onBlur={handleCustomCalculation}
                           />
                         </div>
@@ -296,7 +329,10 @@ export default function PrintArtworkPage() {
                             max="120"
                             placeholder="20-120"
                             value={customHeight || ''}
-                            onChange={(e) => setCustomHeight(Number(e.target.value))}
+                            onChange={(e) => {
+                              setCustomHeight(Number(e.target.value));
+                              handleDebouncedCalculation();
+                            }}
                             onBlur={handleCustomCalculation}
                           />
                         </div>
@@ -309,8 +345,8 @@ export default function PrintArtworkPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="paper">Paper (€0.013/cm²)</SelectItem>
-                            <SelectItem value="canvas">Canvas (€0.015/cm²)</SelectItem>
+                            <SelectItem value="paper">Paper</SelectItem>
+                            <SelectItem value="canvas">Canvas</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -353,6 +389,10 @@ export default function PrintArtworkPage() {
                           setCustomPrice(null);
                           setCustomWidth(0);
                           setCustomHeight(0);
+                          setCustomMaterial("paper");
+                          if (debounceTimer) {
+                            clearTimeout(debounceTimer);
+                          }
                         }}
                         className="w-full"
                       >
