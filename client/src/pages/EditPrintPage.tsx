@@ -391,14 +391,14 @@ export default function EditPrintPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Reference Artwork (Optional)</FormLabel>
-                        <Select onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)} value={field.value?.toString() || ""}>
+                        <Select onValueChange={(value) => field.onChange(value === "none" ? undefined : parseInt(value))} value={field.value?.toString() || "none"}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select original artwork (optional)" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">No reference artwork</SelectItem>
+                            <SelectItem value="none">No reference artwork</SelectItem>
                             {artworks.map((artwork) => (
                               <SelectItem key={artwork.id} value={artwork.id.toString()}>
                                 {artwork.title} ({artwork.year})
