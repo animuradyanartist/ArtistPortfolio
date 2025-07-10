@@ -169,8 +169,8 @@ export default function PrintArtworkPage() {
           Back to Prints
         </Button>
 
-        <div className="grid lg:grid-cols-10 gap-8">
-          {/* Left Column - Images (70%) */}
+        <div className="grid lg:grid-cols-12 gap-8">
+          {/* Left Column - Images (60%) */}
           <div className="lg:col-span-7">
             <div className="space-y-6">
               {/* Main Image */}
@@ -210,7 +210,7 @@ export default function PrintArtworkPage() {
 
               {/* Thumbnails */}
               {print.images.length > 1 && (
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-6 gap-2">
                   {print.images.map((image, index) => (
                     <button
                       key={index}
@@ -224,7 +224,7 @@ export default function PrintArtworkPage() {
                       <img 
                         src={image} 
                         alt={`${print.title} thumbnail ${index + 1}`}
-                        className="w-full h-16 object-cover"
+                        className="w-full h-12 object-cover"
                       />
                     </button>
                   ))}
@@ -254,8 +254,8 @@ export default function PrintArtworkPage() {
             </div>
           </div>
 
-          {/* Right Column - Print Options (30%) */}
-          <div className="lg:col-span-3">
+          {/* Right Column - Print Options (40%) */}
+          <div className="lg:col-span-5">
             <div className="space-y-6">
               {/* Available Sizes */}
               {printSizes.length > 0 && (

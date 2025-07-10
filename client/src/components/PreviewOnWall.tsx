@@ -7,12 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Eye, Maximize2 } from "lucide-react";
 
-// Room backgrounds
-import livingRoomSvg from "@/assets/room-backgrounds/living-room.svg";
-import bedroomSvg from "@/assets/room-backgrounds/bedroom.svg";
-import officeSvg from "@/assets/room-backgrounds/office.svg";
-import diningRoomSvg from "@/assets/room-backgrounds/dining-room.svg";
-import kitchenSvg from "@/assets/room-backgrounds/kitchen.svg";
+// Room backgrounds are now inline SVG
 
 interface PreviewOnWallProps {
   artwork: {
@@ -36,41 +31,83 @@ interface RoomBackground {
   };
 }
 
+const modernInteriorSvg = `
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+  <!-- Light wood floor -->
+  <defs>
+    <pattern id="woodFloor" patternUnits="userSpaceOnUse" width="60" height="8">
+      <rect width="60" height="8" fill="#F5E6D3"/>
+      <rect x="0" y="0" width="60" height="2" fill="#E8D5C0"/>
+      <rect x="0" y="6" width="60" height="2" fill="#E8D5C0"/>
+    </pattern>
+    <linearGradient id="wallGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FEFEFE;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F8F8F8;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Floor -->
+  <rect x="0" y="300" width="800" height="200" fill="url(#woodFloor)"/>
+  
+  <!-- Main wall -->
+  <rect x="0" y="0" width="800" height="300" fill="url(#wallGradient)"/>
+  
+  <!-- Wall panel shadows -->
+  <rect x="50" y="180" width="120" height="80" fill="#F0F0F0" opacity="0.3"/>
+  <rect x="180" y="180" width="120" height="80" fill="#F0F0F0" opacity="0.3"/>
+  <rect x="310" y="180" width="120" height="80" fill="#F0F0F0" opacity="0.3"/>
+  
+  <!-- Floating console/shelf -->
+  <rect x="50" y="260" width="380" height="20" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="1"/>
+  <rect x="50" y="278" width="380" height="8" fill="#F0F0F0"/>
+  
+  <!-- Left wooden built-in shelf -->
+  <rect x="20" y="80" width="60" height="180" fill="#DFC49A"/>
+  <rect x="25" y="90" width="50" height="15" fill="#F8F8F8"/>
+  <rect x="25" y="115" width="50" height="15" fill="#F8F8F8"/>
+  <rect x="25" y="140" width="50" height="15" fill="#F8F8F8"/>
+  <rect x="25" y="165" width="50" height="15" fill="#F8F8F8"/>
+  <rect x="25" y="190" width="50" height="15" fill="#F8F8F8"/>
+  
+  <!-- Modern gray chair -->
+  <ellipse cx="580" cy="320" rx="35" ry="15" fill="#8A8A8A"/>
+  <rect x="555" y="250" width="50" height="70" rx="25" fill="#9A9A9A"/>
+  <rect x="548" y="245" width="64" height="40" rx="32" fill="#8A8A8A"/>
+  <rect x="575" y="285" width="10" height="35" fill="#7A7A7A"/>
+  
+  <!-- Plant -->
+  <ellipse cx="650" cy="320" rx="15" ry="8" fill="#8A8A8A"/>
+  <rect x="645" y="290" width="10" height="30" fill="#2D5016"/>
+  <ellipse cx="650" cy="275" rx="20" ry="25" fill="#4A7C29"/>
+  <ellipse cx="645" cy="270" rx="15" ry="20" fill="#5C8A35"/>
+  <ellipse cx="655" cy="270" rx="15" ry="20" fill="#5C8A35"/>
+  
+  <!-- Window frame -->
+  <rect x="720" y="40" width="80" height="180" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="2"/>
+  <rect x="720" y="40" width="80" height="90" fill="#E8F4FD" opacity="0.6"/>
+  <rect x="720" y="130" width="80" height="90" fill="#E8F4FD" opacity="0.6"/>
+  <line x1="760" y1="40" x2="760" y2="220" stroke="#D0D0D0" stroke-width="1"/>
+  <line x1="720" y1="130" x2="800" y2="130" stroke="#D0D0D0" stroke-width="1"/>
+  
+  <!-- Ceiling lights -->
+  <circle cx="200" cy="30" r="8" fill="#FFFFFF" stroke="#E0E0E0"/>
+  <circle cx="400" cy="30" r="8" fill="#FFFFFF" stroke="#E0E0E0"/>
+  
+  <!-- Wall decoration area (where artwork will be placed) -->
+  <rect x="200" y="120" width="200" height="120" fill="transparent" stroke="#000000" stroke-width="1" stroke-dasharray="2,2" opacity="0.2"/>
+</svg>`;
+
 const roomBackgrounds: RoomBackground[] = [
   {
-    id: "living-room",
-    name: "Living Room",
-    svg: livingRoomSvg,
-    wallArea: { x: 200, y: 100, width: 300, height: 200 }
-  },
-  {
-    id: "bedroom",
-    name: "Bedroom",
-    svg: bedroomSvg,
-    wallArea: { x: 250, y: 120, width: 280, height: 180 }
-  },
-  {
-    id: "office",
-    name: "Office",
-    svg: officeSvg,
-    wallArea: { x: 300, y: 120, width: 260, height: 180 }
-  },
-  {
-    id: "dining-room",
-    name: "Dining Room",
-    svg: diningRoomSvg,
-    wallArea: { x: 550, y: 120, width: 200, height: 160 }
-  },
-  {
-    id: "kitchen",
-    name: "Kitchen",
-    svg: kitchenSvg,
-    wallArea: { x: 400, y: 160, width: 200, height: 150 }
+    id: "modern-interior",
+    name: "Modern Interior",
+    svg: `data:image/svg+xml;base64,${btoa(modernInteriorSvg)}`,
+    wallArea: { x: 200, y: 120, width: 200, height: 120 }
   }
 ];
 
 export default function PreviewOnWall({ artwork, onSizeSelect }: PreviewOnWallProps) {
-  const [selectedRoom, setSelectedRoom] = useState<string>("living-room");
+  const [selectedRoom, setSelectedRoom] = useState<string>("modern-interior");
   const [selectedWidth, setSelectedWidth] = useState<number>(40);
   const [selectedHeight, setSelectedHeight] = useState<number>(60);
   const [selectedMaterial, setSelectedMaterial] = useState<string>("paper");

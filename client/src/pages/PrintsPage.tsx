@@ -84,7 +84,7 @@ export default function PrintsPage() {
                 <p className="text-soft-gray text-lg">No print editions available at the moment.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {activePrints.map((print, index) => (
                   <div
                     key={print.id}
@@ -95,7 +95,7 @@ export default function PrintsPage() {
                     }}
                   >
                     <Card 
-                      className="overflow-hidden hover:shadow-xl transition-all duration-500 group transform hover:scale-105 cursor-pointer"
+                      className="overflow-hidden hover:shadow-lg transition-all duration-300 group transform hover:scale-102 cursor-pointer"
                       onClick={() => setLocation(`/prints/${print.id}`)}
                     >
                       <div className="relative aspect-[3/4] overflow-hidden">
@@ -114,19 +114,21 @@ export default function PrintsPage() {
                           </div>
                         </div>
                       </div>
-                      <CardContent className="p-4 group-hover:bg-gray-50/50 transition-colors duration-300">
-                        <div className="transform transition-transform duration-300 group-hover:translate-y-[-2px]">
-                          <div className="flex items-start justify-between mb-1">
-                            <h3 className="font-medium text-charcoal text-sm transition-colors duration-300 group-hover:text-deep-blue">
+                      <CardContent className="p-3 group-hover:bg-gray-50/50 transition-colors duration-300">
+                        <div className="transform transition-transform duration-300 group-hover:translate-y-[-1px]">
+                          <div className="mb-1">
+                            <h3 className="font-medium text-charcoal text-xs transition-colors duration-300 group-hover:text-deep-blue line-clamp-1">
                               {print.title}
                             </h3>
-                            <div className="text-xs px-2 py-1 rounded-full font-medium bg-blue-100 text-blue-700">
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-soft-gray text-xs transition-colors duration-300 group-hover:text-charcoal/80">
+                              Multiple sizes
+                            </p>
+                            <div className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700">
                               {print.preferredMaterial}
                             </div>
                           </div>
-                          <p className="text-soft-gray text-xs transition-colors duration-300 group-hover:text-charcoal/80">
-                            Multiple sizes available
-                          </p>
                         </div>
                       </CardContent>
                     </Card>
