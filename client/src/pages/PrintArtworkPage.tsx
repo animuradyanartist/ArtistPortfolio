@@ -32,8 +32,7 @@ export default function PrintArtworkPage() {
     enabled: !!artworkId && !isNaN(artworkId)
   });
 
-  // Debug logging
-  console.log('PrintArtworkPage - artworkId:', artworkId, 'artwork:', artwork, 'isLoading:', isLoading, 'error:', error);
+
 
   // Parse print sizes from JSON
   const printSizes = useMemo(() => {

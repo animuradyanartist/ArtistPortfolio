@@ -397,7 +397,13 @@ export default function EditArtworkPage() {
                       <FormItem>
                         <FormLabel>Price ($)</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" />
+                          <Input 
+                            {...field} 
+                            type="number" 
+                            placeholder="2500"
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                            value={field.value || ''}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
