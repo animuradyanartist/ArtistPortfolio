@@ -74,6 +74,18 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
     try {
       setError(null);
       
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setError('Camera access is not supported in this browser.');
+        return;
+      }
+      
+      // Check if running in secure context (HTTPS required for camera)
+      if (!window.isSecureContext) {
+        setError('Camera access requires a secure connection (HTTPS). Please ensure your site is served over HTTPS.');
+        return;
+      }
+      
       // Request camera access
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
@@ -87,16 +99,45 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
         
+        // Wait for video to load
         videoRef.current.onloadedmetadata = () => {
           setIsInitialized(true);
           startARLoop();
         };
+        
+        // Handle video loading errors
+        videoRef.current.onerror = (e) => {
+          console.error('Video error:', e);
+          setError('Error loading camera feed. Please try again.');
+        };
+        
+        // Play the video
+        try {
+          const playPromise = videoRef.current.play();
+          if (playPromise !== undefined) {
+            await playPromise;
+          }
+        } catch (playError) {
+          console.error('Error playing video:', playError);
+          setError('Unable to start camera preview. Please check your camera permissions.');
+        }
       }
     } catch (err) {
       console.error('Error accessing camera:', err);
-      setError('Unable to access camera. Please ensure camera permissions are granted.');
+      
+      // Provide more specific error messages
+      if (err.name === 'NotAllowedError') {
+        setError('Camera access was denied. Please allow camera permissions and try again.');
+      } else if (err.name === 'NotFoundError') {
+        setError('No camera found on this device.');
+      } else if (err.name === 'NotSupportedError') {
+        setError('Camera access is not supported in this browser.');
+      } else if (err.name === 'NotReadableError') {
+        setError('Camera is being used by another application. Please close other camera apps and try again.');
+      } else {
+        setError('Unable to access camera. Please check your browser settings and try again.');
+      }
     }
   };
 
@@ -397,12 +438,54 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
                     <Camera className="w-16 h-16 mx-auto mb-4 opacity-50" />
                     <p className="text-lg mb-4">Camera Access Required</p>
                     <p className="text-sm mb-4 opacity-80">{error}</p>
-                    <Button
-                      onClick={initializeAR}
-                      className="bg-white text-black hover:bg-gray-100"
-                    >
-                      Try Again
-                    </Button>
+                    
+                    <div className="text-xs text-gray-300 mb-4 text-left">
+                      <p className="font-medium mb-2">Common solutions:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Allow camera permissions in your browser</li>
+                        <li>Close other apps using the camera</li>
+                        <li>Refresh the page and try again</li>
+                        <li>Make sure your device has a camera</li>
+                        <li>Check if your browser supports camera access</li>
+                      </ul>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <Button
+                        onClick={() => {
+                          setError(null);
+                          initializeAR();
+                        }}
+                        className="w-full bg-white text-black hover:bg-gray-100"
+                      >
+                        Try Again
+                      </Button>
+                      
+                      <Button
+                        onClick={() => {
+                          // Try with different constraints
+                          setError(null);
+                          navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: 'user' } // Try front camera
+                          }).then(stream => {
+                            streamRef.current = stream;
+                            if (videoRef.current) {
+                              videoRef.current.srcObject = stream;
+                              videoRef.current.play();
+                              setIsInitialized(true);
+                              startARLoop();
+                            }
+                          }).catch(err => {
+                            console.error('Front camera error:', err);
+                            setError('Unable to access any camera on this device.');
+                          });
+                        }}
+                        variant="outline"
+                        className="w-full bg-white/10 text-white hover:bg-white/20"
+                      >
+                        Try Front Camera
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
