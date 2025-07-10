@@ -175,20 +175,32 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
 
   // Draw artwork overlay on canvas with realistic rendering
   const drawArtworkOverlay = (ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) => {
-    if (!artworkRef.current || !artworkRef.current.complete) return;
+    if (!artworkRef.current || !artworkRef.current.complete) {
+      console.log('Artwork not ready:', { 
+        artworkRef: !!artworkRef.current, 
+        complete: artworkRef.current?.complete,
+        src: artworkRef.current?.src
+      });
+      return;
+    }
     
     const currentSize = currentARSize || selectedSize;
-    if (!currentSize) return;
     
-    // Calculate real-world size in pixels
-    // Using device pixel ratio and estimated screen DPI for better accuracy
-    const devicePixelRatio = window.devicePixelRatio || 1;
-    const estimatedDPI = 96 * devicePixelRatio; // Approximate screen DPI
-    const cmToPx = (estimatedDPI / 2.54) * realWorldScale; // Convert cm to pixels
+    // Use default size if none selected
+    const size = currentSize || { width: 50, height: 70, material: 'paper' };
     
+    // Calculate artwork dimensions
     const scale = artworkScale[0] / 100;
-    let artworkWidth = currentSize.width * cmToPx * scale;
-    let artworkHeight = currentSize.height * cmToPx * scale;
+    let artworkWidth = (size.width * 4) * scale; // Simplified: 4 pixels per cm
+    let artworkHeight = (size.height * 4) * scale;
+    
+    // Ensure minimum size for visibility
+    const minSize = 100;
+    if (artworkWidth < minSize) {
+      const ratio = minSize / artworkWidth;
+      artworkWidth = minSize;
+      artworkHeight = artworkHeight * ratio;
+    }
     
     // Calculate position
     const x = (artworkPosition.x / 100) * canvasWidth - artworkWidth / 2;
@@ -204,13 +216,13 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
     // Create realistic rendering effects
     
     // 1. Draw shadow first (behind the artwork)
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 6;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 8;
     
     // 2. Draw a subtle frame/mat border for paper prints
-    if (currentSize.material === 'paper') {
+    if (size.material === 'paper') {
       const borderWidth = 8;
       ctx.fillStyle = '#f8f8f8';
       ctx.fillRect(
@@ -221,36 +233,41 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
       );
       
       // Add subtle border shadow
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 1;
-      ctx.shadowOffsetY = 2;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 4;
     }
     
     // 3. Draw the artwork
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
-    ctx.shadowBlur = 6;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 4;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 6;
     
-    ctx.drawImage(
-      artworkRef.current,
-      -artworkWidth / 2,
-      -artworkHeight / 2,
-      artworkWidth,
-      artworkHeight
-    );
+    try {
+      ctx.drawImage(
+        artworkRef.current,
+        -artworkWidth / 2,
+        -artworkHeight / 2,
+        artworkWidth,
+        artworkHeight
+      );
+      console.log('Artwork drawn successfully:', { x, y, artworkWidth, artworkHeight });
+    } catch (error) {
+      console.error('Error drawing artwork:', error);
+    }
     
     // 4. Add subtle glare effect for canvas prints
-    if (currentSize.material === 'canvas') {
+    if (size.material === 'canvas') {
       const gradient = ctx.createLinearGradient(
         -artworkWidth / 2, -artworkHeight / 2,
         artworkWidth / 2, artworkHeight / 2
       );
-      gradient.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
-      gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.02)');
-      gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.02)');
-      gradient.addColorStop(1, 'rgba(255, 255, 255, 0.08)');
+      gradient.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
+      gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.05)');
+      gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.05)');
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0.1)');
       
       ctx.fillStyle = gradient;
       ctx.fillRect(
@@ -285,8 +302,8 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
       ctx.stroke();
       
       // Size text
-      ctx.fillText(`${currentSize.width}cm`, x + artworkWidth/2 - 20, y + artworkHeight + 35);
-      ctx.fillText(`${currentSize.height}cm`, x + artworkWidth + 35, y + artworkHeight/2);
+      ctx.fillText(`${size.width}cm`, x + artworkWidth/2 - 20, y + artworkHeight + 35);
+      ctx.fillText(`${size.height}cm`, x + artworkWidth + 35, y + artworkHeight/2);
     }
     
     // Restore context
@@ -384,6 +401,18 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
       setCurrentARSize(selectedSize);
     }
   }, [selectedSize]);
+
+  // Ensure artwork image loads properly
+  useEffect(() => {
+    if (artworkRef.current && artwork.images[0]) {
+      artworkRef.current.onload = () => {
+        console.log('Artwork image loaded successfully');
+      };
+      artworkRef.current.onerror = () => {
+        console.error('Failed to load artwork image');
+      };
+    }
+  }, [artwork.images]);
 
   return (
     <>
