@@ -1,0 +1,45 @@
+<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Wall -->
+  <rect width="800" height="600" fill="#f8fafc"/>
+  
+  <!-- Floor -->
+  <rect x="0" y="450" width="800" height="150" fill="#e2e8f0"/>
+  
+  <!-- Kitchen Counter -->
+  <rect x="50" y="380" width="300" height="80" rx="5" fill="#64748b"/>
+  <rect x="50" y="370" width="300" height="15" rx="5" fill="#475569"/>
+  
+  <!-- Upper Cabinets -->
+  <rect x="50" y="150" width="300" height="120" rx="5" fill="#8b5cf6"/>
+  <rect x="70" y="170" width="20" height="80" fill="#6b46c1"/>
+  <rect x="130" y="170" width="20" height="80" fill="#6b46c1"/>
+  <rect x="190" y="170" width="20" height="80" fill="#6b46c1"/>
+  <rect x="250" y="170" width="20" height="80" fill="#6b46c1"/>
+  <rect x="310" y="170" width="20" height="80" fill="#6b46c1"/>
+  
+  <!-- Sink -->
+  <rect x="100" y="350" width="60" height="40" rx="5" fill="#cbd5e1"/>
+  
+  <!-- Stove -->
+  <rect x="200" y="350" width="80" height="40" rx="5" fill="#374151"/>
+  <circle cx="220" cy="370" r="8" fill="#1f2937"/>
+  <circle cx="260" cy="370" r="8" fill="#1f2937"/>
+  
+  <!-- Refrigerator -->
+  <rect x="650" y="200" width="100" height="260" rx="10" fill="#e5e7eb"/>
+  <rect x="660" y="210" width="80" height="120" rx="5" fill="#d1d5db"/>
+  <rect x="660" y="340" width="80" height="110" rx="5" fill="#d1d5db"/>
+  <circle cx="680" cy="270" r="3" fill="#374151"/>
+  <circle cx="680" cy="400" r="3" fill="#374151"/>
+  
+  <!-- Wall Art Area (where artwork will be placed) -->
+  <rect x="400" y="160" width="200" height="150" fill="none" stroke="#e5e7eb" stroke-width="2" stroke-dasharray="5,5" opacity="0.5"/>
+  
+  <!-- Window -->
+  <rect x="450" y="50" width="120" height="100" rx="5" fill="#dbeafe" stroke="#9ca3af" stroke-width="2"/>
+  <line x1="510" y1="50" x2="510" y2="150" stroke="#9ca3af" stroke-width="2"/>
+  
+  <!-- Decorative elements -->
+  <circle cx="120" cy="340" r="5" fill="#fbbf24"/>
+  <circle cx="240" cy="340" r="5" fill="#fbbf24"/>
+</svg>

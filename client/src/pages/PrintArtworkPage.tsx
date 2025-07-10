@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import PreviewOnWall from "@/components/PreviewOnWall";
 import type { Artwork } from "@shared/schema";
 
 export default function PrintArtworkPage() {
@@ -402,6 +403,30 @@ export default function PrintArtworkPage() {
                       </Button>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+
+              {/* Preview on Wall */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-playfair text-lg text-deep-blue">
+                    Preview on Wall
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-soft-gray text-sm mb-3">
+                    See how this artwork looks in different rooms and sizes before ordering.
+                  </p>
+                  <PreviewOnWall 
+                    artwork={artwork}
+                    onSizeSelect={(width, height, material) => {
+                      setCustomWidth(width);
+                      setCustomHeight(height);
+                      setCustomMaterial(material);
+                      setShowCustomForm(true);
+                      handleCustomCalculation();
+                    }}
+                  />
                 </CardContent>
               </Card>
 

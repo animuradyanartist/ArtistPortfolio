@@ -1,0 +1,37 @@
+<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Wall -->
+  <rect width="800" height="600" fill="#faf5f0"/>
+  
+  <!-- Floor -->
+  <rect x="0" y="450" width="800" height="150" fill="#d6d3d1"/>
+  
+  <!-- Bed -->
+  <rect x="500" y="350" width="200" height="120" rx="10" fill="#e7e5e4"/>
+  <rect x="490" y="340" width="220" height="20" rx="10" fill="#d6d3d1"/>
+  
+  <!-- Pillows -->
+  <rect x="520" y="320" width="40" height="30" rx="5" fill="#fbbf24"/>
+  <rect x="580" y="320" width="40" height="30" rx="5" fill="#f59e0b"/>
+  <rect x="640" y="320" width="40" height="30" rx="5" fill="#fbbf24"/>
+  
+  <!-- Nightstand -->
+  <rect x="430" y="400" width="60" height="60" rx="5" fill="#a78bfa"/>
+  
+  <!-- Lamp -->
+  <circle cx="460" cy="390" r="12" fill="#fef3c7"/>
+  <rect x="455" y="360" width="10" height="30" fill="#374151"/>
+  
+  <!-- Wardrobe -->
+  <rect x="50" y="100" width="120" height="300" rx="10" fill="#8b5cf6"/>
+  <rect x="70" y="120" width="20" height="260" fill="#6b46c1"/>
+  <rect x="130" y="120" width="20" height="260" fill="#6b46c1"/>
+  
+  <!-- Wall Art Area (where artwork will be placed) -->
+  <rect x="250" y="120" width="280" height="180" fill="none" stroke="#e5e7eb" stroke-width="2" stroke-dasharray="5,5" opacity="0.5"/>
+  
+  <!-- Mirror -->
+  <ellipse cx="650" cy="200" rx="40" ry="60" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+  
+  <!-- Rug -->
+  <ellipse cx="400" cy="420" rx="100" ry="30" fill="#fbbf24"/>
+</svg>

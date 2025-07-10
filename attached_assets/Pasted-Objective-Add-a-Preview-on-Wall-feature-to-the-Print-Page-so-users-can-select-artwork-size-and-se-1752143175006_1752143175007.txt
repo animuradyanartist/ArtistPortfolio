@@ -1,0 +1,76 @@
+Objective:
+Add a “Preview on Wall” feature to the Print Page so users can select artwork size and see a real-time, to-scale visual of the artwork in a chosen room interior.
+
+Feature Details:
+
+Trigger & Placement:
+
+On each artwork’s Print Page, add a button or section labeled “Preview on Wall.”
+
+Room/Interior Selection:
+
+When clicked, display a modal or section with at least 3–5 default room images (e.g., living room, bedroom, office, etc.), each with a visible wall area.
+
+User selects a room/interior background.
+
+Artwork Size Selection & Scaling:
+
+Display all available print sizes for the selected artwork (e.g., 30x40cm, 40x60cm, 60x80cm).
+
+When a user chooses a size, the artwork preview on the wall updates to reflect the chosen dimensions, scaled accurately relative to the room’s furniture (e.g., sofa or bed for reference).
+
+Live Visual Preview:
+
+Overlay the artwork image onto the selected wall background, centered and scaled to chosen size.
+
+If possible, add frame color/style options (optional, for future).
+
+The preview should update in real-time as the user changes size or room.
+
+Mobile & Desktop:
+
+The feature must work responsively on both desktop and mobile devices.
+
+Purchase Integration:
+
+After previewing, user can continue with their purchase in the selected size.
+
+Technical Requirements:
+
+Use React (or your current tech stack).
+
+The room backgrounds and artwork images should be high quality and loaded efficiently.
+
+Use a modal, drawer, or expandable section for the preview to avoid disrupting the main purchase flow.
+
+Use CSS or Canvas/SVG to handle image overlay and scaling.
+
+Accessibility:
+
+All buttons, inputs, and previews should be accessible (labeled, keyboard navigable, alt text).
+
+Admin Panel:
+
+Optionally, allow admin to upload new room backgrounds and tag wall dimensions for accurate scaling.
+
+User Flow Example:
+
+User is on a print’s detail page.
+
+User clicks “Preview on Wall.”
+
+Modal/section opens: User picks a room.
+
+User selects print size; artwork appears scaled on the wall.
+
+User adjusts as desired, then continues to purchase.
+
+Deliverable:
+An interactive “Preview on Wall” feature on each Print Page, where users can select a room, pick an artwork size, and view a realistic, to-scale wall preview before purchase.
+
+💡 Tips for Best Results
+Mention your preferred modal library (if any), or say “use shadcn/ui modal” or similar for UI consistency.
+
+Let them know if you want the preview section to be always visible or appear on click.
+
+Ask to maintain site branding/style in new feature.
