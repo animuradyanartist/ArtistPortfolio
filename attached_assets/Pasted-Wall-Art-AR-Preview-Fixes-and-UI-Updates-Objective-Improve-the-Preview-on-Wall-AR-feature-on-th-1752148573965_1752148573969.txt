@@ -1,0 +1,55 @@
+Wall Art AR Preview Fixes and UI Updates
+Objective:
+Improve the “Preview on Wall” (AR) feature on the print detail page, ensuring correct sizing functionality, compact UI, and temporary hiding of the preview button.
+
+Required Fixes & Enhancements:
+
+Live Artwork Resizing:
+
+In the AR camera view, when a user selects a different print size, the artwork overlay must immediately resize to reflect the chosen size in real time.
+
+Ensure the size selection updates a state variable and the overlay’s width and height (or scaling transform) depend directly on this variable.
+
+Double-check the size-to-pixel conversion logic for realistic scaling in the camera feed.
+
+Compact Horizontal Size Selector:
+
+Update the print size selector UI inside the AR camera view so all size options appear as small, pill-shaped buttons in a single horizontal row.
+
+The selector should be at the top or bottom edge of the camera feed, take up minimal vertical space, and be horizontally scrollable if there are many sizes.
+
+The selector must never overlap or block the main artwork overlay.
+
+Photo Capture:
+
+Add a camera or “Take Photo” button in the AR view.
+
+When clicked, capture the current camera feed and artwork overlay as a single image, and prompt the user to save/download it.
+
+Show a visual feedback and a confirmation (“Photo saved!”).
+
+Hide “Preview on Wall” Button:
+
+Temporarily hide or remove the “Preview on Wall” (AR) button from the print detail page so users cannot access the AR preview feature.
+
+Ensure this does not affect any other page functionality. If you want to restore this later, leave a code comment with clear instructions.
+
+Technical Notes:
+
+All AR UI components must be responsive and touch-friendly.
+
+Use state management so artwork overlay updates instantly with each size selection.
+
+For photo capture, use HTML5 Canvas (or similar) to combine camera and overlay.
+
+Clean up or comment out any code/assets only used by the AR preview if the button is hidden.
+
+Deliverable:
+
+The AR overlay always updates to match the selected size instantly.
+
+Size selection UI in AR view is compact and non-obtrusive.
+
+Users can take a photo of the live preview and save it.
+
+The “Preview on Wall” button is currently hidden from the website.
