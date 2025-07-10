@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import PreviewOnWall from "@/components/PreviewOnWall";
+import ARPreview from "@/components/ARPreview";
 import type { Print } from "@shared/schema";
 
 export default function PrintArtworkPage() {
@@ -26,6 +27,9 @@ export default function PrintArtworkPage() {
   
   // Image carousel state
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // AR Preview state
+  const [selectedSize, setSelectedSize] = useState<{width: number, height: number, material: string} | null>(null);
 
   // Fetch print data
   const { data: print, isLoading, error } = useQuery<Print>({
@@ -267,7 +271,8 @@ export default function PrintArtworkPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {printSizes.map((size: any, index: number) => (
-                      <div key={index} className="flex justify-between items-center p-3 border rounded-lg">
+                      <div key={index} className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                           onClick={() => setSelectedSize({width: size.width, height: size.height, material: size.material})}>
                         <div>
                           <div className="font-medium text-charcoal">
                             {size.width} × {size.height} cm
@@ -382,6 +387,14 @@ export default function PrintArtworkPage() {
                           <div className="text-xl font-bold text-deep-blue">
                             Custom Price: €{customPrice.toFixed(2)}
                           </div>
+                          <Button
+                            onClick={() => {
+                              setSelectedSize({width: customWidth, height: customHeight, material: customMaterial});
+                            }}
+                            className="w-full mt-3 bg-deep-blue hover:bg-deep-blue/90"
+                          >
+                            Select This Size for AR Preview
+                          </Button>
                         </div>
                       )}
 
@@ -406,16 +419,56 @@ export default function PrintArtworkPage() {
                 </CardContent>
               </Card>
 
+              {/* AR Preview */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-playfair text-lg text-deep-blue">
+                    AR Preview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-soft-gray text-sm">
+                    See this artwork on your own wall using your device's camera.
+                  </p>
+                  
+                  {selectedSize && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="text-sm font-medium text-blue-900">
+                        Selected Size: {selectedSize.width} × {selectedSize.height} cm ({selectedSize.material})
+                      </div>
+                      <div className="text-xs text-blue-700 mt-1">
+                        AR preview will show this size
+                      </div>
+                    </div>
+                  )}
+                  
+                  <ARPreview 
+                    artwork={{
+                      id: print.id,
+                      title: print.title,
+                      images: print.images
+                    }}
+                    selectedSize={selectedSize}
+                  />
+                  
+                  {!selectedSize && (
+                    <p className="text-xs text-soft-gray">
+                      Select a size above to see accurate sizing in AR preview
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Preview on Wall */}
               <Card>
                 <CardHeader>
                   <CardTitle className="font-playfair text-lg text-deep-blue">
-                    Preview on Wall
+                    Interior Preview
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-soft-gray text-sm mb-3">
-                    See how this artwork looks in different rooms and sizes before ordering.
+                    See how this artwork looks in different rooms and sizes.
                   </p>
                   <PreviewOnWall 
                     artwork={{
