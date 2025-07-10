@@ -159,6 +159,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk print management endpoints
+  app.post("/api/artworks/bulk-print-enable", async (req, res) => {
+    try {
+      const artworks = await storage.getAllArtworks();
+      
+      // Update all artworks to enable prints
+      for (const artwork of artworks) {
+        await storage.updateArtwork(artwork.id, {
+          ...artwork,
+          availableForPrint: true
+        });
+      }
+      
+      res.json({ message: "All artworks are now available for prints", count: artworks.length });
+    } catch (error) {
+      console.error('Bulk print enable error:', error);
+      res.status(500).json({ message: "Failed to enable prints for all artworks" });
+    }
+  });
+
+  app.post("/api/artworks/bulk-print-disable", async (req, res) => {
+    try {
+      const artworks = await storage.getAllArtworks();
+      
+      // Update all artworks to disable prints
+      for (const artwork of artworks) {
+        await storage.updateArtwork(artwork.id, {
+          ...artwork,
+          availableForPrint: false
+        });
+      }
+      
+      res.json({ message: "All prints have been disabled", count: artworks.length });
+    } catch (error) {
+      console.error('Bulk print disable error:', error);
+      res.status(500).json({ message: "Failed to disable prints for all artworks" });
+    }
+  });
+
   // Exhibitions routes
   app.get("/api/exhibitions", async (req, res) => {
     try {

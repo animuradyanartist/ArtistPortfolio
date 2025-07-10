@@ -18,7 +18,7 @@ export default function AdminPage() {
   const [, setLocation] = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<'homepage' | 'artworks' | 'exhibitions' | 'artist'>('homepage');
+  const [activeTab, setActiveTab] = useState<'homepage' | 'artworks' | 'prints' | 'exhibitions' | 'artist'>('homepage');
   const [showPassword, setShowPassword] = useState(false);
 
   const { toast } = useToast();
@@ -309,7 +309,7 @@ export default function AdminPage() {
 
         {/* Optimized Tabs */}
         <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-sm mb-8">
-          {(['homepage', 'artworks', 'exhibitions', 'artist'] as const).map((tab) => (
+          {(['homepage', 'artworks', 'prints', 'exhibitions', 'artist'] as const).map((tab) => (
             <Button
               key={tab}
               variant={activeTab === tab ? 'default' : 'ghost'}
@@ -655,6 +655,185 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Prints Tab */}
+        {activeTab === 'prints' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="font-playfair text-2xl text-deep-blue">Print Management</h2>
+            </div>
+            
+            {artworksLoading ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse">
+                    <div className="bg-gray-200 h-48 rounded-lg"></div>
+                    <div className="mt-2 h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div className="mt-1 h-3 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {artworks.map((artwork) => (
+                  <Card key={artwork.id} className="overflow-hidden">
+                    <div className="aspect-video bg-gray-100">
+                      {artwork.images?.[0] && (
+                        <img 
+                          src={artwork.images[0]} 
+                          alt={artwork.title}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="font-semibold text-charcoal text-sm truncate">
+                          {artwork.title}
+                        </h3>
+                        <div className={`text-xs px-2 py-1 rounded-full font-medium ${
+                          artwork.availableForPrint 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {artwork.availableForPrint ? 'Print Available' : 'No Prints'}
+                        </div>
+                      </div>
+                      <p className="text-soft-gray text-xs mb-3">
+                        {artwork.year} • {artwork.medium}
+                      </p>
+                      
+                      {/* Print Status and Controls */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant={artwork.availableForPrint ? "default" : "outline"}
+                            onClick={async () => {
+                              const newStatus = !artwork.availableForPrint;
+                              try {
+                                await apiRequest(`/api/artworks/${artwork.id}`, {
+                                  method: "PUT",
+                                  body: JSON.stringify({
+                                    ...artwork,
+                                    availableForPrint: newStatus
+                                  })
+                                });
+                                queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
+                                toast({
+                                  title: "Print status updated",
+                                  description: `${artwork.title} is now ${newStatus ? 'available' : 'unavailable'} for prints`,
+                                });
+                              } catch (error) {
+                                toast({
+                                  title: "Error",
+                                  description: "Failed to update print status",
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
+                            className="text-xs"
+                          >
+                            {artwork.availableForPrint ? 'Disable Prints' : 'Enable Prints'}
+                          </Button>
+                        </div>
+                        
+                        {artwork.availableForPrint && (
+                          <div className="text-xs text-soft-gray">
+                            Material: {artwork.preferredPrintMaterial || 'paper'}
+                            {artwork.printSizes && (() => {
+                              try {
+                                const sizes = JSON.parse(artwork.printSizes);
+                                return sizes.length > 0 ? ` • ${sizes.length} size(s)` : ' • No sizes set';
+                              } catch {
+                                return ' • No sizes set';
+                              }
+                            })()}
+                          </div>
+                        )}
+                        
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setLocation(`/admin/edit-artwork/${artwork.id}`)}
+                          className="w-full text-xs"
+                        >
+                          <Edit className="w-3 h-3 mr-1" />
+                          Edit Print Settings
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+            
+            {/* Bulk Print Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-playfair text-lg text-deep-blue">
+                  Bulk Print Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      try {
+                        await apiRequest('/api/artworks/bulk-print-enable', {
+                          method: 'POST',
+                        });
+                        queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
+                        toast({
+                          title: "Success",
+                          description: "All artworks are now available for prints",
+                        });
+                      } catch (error) {
+                        toast({
+                          title: "Error", 
+                          description: "Failed to enable prints for all artworks",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    Enable All Prints
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        await apiRequest('/api/artworks/bulk-print-disable', {
+                          method: 'POST',
+                        });
+                        queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
+                        toast({
+                          title: "Success",
+                          description: "All prints have been disabled",
+                        });
+                      } catch (error) {
+                        toast({
+                          title: "Error",
+                          description: "Failed to disable prints for all artworks", 
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                  >
+                    Disable All Prints
+                  </Button>
+                </div>
+                
+                <p className="text-sm text-soft-gray">
+                  Use these actions to quickly enable or disable print availability for all artworks at once.
+                  Individual print settings like sizes and materials can be configured per artwork.
+                </p>
+              </CardContent>
+            </Card>
           </div>
         )}
 
