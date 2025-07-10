@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { X, Camera, Move, ZoomIn, ZoomOut, RotateCw, Ruler, CreditCard } from "lucide-react";
+import { X, Camera, Move, ZoomIn, ZoomOut, RotateCw, Ruler, CreditCard, Download, Palette } from "lucide-react";
 
 interface ARPreviewProps {
   artwork: {
@@ -19,9 +19,10 @@ interface ARPreviewProps {
     material: string;
   };
   availableSizes?: string; // JSON string of available sizes
+  onSizeSelect?: (width: number, height: number, material: string) => void;
 }
 
-export default function ARPreview({ artwork, selectedSize, availableSizes }: ARPreviewProps) {
+export default function ARPreview({ artwork, selectedSize, availableSizes, onSizeSelect }: ARPreviewProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +40,11 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
   const [showSizeSelector, setShowSizeSelector] = useState(false);
   const [calibrationMode, setCalibrationMode] = useState(false);
   const [realWorldScale, setRealWorldScale] = useState(1); // pixels per cm
+  
+  // Photo capture
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [captureFlash, setCaptureFlash] = useState(false);
+  const [showCaptureSuccess, setShowCaptureSuccess] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -368,12 +374,64 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
     setCalibrationMode(false);
   };
 
-  // Handle size change in AR
+  // Handle size change in AR - instant updates
   const handleSizeChange = (sizeString: string) => {
     const size = allSizes.find(s => `${s.width}x${s.height}-${s.material}` === sizeString);
     if (size) {
       setCurrentARSize(size);
       setShowSizeSelector(false);
+    }
+  };
+
+  // Photo capture functionality
+  const capturePhoto = async () => {
+    if (!canvasRef.current || !videoRef.current) return;
+    
+    setIsCapturing(true);
+    setCaptureFlash(true);
+    
+    try {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      
+      // Create a temporary canvas for the photo
+      const photoCanvas = document.createElement('canvas');
+      const photoCtx = photoCanvas.getContext('2d');
+      
+      if (!photoCtx) return;
+      
+      // Set photo canvas size to match the video
+      photoCanvas.width = video.videoWidth;
+      photoCanvas.height = video.videoHeight;
+      
+      // Draw current frame from video
+      photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
+      
+      // Draw the artwork overlay
+      drawArtworkOverlay(photoCtx, photoCanvas.width, photoCanvas.height);
+      
+      // Convert to blob and trigger download
+      photoCanvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `ar-preview-${artwork.title}-${new Date().toISOString().split('T')[0]}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          setShowCaptureSuccess(true);
+          setTimeout(() => setShowCaptureSuccess(false), 3000);
+        }
+      }, 'image/png');
+      
+    } catch (error) {
+      console.error('Error capturing photo:', error);
+    } finally {
+      setIsCapturing(false);
+      setTimeout(() => setCaptureFlash(false), 200);
     }
   };
 
@@ -571,23 +629,49 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
               </div>
             )}
 
-            {/* Size selector overlay */}
+            {/* Size selector overlay - Instant Live Updates */}
             {showSizeSelector && isInitialized && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
                 <Card className="max-w-md mx-4">
                   <CardContent className="p-6">
                     <h3 className="text-lg font-semibold mb-4">Select Print Size</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Tap any size to instantly see it on your wall
+                    </p>
                     <div className="grid grid-cols-2 gap-3 mb-4">
                       {allSizes.map((size, index) => (
                         <Button
                           key={index}
                           variant={currentARSize?.width === size.width && currentARSize?.height === size.height && currentARSize?.material === size.material ? "default" : "outline"}
-                          className="p-3 h-auto text-left"
-                          onClick={() => handleSizeChange(`${size.width}x${size.height}-${size.material}`)}
+                          className="p-3 h-auto text-left relative"
+                          onClick={() => {
+                            // Instant live update
+                            setCurrentARSize(size);
+                            
+                            // Notify parent component if callback provided
+                            if (onSizeSelect) {
+                              onSizeSelect(size.width, size.height, size.material);
+                            }
+                            
+                            // Visual feedback
+                            const btn = document.querySelector(`[data-size="${size.width}x${size.height}-${size.material}"]`);
+                            if (btn) {
+                              btn.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
+                              setTimeout(() => {
+                                btn.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
+                              }, 300);
+                            }
+                          }}
+                          data-size={`${size.width}x${size.height}-${size.material}`}
                         >
                           <div>
                             <div className="font-medium">{size.width} × {size.height} cm</div>
                             <div className="text-xs text-gray-500 capitalize">{size.material}</div>
+                            {currentARSize?.width === size.width && currentARSize?.height === size.height && currentARSize?.material === size.material && (
+                              <div className="absolute top-2 right-2">
+                                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                              </div>
+                            )}
                           </div>
                         </Button>
                       ))}
@@ -597,7 +681,7 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
                       onClick={() => setShowSizeSelector(false)}
                       className="w-full"
                     >
-                      Close
+                      Done
                     </Button>
                   </CardContent>
                 </Card>
@@ -725,11 +809,50 @@ export default function ARPreview({ artwork, selectedSize, availableSizes }: ARP
                     </Button>
                   </div>
 
+                  {/* Photo Capture Button */}
+                  <div className="flex items-center justify-center">
+                    <Button
+                      onClick={capturePhoto}
+                      disabled={isCapturing}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow-lg"
+                    >
+                      {isCapturing ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                          Capturing...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-5 h-5 mr-2" />
+                          Take Photo
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
                   {/* Usage tip */}
                   <div className="text-center text-white/70 text-xs">
                     Drag artwork to move • Use controls to adjust size and rotation
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Flash Effect */}
+            {captureFlash && (
+              <div className="absolute inset-0 bg-white z-30 opacity-70 animate-pulse" />
+            )}
+
+            {/* Capture Success Message */}
+            {showCaptureSuccess && (
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30">
+                <Card className="bg-green-500 text-white border-green-600 shadow-xl">
+                  <CardContent className="p-6 text-center">
+                    <Download className="w-12 h-12 mx-auto mb-3 text-white" />
+                    <p className="font-bold text-lg mb-1">Photo Saved!</p>
+                    <p className="text-sm opacity-90">Check your downloads folder</p>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </div>
