@@ -1,0 +1,73 @@
+Project: Art Prints Website – Artwork Inner Page Functionality
+
+1. Objective:
+When a user clicks any artwork on the Prints overview page, open a dedicated inner page (artwork details page) for that print.
+
+2. Required Inner Page Features:
+
+Artwork image(s) (large, high-quality, left side of layout)
+
+Artwork title and description (prominent, right side or below image on mobile)
+
+Print size options:
+
+List available/predefined print sizes (populated from admin panel; selectable)
+
+Material type selector (Canvas / Paper)
+
+Quantity input
+
+Live price display (auto-updating based on selected options)
+
+NEW: Custom Size Button
+
+Below predefined sizes, add a button: “Custom Size”
+
+On click, show a custom size calculator form:
+
+Width (cm) and Height (cm) inputs (min 20cm, max 120cm, validation and warning if out of range)
+
+Material type selector (Canvas/Paper)
+
+Quantity input
+
+Live price calculation (use same logic as for predefined sizes)
+
+“Cancel” or toggle to close/hide calculator
+
+Hide the calculator by default; only show when “Custom Size” is clicked.
+
+Info message (not a Buy button):
+“To purchase, please contact me via [email] or Instagram” (with clickable links).
+
+Fully responsive layout for desktop and mobile.
+
+3. Navigation & Routing:
+
+From Prints overview, clicking an artwork should open /prints/[artwork-slug] (or similar route) showing all the above features for the selected artwork only.
+
+Use clean URLs and support browser back/forward navigation.
+
+4. Technical Requirements:
+
+Use component-based architecture (React/Next.js preferred, but specify your stack if different)
+
+Fetch and display artwork data dynamically based on the clicked artwork (from backend or static data source)
+
+All logic (size, material, quantity, price calculation) should be modular and reusable.
+
+Follow existing styling conventions (e.g., Tailwind CSS, CSS Modules, etc.)
+
+Ensure accessibility (labels, focus states, etc.)
+
+5. Additional Notes:
+
+Do not remove or break existing Prints page functionality.
+
+Reuse existing calculator logic for the custom size feature.
+
+Admin panel should allow adding/editing available sizes/materials per artwork (if not already implemented).
+
+Summary:
+
+When a user clicks any artwork on the Prints page, open a dedicated inner page with artwork images, details, predefined size/material/quantity options, live price, and the new custom size calculator (toggle by button). Include a contact info message instead of a buy button. Ensure everything is responsive, modular, and consistent with the current website style.
