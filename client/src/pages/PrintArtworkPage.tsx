@@ -29,16 +29,7 @@ export default function PrintArtworkPage() {
 
   // Fetch print data
   const { data: print, isLoading, error } = useQuery<Print>({
-    queryKey: ['/api/prints', printId],
-    enabled: !!printId && !isNaN(printId)
-  });
-
-  // Debug logging
-  console.log('PrintArtworkPage Debug:', {
-    printId,
-    print,
-    isLoading,
-    error,
+    queryKey: [`/api/prints/${printId}`],
     enabled: !!printId && !isNaN(printId)
   });
 
