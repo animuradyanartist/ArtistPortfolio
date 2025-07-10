@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import PreviewOnWall from "@/components/PreviewOnWall";
-// import ARPreview from "@/components/ARPreview"; // TEMPORARILY COMMENTED OUT - restore when AR Preview is re-enabled
+import ARPreview from "@/components/ARPreview";
 import type { Print } from "@shared/schema";
 
 export default function PrintArtworkPage() {
@@ -419,58 +419,46 @@ export default function PrintArtworkPage() {
                 </CardContent>
               </Card>
 
-              {/* AR Preview - TEMPORARILY HIDDEN */}
-              {/* 
-                RESTORATION INSTRUCTIONS: 
-                To restore AR Preview functionality, uncomment the code block below.
-                The AR Preview feature is fully functional with:
-                - Live artwork resizing when size is selected
-                - Compact horizontal size selector with pill-shaped buttons
-                - Photo capture and download functionality
-                - Realistic scaling and visual effects
-                - Mobile-friendly touch interface
-              */}
-              {false && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="font-playfair text-lg text-deep-blue">
-                      AR Preview
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-soft-gray text-sm">
-                      See this artwork on your own wall using your device's camera.
-                    </p>
-                    
-                    {selectedSize && (
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="text-sm font-medium text-blue-900">
-                          Selected Size: {selectedSize.width} × {selectedSize.height} cm ({selectedSize.material})
-                        </div>
-                        <div className="text-xs text-blue-700 mt-1">
-                          AR preview will show this size
-                        </div>
+              {/* AR Preview */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-playfair text-lg text-deep-blue">
+                    AR Preview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-soft-gray text-sm">
+                    See this artwork on your own wall using your device's camera.
+                  </p>
+                  
+                  {selectedSize && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="text-sm font-medium text-blue-900">
+                        Selected Size: {selectedSize.width} × {selectedSize.height} cm ({selectedSize.material})
                       </div>
-                    )}
-                    
-                    <ARPreview 
-                      artwork={{
-                        id: print.id,
-                        title: print.title,
-                        images: print.images
-                      }}
-                      selectedSize={selectedSize}
-                      availableSizes={print.availableSizes}
-                    />
-                    
-                    {!selectedSize && (
-                      <p className="text-xs text-soft-gray">
-                        Select a size above to see accurate sizing in AR preview
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
+                      <div className="text-xs text-blue-700 mt-1">
+                        AR preview will show this size
+                      </div>
+                    </div>
+                  )}
+                  
+                  <ARPreview 
+                    artwork={{
+                      id: print.id,
+                      title: print.title,
+                      images: print.images
+                    }}
+                    selectedSize={selectedSize}
+                    availableSizes={print.availableSizes}
+                  />
+                  
+                  {!selectedSize && (
+                    <p className="text-xs text-soft-gray">
+                      Select a size above to see accurate sizing in AR preview
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Preview on Wall */}
               <Card>

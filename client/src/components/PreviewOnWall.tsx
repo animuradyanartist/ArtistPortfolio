@@ -315,7 +315,9 @@ export default function PreviewOnWall({ artwork, onSizeSelect }: PreviewOnWallPr
     <>
       <Dialog>
         <DialogTrigger asChild>
-          <Button className="w-full bg-deep-blue hover:bg-deep-blue/90">
+          {/* TEMPORARILY HIDDEN - Preview on Wall button */}
+          {/* To restore: remove the style={{display: 'none'}} */}
+          <Button className="w-full bg-deep-blue hover:bg-deep-blue/90" style={{display: 'none'}}>
             <Eye className="w-4 h-4 mr-2" />
             Preview on Wall
           </Button>
