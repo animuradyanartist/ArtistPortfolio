@@ -1,0 +1,71 @@
+Objective:
+When a user clicks on an artwork in the Prints section, open a detailed inner page for that artwork (not the "Prints Not Available" page), similar in functionality and layout to the second screenshot.
+
+Prompt:
+Task:
+Fix the Prints section so that clicking on any available artwork opens an individual inner page displaying all print purchase details.
+
+Current Issue:
+Instead of showing details, the page sometimes shows: “Prints Not Available. This artwork is not currently available for printing.”
+
+Requirements:
+
+Artwork Availability
+
+Only show “Prints Not Available” if that specific artwork is actually not set up for printing in the admin/database.
+
+For all other artworks, open an inner page with the artwork’s print details.
+
+Artwork Inner Page – Features and Layout:
+
+Images: Large main image, with additional thumbnails if available (left side, or gallery)
+
+Title: Prominent artwork name/title at the top
+
+Price: Show current price for the selected size/material, update dynamically
+
+Select Size: Show available sizes as selectable buttons (like 6x8, 8x10, 12x16, etc.)
+
+Material: Selector for canvas/paper (or other material types if available)
+
+Quantity Selector
+
+Add to Cart Button (if e-commerce), or info/contact to purchase (if manual)
+
+Custom Size Button: Add this under the size options. When clicked, show a calculator form (see previous prompt for custom size details)
+
+Purchase Info: If you don’t sell directly, instead of Add to Cart, show:
+“To purchase this artwork, please contact me via [email] or Instagram.”
+(with clickable links)
+
+Description: Artwork and print details (expand/collapse if long)
+
+Shipping and Delivery Info: Expandable section if required
+
+Mobile Responsive Design: All features must display well on desktop and mobile
+
+Navigation:
+
+Clicking on an artwork from the Prints overview must open this detailed page (route: /prints/[artwork-slug-or-id])
+
+Include a “Back to Prints” button for easy navigation
+
+Data:
+
+Ensure each artwork’s print options, images, sizes, price, and availability come from your admin/database
+
+If an artwork has no available print data, only then show “Prints Not Available”
+
+User Experience:
+
+No reloads when selecting sizes/materials—use dynamic updates
+
+Clear error/warning if user tries to buy unavailable artwork
+
+Maintain Consistency:
+
+Match the look, spacing, font, and colors of your site and the professional reference (second image)
+
+Deliverable:
+
+When user clicks a print artwork, they see a full detail page with all options, images, and info—never the “Prints Not Available” page unless the artwork truly has no print data.
