@@ -313,10 +313,7 @@ export default function PrintArtworkPage() {
                           }`}
                         >
                           <div className="text-center">
-                            <div className="font-semibold capitalize mb-1">{material}</div>
-                            <div className="text-sm text-soft-gray">
-                              {material === 'paper' ? '€0.013/cm²' : '€0.015/cm²'}
-                            </div>
+                            <div className="font-semibold capitalize">{material}</div>
                           </div>
                         </button>
                       ))}
