@@ -523,34 +523,7 @@ export default function PrintArtworkPage() {
                 </CardContent>
               </Card>
 
-              {/* Preview on Wall */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-playfair text-lg text-deep-blue">
-                    Interior Preview
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-soft-gray text-sm mb-3">
-                    See how this artwork looks in different rooms and sizes.
-                  </p>
-                  <PreviewOnWall 
-                    artwork={{
-                      id: print.id,
-                      title: print.title,
-                      images: print.images,
-                      printSizes: print.availableSizes
-                    }}
-                    onSizeSelect={(width, height, material) => {
-                      setCustomWidth(width);
-                      setCustomHeight(height);
-                      setCustomMaterial(material);
-                      setShowCustomForm(true);
-                      handleCustomCalculation();
-                    }}
-                  />
-                </CardContent>
-              </Card>
+
 
               {/* Contact Information */}
               <Card>
