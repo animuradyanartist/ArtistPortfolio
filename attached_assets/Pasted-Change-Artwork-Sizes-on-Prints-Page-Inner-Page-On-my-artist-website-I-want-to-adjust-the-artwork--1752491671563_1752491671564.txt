@@ -1,0 +1,66 @@
+Change Artwork Sizes on Prints Page & Inner Page
+On my artist website, I want to adjust the artwork image sizes:
+
+On the main prints page, make the artwork images larger than they are now.
+
+On each individual artwork (inner) page, make the main photo smaller than its current size.
+
+Please update the code and explain where the changes should be made (CSS or component files).
+Here is my current code for the prints page and inner artwork page:
+
+bash
+Copy
+Edit
+[paste relevant code or mention file names, e.g., PrintsPage.js, ArtworkPage.js, styles.css]
+2. Add Remove Artwork Functionality
+I want to add a feature to remove an artwork (both original and print) from my website.
+Please add a delete/remove button to the artwork management area (admin panel and/or user interface) so I can easily delete any artwork if needed.
+The function should:
+
+Show a confirmation dialog before deleting.
+
+Update both the database/storage and the user interface immediately.
+
+Here’s my admin tool code:
+
+bash
+Copy
+Edit
+[paste your admin tool code or file names]
+Please provide the code and explain where to insert it.
+
+3. Combine Paper and Canvas Options for Prints (Both User & Admin Side)
+When creating a new print in the admin tool, currently I have to choose either “paper” or “canvas” as a separate item.
+I want to change this so that both options are available for each artwork print—let the user choose which one they want when ordering, and let the admin add both options for each new print.
+
+Please update:
+
+The admin tool: Allow adding both “canvas” and “paper” options together for a single print (not as separate items).
+
+The user/shop interface: When a user views a print, show both options (paper and canvas) in a dropdown or button selector.
+
+Here’s my current code for creating prints in the admin tool and for displaying prints on the website:
+
+bash
+Copy
+Edit
+[paste code or file names]
+Please update the code and explain what was changed.
+
+If you want to combine all 3 into a single prompt:
+I’m building an artist website and need to make these updates:
+
+On the main prints page, make the artwork images larger; on the individual artwork (inner) page, make the photo smaller.
+
+Add functionality to remove (delete) an artwork in the admin tool, with a confirmation dialog.
+
+In the admin tool, when creating a new print, don’t separate paper and canvas. Instead, provide both options together, so users can choose either when ordering. Update the user/shop interface to show both options for each print.
+
+Here’s my code for the relevant parts:
+
+bash
+Copy
+Edit
+[paste code or mention files]
+Please update my code to solve these issues and explain what you changed.
+

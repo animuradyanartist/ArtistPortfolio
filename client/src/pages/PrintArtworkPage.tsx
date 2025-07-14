@@ -174,15 +174,15 @@ export default function PrintArtworkPage() {
         </Button>
 
         <div className="grid lg:grid-cols-12 gap-8">
-          {/* Left Column - Images (60%) */}
-          <div className="lg:col-span-7">
+          {/* Left Column - Images (50%) */}
+          <div className="lg:col-span-6">
             <div className="space-y-6">
               {/* Main Image */}
               <div className="relative">
                 <img 
                   src={print.images[currentImageIndex]} 
                   alt={`${print.title} - Image ${currentImageIndex + 1}`}
-                  className="w-full rounded-lg shadow-lg object-cover aspect-[3/4]"
+                  className="w-full rounded-lg shadow-lg object-cover aspect-[3/4] max-h-96"
                 />
                 
                 {print.images.length > 1 && (
@@ -258,8 +258,8 @@ export default function PrintArtworkPage() {
             </div>
           </div>
 
-          {/* Right Column - Print Options (40%) */}
-          <div className="lg:col-span-5">
+          {/* Right Column - Print Options (50%) */}
+          <div className="lg:col-span-6">
             <div className="space-y-6">
               {/* Available Sizes */}
               {printSizes.length > 0 && (

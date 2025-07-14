@@ -13,6 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema } from "@shared/schema";
 import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio } from "@shared/schema";
 import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function AdminPage() {
   const [, setLocation] = useLocation();
@@ -217,6 +218,17 @@ export default function AdminPage() {
     },
     onError: () => {
       toast({ title: "Failed to delete artwork", variant: "destructive" });
+    },
+  });
+
+  const deletePrintMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/prints/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/prints"] });
+      toast({ title: "Print deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete print", variant: "destructive" });
     },
   });
 
@@ -481,14 +493,34 @@ export default function AdminPage() {
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => deleteArtworkMutation.mutate(artwork.id)}
-                            disabled={deleteArtworkMutation.isPending}
-                          >
-                            <Trash className="w-4 h-4" />
-                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={deleteArtworkMutation.isPending}
+                              >
+                                <Trash className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Artwork</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete "{artwork.title}"? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteArtworkMutation.mutate(artwork.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                         
                         {/* Reordering Controls */}
@@ -641,14 +673,34 @@ export default function AdminPage() {
                             {exhibition.venue}, {exhibition.location} • {exhibition.year}
                           </p>
                         </div>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteExhibitionMutation.mutate(exhibition.id)}
-                          disabled={deleteExhibitionMutation.isPending}
-                        >
-                          <Trash className="w-4 h-4" />
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={deleteExhibitionMutation.isPending}
+                            >
+                              <Trash className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Exhibition</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete "{exhibition.title}"? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteExhibitionMutation.mutate(exhibition.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </CardContent>
                   </Card>
@@ -824,9 +876,21 @@ export default function AdminPage() {
 function PrintsManagement() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   const { data: prints = [], isLoading: printsLoading } = useQuery<Print[]>({
     queryKey: ["/api/prints"],
+  });
+
+  const deletePrintMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/prints/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/prints"] });
+      toast({ title: "Print deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete print", variant: "destructive" });
+    },
   });
 
   return (
@@ -959,6 +1023,36 @@ function PrintsManagement() {
                     <Edit className="w-3 h-3 mr-1" />
                     Edit
                   </Button>
+                  
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="text-xs"
+                        disabled={deletePrintMutation.isPending}
+                      >
+                        <Trash className="w-3 h-3" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Print Edition</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete "{print.title}"? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deletePrintMutation.mutate(print.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                   
                   {print.featured && (
                     <div className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full font-medium">
