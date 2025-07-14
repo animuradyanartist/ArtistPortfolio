@@ -20,13 +20,6 @@ export default function PrintArtworkPage() {
   // Material selection state
   const [selectedMaterial, setSelectedMaterial] = useState<"paper" | "canvas">("paper");
   
-  // Auto-select first available material if current selection is not available
-  useEffect(() => {
-    if (availableMaterials.length > 0 && !availableMaterials.includes(selectedMaterial)) {
-      setSelectedMaterial(availableMaterials[0] as "paper" | "canvas");
-    }
-  }, [availableMaterials, selectedMaterial]);
-  
   // Custom size form state
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customWidth, setCustomWidth] = useState<number>(0);
@@ -69,6 +62,13 @@ export default function PrintArtworkPage() {
     const materials = new Set(printSizes.map((size: any) => size.material));
     return Array.from(materials).sort();
   }, [printSizes]);
+
+  // Auto-select first available material if current selection is not available
+  useEffect(() => {
+    if (availableMaterials.length > 0 && !availableMaterials.includes(selectedMaterial)) {
+      setSelectedMaterial(availableMaterials[0] as "paper" | "canvas");
+    }
+  }, [availableMaterials, selectedMaterial]);
 
   // Calculate price for a given size and material
   const calculatePrice = (width: number, height: number, material: string) => {
