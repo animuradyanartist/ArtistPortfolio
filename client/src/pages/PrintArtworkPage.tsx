@@ -17,6 +17,16 @@ export default function PrintArtworkPage() {
   const [, setLocation] = useLocation();
   const printId = parseInt(params.id as string);
   
+  // Material selection state
+  const [selectedMaterial, setSelectedMaterial] = useState<"paper" | "canvas">("paper");
+  
+  // Auto-select first available material if current selection is not available
+  useEffect(() => {
+    if (availableMaterials.length > 0 && !availableMaterials.includes(selectedMaterial)) {
+      setSelectedMaterial(availableMaterials[0] as "paper" | "canvas");
+    }
+  }, [availableMaterials, selectedMaterial]);
+  
   // Custom size form state
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customWidth, setCustomWidth] = useState<number>(0);
@@ -48,6 +58,17 @@ export default function PrintArtworkPage() {
       return [];
     }
   }, [print?.availableSizes]);
+
+  // Filter sizes by selected material
+  const filteredSizes = useMemo(() => {
+    return printSizes.filter((size: any) => size.material === selectedMaterial);
+  }, [printSizes, selectedMaterial]);
+
+  // Get unique materials from available sizes
+  const availableMaterials = useMemo(() => {
+    const materials = new Set(printSizes.map((size: any) => size.material));
+    return Array.from(materials).sort();
+  }, [printSizes]);
 
   // Calculate price for a given size and material
   const calculatePrice = (width: number, height: number, material: string) => {
@@ -86,6 +107,11 @@ export default function PrintArtworkPage() {
       handleCustomCalculation();
     }
   }, [customMaterial]);
+
+  // Sync custom material with selected material
+  useEffect(() => {
+    setCustomMaterial(selectedMaterial);
+  }, [selectedMaterial]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {
@@ -261,28 +287,61 @@ export default function PrintArtworkPage() {
           {/* Right Column - Print Options (50%) */}
           <div className="lg:col-span-6">
             <div className="space-y-6">
-              {/* Available Sizes */}
-              {printSizes.length > 0 && (
+              {/* Material Selection */}
+              {availableMaterials.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="font-playfair text-xl text-deep-blue">
-                      Available Print Sizes
+                      Choose Material
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-3">
+                      {availableMaterials.map((material) => (
+                        <button
+                          key={material}
+                          onClick={() => setSelectedMaterial(material as "paper" | "canvas")}
+                          className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                            selectedMaterial === material
+                              ? 'border-deep-blue bg-blue-50 text-deep-blue'
+                              : 'border-gray-200 hover:border-gray-300 text-charcoal'
+                          }`}
+                        >
+                          <div className="text-center">
+                            <div className="font-semibold capitalize mb-1">{material}</div>
+                            <div className="text-sm text-soft-gray">
+                              {material === 'paper' ? '€0.013/cm²' : '€0.015/cm²'}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Available Sizes */}
+              {filteredSizes.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-playfair text-xl text-deep-blue">
+                      Available Print Sizes - {selectedMaterial.charAt(0).toUpperCase() + selectedMaterial.slice(1)}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {printSizes.map((size: any, index: number) => (
+                    {filteredSizes.map((size: any, index: number) => (
                       <div key={index} className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                           onClick={() => setSelectedSize({width: size.width, height: size.height, material: size.material})}>
+                           onClick={() => setSelectedSize({width: size.width, height: size.height, material: selectedMaterial})}>
                         <div>
                           <div className="font-medium text-charcoal">
                             {size.width} × {size.height} cm
                           </div>
                           <div className="text-sm text-soft-gray capitalize">
-                            {size.material}
+                            {selectedMaterial}
                           </div>
                         </div>
                         <div className="text-lg font-semibold text-deep-blue">
-                          €{size.price ? size.price.toFixed(2) : calculatePrice(size.width, size.height, size.material).toFixed(2)}
+                          €{size.price ? size.price.toFixed(2) : calculatePrice(size.width, size.height, selectedMaterial).toFixed(2)}
                         </div>
                       </div>
                     ))}
@@ -348,15 +407,14 @@ export default function PrintArtworkPage() {
 
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">Material</Label>
-                        <Select value={customMaterial} onValueChange={setCustomMaterial}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="paper">Paper</SelectItem>
-                            <SelectItem value="canvas">Canvas</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div className="p-3 bg-gray-50 rounded-lg border">
+                          <div className="font-medium text-charcoal capitalize">
+                            {selectedMaterial}
+                          </div>
+                          <div className="text-sm text-soft-gray">
+                            {selectedMaterial === 'paper' ? '€0.013/cm²' : '€0.015/cm²'}
+                          </div>
+                        </div>
                       </div>
 
                       <Button 
