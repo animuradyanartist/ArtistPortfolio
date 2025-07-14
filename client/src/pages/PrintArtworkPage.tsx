@@ -182,7 +182,7 @@ export default function PrintArtworkPage() {
                 <img 
                   src={print.images[currentImageIndex]} 
                   alt={`${print.title} - Image ${currentImageIndex + 1}`}
-                  className="w-full rounded-lg shadow-lg object-cover aspect-[3/4] max-h-96"
+                  className="w-full rounded-lg shadow-lg object-cover aspect-[3/4] max-h-[600px]"
                 />
                 
                 {print.images.length > 1 && (
