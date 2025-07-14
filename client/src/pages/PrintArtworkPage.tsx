@@ -17,8 +17,8 @@ export default function PrintArtworkPage() {
   const [, setLocation] = useLocation();
   const printId = parseInt(params.id as string);
   
-  // Material selection state
-  const [selectedMaterial, setSelectedMaterial] = useState<"paper" | "canvas">("paper");
+  // Material selection state - Canvas selected by default
+  const [selectedMaterial, setSelectedMaterial] = useState<"paper" | "canvas">("canvas");
   
   // Custom size form state
   const [showCustomForm, setShowCustomForm] = useState(false);
@@ -52,10 +52,17 @@ export default function PrintArtworkPage() {
     }
   }, [print?.availableSizes]);
 
-  // Filter sizes by selected material
-  const filteredSizes = useMemo(() => {
-    return printSizes.filter((size: any) => size.material === selectedMaterial);
-  }, [printSizes, selectedMaterial]);
+  // Get all unique sizes (regardless of material) - sizes don't change, only prices do
+  const allSizes = useMemo(() => {
+    const sizeMap = new Map();
+    printSizes.forEach((size: any) => {
+      const key = `${size.width}x${size.height}`;
+      if (!sizeMap.has(key)) {
+        sizeMap.set(key, { width: size.width, height: size.height });
+      }
+    });
+    return Array.from(sizeMap.values());
+  }, [printSizes]);
 
   // Get unique materials from available sizes
   const availableMaterials = useMemo(() => {
@@ -63,18 +70,28 @@ export default function PrintArtworkPage() {
     return Array.from(materials).sort();
   }, [printSizes]);
 
-  // Auto-select first available material if current selection is not available
+  // Auto-select canvas if available, otherwise first available material
   useEffect(() => {
-    if (availableMaterials.length > 0 && !availableMaterials.includes(selectedMaterial)) {
-      setSelectedMaterial(availableMaterials[0] as "paper" | "canvas");
+    if (availableMaterials.length > 0) {
+      if (availableMaterials.includes('canvas')) {
+        setSelectedMaterial('canvas');
+      } else if (!availableMaterials.includes(selectedMaterial)) {
+        setSelectedMaterial(availableMaterials[0] as "paper" | "canvas");
+      }
     }
-  }, [availableMaterials, selectedMaterial]);
+  }, [availableMaterials]);
 
-  // Calculate price for a given size and material
+  // Easy-to-edit price calculation function
   const calculatePrice = (width: number, height: number, material: string) => {
     const area = width * height;
-    const rates = { paper: 0.013, canvas: 0.015 };
-    return area * (rates[material as keyof typeof rates] || rates.paper);
+    
+    // Price rates - edit these values to change pricing
+    const rates = { 
+      paper: 0.013,   // €0.013 per cm²
+      canvas: 0.015   // €0.015 per cm²
+    };
+    
+    return area * (rates[material as keyof typeof rates] || rates.canvas);
   };
 
   // Handle custom size calculation
@@ -320,8 +337,8 @@ export default function PrintArtworkPage() {
                 </Card>
               )}
 
-              {/* Available Sizes */}
-              {filteredSizes.length > 0 && (
+              {/* Available Sizes - same sizes for all materials, only prices change */}
+              {allSizes.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="font-playfair text-xl text-deep-blue">
@@ -329,7 +346,7 @@ export default function PrintArtworkPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {filteredSizes.map((size: any, index: number) => (
+                    {allSizes.map((size: any, index: number) => (
                       <div key={index} className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
                            onClick={() => setSelectedSize({width: size.width, height: size.height, material: selectedMaterial})}>
                         <div>
@@ -341,7 +358,7 @@ export default function PrintArtworkPage() {
                           </div>
                         </div>
                         <div className="text-lg font-semibold text-deep-blue">
-                          €{size.price ? size.price.toFixed(2) : calculatePrice(size.width, size.height, selectedMaterial).toFixed(2)}
+                          €{calculatePrice(size.width, size.height, selectedMaterial).toFixed(2)}
                         </div>
                       </div>
                     ))}
