@@ -64,22 +64,10 @@ export default function PrintArtworkPage() {
     return Array.from(sizeMap.values());
   }, [printSizes]);
 
-  // Get unique materials from available sizes
-  const availableMaterials = useMemo(() => {
-    const materials = new Set(printSizes.map((size: any) => size.material));
-    return Array.from(materials).sort();
-  }, [printSizes]);
+  // Always provide both materials - paper and canvas
+  const availableMaterials = ["canvas", "paper"];
 
-  // Auto-select canvas if available, otherwise first available material
-  useEffect(() => {
-    if (availableMaterials.length > 0) {
-      if (availableMaterials.includes('canvas')) {
-        setSelectedMaterial('canvas');
-      } else if (!availableMaterials.includes(selectedMaterial)) {
-        setSelectedMaterial(availableMaterials[0] as "paper" | "canvas");
-      }
-    }
-  }, [availableMaterials]);
+  // Canvas is always selected by default (no need for useEffect since materials are hardcoded)
 
   // Easy-to-edit price calculation function
   const calculatePrice = (width: number, height: number, material: string) => {
