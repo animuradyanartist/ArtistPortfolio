@@ -165,7 +165,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Fetching prints...');
       const prints = await storage.getAllPrints();
       console.log('Prints fetched:', prints.length);
-      res.json(prints);
+      
+      // Limit image data size to prevent large responses
+      const printsWithLimitedImages = prints.map(print => ({
+        ...print,
+        images: print.images.slice(0, 3) // Limit to first 3 images
+      }));
+      
+      console.log('First print:', printsWithLimitedImages[0] ? {
+        id: printsWithLimitedImages[0].id,
+        title: printsWithLimitedImages[0].title,
+        status: printsWithLimitedImages[0].status,
+        imagesLength: printsWithLimitedImages[0].images?.length || 0,
+        firstImagePrefix: printsWithLimitedImages[0].images?.[0]?.substring(0, 30) || 'No image'
+      } : 'No prints');
+      
+      res.json(printsWithLimitedImages);
     } catch (error) {
       console.error('Error fetching prints:', error);
       res.status(500).json({ message: "Failed to fetch prints", error: error instanceof Error ? error.message : 'Unknown error' });

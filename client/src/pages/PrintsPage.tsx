@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,9 +16,18 @@ export default function PrintsPage() {
   const [material, setMaterial] = useState<string>("paper");
 
   // Fetch all prints
-  const { data: prints = [], isLoading } = useQuery<Print[]>({
-    queryKey: ["/api/prints"]
+  const { data: prints = [], isLoading, error } = useQuery<Print[]>({
+    queryKey: ["/api/prints"],
+    retry: 3,
+    retryDelay: 1000
   });
+
+  // Debug logging
+  useEffect(() => {
+    if (error) {
+      console.error('Query error:', error);
+    }
+  }, [error]);
 
   // Filter active prints
   const activePrints = useMemo(() => {
