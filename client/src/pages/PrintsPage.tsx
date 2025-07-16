@@ -22,7 +22,10 @@ export default function PrintsPage() {
 
   // Filter active prints
   const activePrints = useMemo(() => {
-    return prints.filter(print => print.status === 'active');
+    console.log('All prints:', prints);
+    const filtered = prints.filter(print => print.status === 'active');
+    console.log('Active prints:', filtered);
+    return filtered;
   }, [prints]);
 
   // Price calculation
