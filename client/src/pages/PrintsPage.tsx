@@ -18,16 +18,20 @@ export default function PrintsPage() {
   // Fetch all prints
   const { data: prints = [], isLoading, error } = useQuery<Print[]>({
     queryKey: ["/api/prints"],
-    retry: 3,
-    retryDelay: 1000
+    retry: 5,
+    retryDelay: 500,
+    staleTime: 30000 // Cache for 30 seconds
   });
 
   // Debug logging
   useEffect(() => {
-    if (error) {
-      console.error('Query error:', error);
-    }
-  }, [error]);
+    console.log('Prints query state:', { 
+      isLoading, 
+      error: error?.message, 
+      printsCount: prints.length,
+      activePrints: prints.filter(p => p.status === 'active').length
+    });
+  }, [prints, isLoading, error]);
 
   // Filter active prints
   const activePrints = useMemo(() => {
@@ -112,11 +116,20 @@ export default function PrintsPage() {
                     >
                       <div className="relative aspect-[3/4] overflow-hidden">
                         <div className="absolute inset-0 transform transition-transform duration-700 ease-out group-hover:scale-110">
-                          <img 
-                            src={print.images[0]} 
-                            alt={print.title}
-                            className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-110"
-                          />
+                          {print.images && print.images.length > 0 && print.images[0] !== 'placeholder' ? (
+                            <img 
+                              src={print.images[0]} 
+                              alt={print.title}
+                              className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-110"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-600">
+                              <div className="text-center">
+                                <div className="text-4xl mb-2">🖼️</div>
+                                <div className="text-sm font-medium">{print.title}</div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500">
                           <div className="absolute bottom-4 left-4 right-4 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 delay-100">
