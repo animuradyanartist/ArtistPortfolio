@@ -173,16 +173,6 @@ export default function EditPrintPage() {
       return;
     }
 
-    // Validate file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "Error",
-        description: "Image file size must be less than 5MB",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       setUploadingImages(prev => {
         const newState = [...prev];
