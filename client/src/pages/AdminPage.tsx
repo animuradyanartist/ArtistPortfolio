@@ -587,7 +587,11 @@ export default function AdminPage() {
                           <FormItem>
                             <FormLabel>Year</FormLabel>
                             <FormControl>
-                              <Input {...field} type="number" />
+                              <Input 
+                                {...field} 
+                                type="number" 
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
