@@ -137,10 +137,10 @@ export default function PrintsPage() {
         </div>
 
         <div className="grid lg:grid-cols-10 gap-8">
-          {/* Left Column - Prints Grid (70%) */}
-          <div className="lg:col-span-7">
+          {/* Left Column - Prints Grid (80%) */}
+          <div className="lg:col-span-8">
             <h2 className="font-playfair text-2xl font-semibold text-deep-blue mb-6">
-              Available Print Editions
+              Available Print Editions ({activePrints.length})
             </h2>
             
             {activePrints.length === 0 ? (
@@ -148,7 +148,7 @@ export default function PrintsPage() {
                 <p className="text-soft-gray text-lg">No print editions available at the moment.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                 {activePrints.map((print, index) => (
                   <div
                     key={print.id}
@@ -198,8 +198,8 @@ export default function PrintsPage() {
             )}
           </div>
 
-          {/* Right Column - Price Calculator (30%) */}
-          <div className="lg:col-span-3">
+          {/* Right Column - Price Calculator (20%) */}
+          <div className="lg:col-span-2">
             <Card className="sticky top-24">
               <CardHeader>
                 <CardTitle className="font-playfair text-xl text-deep-blue">
