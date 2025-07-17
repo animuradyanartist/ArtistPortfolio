@@ -47,71 +47,109 @@ export default function AboutPage() {
   ];
 
   return (
-    <div className="min-h-screen py-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h1 className="font-playfair text-4xl md:text-5xl font-semibold text-deep-blue mb-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        <div className="text-center mb-20">
+          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-8 animate-fadeIn">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
             About the Artist
+          </div>
+          <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6 animate-slideUp">
+            Ani Muradyan
           </h1>
+          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed animate-slideUp animation-delay-200">
+            Abstract Realism Artist from Armenia, creating works that bring hope and emotion into people's lives.
+          </p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-16 items-start">
+        <div className="grid lg:grid-cols-2 gap-20 items-start">
           {/* Artist Portrait */}
-          <div className="space-y-8">
+          <div className="space-y-8 animate-slideLeft">
             {bioLoading ? (
               <div className="animate-pulse">
-                <div className="w-full max-w-md mx-auto h-96 bg-gray-200 rounded-lg"></div>
+                <div className="w-full max-w-lg mx-auto h-96 bg-gradient-to-br from-slate-200 to-slate-300 rounded-3xl"></div>
               </div>
             ) : (
-              <img 
-                src={artistBio?.image || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800"} 
-                alt="Ani Muradyan artist portrait" 
-                className="w-full max-w-md mx-auto rounded-lg shadow-lg aspect-[3/4] object-cover"
-                onError={(e) => {
-                  // Fallback to default image if uploaded image fails to load
-                  e.currentTarget.src = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800";
-                }}
-              />
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
+                <img 
+                  src={artistBio?.image || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800"} 
+                  alt="Ani Muradyan artist portrait" 
+                  className="relative w-full max-w-lg mx-auto rounded-3xl shadow-2xl aspect-[3/4] object-cover border border-slate-200/50 transform group-hover:scale-105 transition-transform duration-700"
+                  onError={(e) => {
+                    e.currentTarget.src = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800";
+                  }}
+                />
+              </div>
             )}
           </div>
 
           {/* Biography and CV */}
-          <div className="space-y-8">
-            <div>
-              <h2 className="font-playfair text-3xl font-semibold text-deep-blue mb-6">
-                {artistBio?.title || "Biography"}
-              </h2>
+          <div className="space-y-12 animate-slideRight">
+            <div className="bg-white rounded-3xl p-8 shadow-xl border border-slate-200/50 hover:shadow-2xl transition-shadow duration-500">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <h2 className="text-3xl font-bold text-slate-900">
+                  {artistBio?.title || "Biography"}
+                </h2>
+              </div>
+              
               {bioLoading ? (
                 <div className="animate-pulse space-y-4">
-                  <div className="h-4 bg-gray-200 rounded w-full"></div>
-                  <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-                  <div className="h-4 bg-gray-200 rounded w-4/5"></div>
-                  <div className="h-4 bg-gray-200 rounded w-full"></div>
+                  <div className="h-4 bg-gradient-to-r from-slate-200 to-slate-300 rounded w-full"></div>
+                  <div className="h-4 bg-gradient-to-r from-slate-200 to-slate-300 rounded w-5/6"></div>
+                  <div className="h-4 bg-gradient-to-r from-slate-200 to-slate-300 rounded w-4/5"></div>
+                  <div className="h-4 bg-gradient-to-r from-slate-200 to-slate-300 rounded w-full"></div>
                 </div>
               ) : (
-                <div className="prose prose-lg text-soft-gray leading-relaxed space-y-4">
+                <div className="prose prose-lg max-w-none text-slate-600 leading-relaxed space-y-6">
                   {artistBio?.description && (
-                    <div className="whitespace-pre-wrap">{artistBio.description}</div>
+                    <div className="whitespace-pre-wrap text-lg leading-relaxed">{artistBio.description}</div>
                   )}
                   
                   {artistBio?.statement && (
-                    <div>
-                      <h3 className="font-semibold text-deep-blue mt-8 mb-4">Artist Statement</h3>
-                      <div className="whitespace-pre-wrap">{artistBio.statement}</div>
+                    <div className="mt-12">
+                      <h3 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                        <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-md flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        Artist Statement
+                      </h3>
+                      <div className="whitespace-pre-wrap text-slate-600">{artistBio.statement}</div>
                     </div>
                   )}
                   
                   {artistBio?.education && (
-                    <div>
-                      <h3 className="font-semibold text-deep-blue mt-8 mb-4">Education</h3>
-                      <div className="whitespace-pre-wrap">{artistBio.education}</div>
+                    <div className="mt-12">
+                      <h3 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                        <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-md flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+                          </svg>
+                        </div>
+                        Education
+                      </h3>
+                      <div className="whitespace-pre-wrap text-slate-600">{artistBio.education}</div>
                     </div>
                   )}
                   
                   {artistBio?.awards && (
-                    <div>
-                      <h3 className="font-semibold text-deep-blue mt-8 mb-4">Awards & Recognition</h3>
-                      <div className="whitespace-pre-wrap">{artistBio.awards}</div>
+                    <div className="mt-12">
+                      <h3 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                        <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-md flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                          </svg>
+                        </div>
+                        Awards & Recognition
+                      </h3>
+                      <div className="whitespace-pre-wrap text-slate-600">{artistBio.awards}</div>
                     </div>
                   )}
                 </div>
@@ -119,33 +157,48 @@ export default function AboutPage() {
             </div>
 
             {/* CV Timeline - Exhibitions Only */}
-            <div>
-              <h2 className="font-playfair text-3xl font-semibold text-deep-blue mb-6">Exhibition History</h2>
+            <div className="bg-white rounded-3xl p-8 shadow-xl border border-slate-200/50 hover:shadow-2xl transition-shadow duration-500">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+                <h2 className="text-3xl font-bold text-slate-900">Exhibition History</h2>
+              </div>
+              
               {exhibitionsLoading ? (
                 <div className="animate-pulse space-y-6">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="border-l-4 border-gray-200 pl-6 pb-6">
-                      <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
-                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-1"></div>
-                      <div className="h-3 bg-gray-200 rounded w-full"></div>
+                    <div key={i} className="border-l-4 border-gradient-to-b from-slate-200 to-slate-300 pl-6 pb-6">
+                      <div className="h-6 bg-gradient-to-r from-slate-200 to-slate-300 rounded w-3/4 mb-2"></div>
+                      <div className="h-4 bg-gradient-to-r from-slate-200 to-slate-300 rounded w-1/2 mb-1"></div>
+                      <div className="h-3 bg-gradient-to-r from-slate-200 to-slate-300 rounded w-full"></div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="space-y-6">
                   {(exhibitions.length > 0 ? exhibitions : fallbackExhibitions).map((exhibition, index) => (
-                    <div key={'id' in exhibition ? exhibition.id : index} className="border-l-4 border-muted-pink pl-6 pb-6">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
-                        <h3 className="font-semibold text-lg">{exhibition.title}</h3>
-                        <span className="text-soft-gray text-sm">{exhibition.year}</span>
+                    <div key={'id' in exhibition ? exhibition.id : index} className="relative pl-8 pb-6 group">
+                      <div className="absolute left-0 top-0 w-1 h-full bg-gradient-to-b from-blue-500 to-indigo-500 rounded-full"></div>
+                      <div className="absolute left-[-4px] top-2 w-2 h-2 bg-blue-500 rounded-full group-hover:scale-150 transition-transform duration-300"></div>
+                      
+                      <div className="bg-gradient-to-r from-slate-50 to-white p-6 rounded-2xl border border-slate-200/50 hover:shadow-lg transition-all duration-300 transform hover:scale-105">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3">
+                          <h3 className="font-semibold text-xl text-slate-900">{exhibition.title}</h3>
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                            {exhibition.year}
+                          </span>
+                        </div>
+                        <p className="text-blue-600 font-medium mb-2">
+                          {exhibition.venue}
+                          {'location' in exhibition && exhibition.location && `, ${exhibition.location}`}
+                        </p>
+                        {exhibition.description && (
+                          <p className="text-slate-600 text-sm leading-relaxed">{exhibition.description}</p>
+                        )}
                       </div>
-                      <p className="text-deep-blue font-medium">
-                        {exhibition.venue}
-                        {'location' in exhibition && exhibition.location && `, ${exhibition.location}`}
-                      </p>
-                      {exhibition.description && (
-                        <p className="text-soft-gray text-sm mt-1">{exhibition.description}</p>
-                      )}
                     </div>
                   ))}
                 </div>
