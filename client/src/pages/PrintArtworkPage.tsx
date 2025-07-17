@@ -192,28 +192,43 @@ export default function PrintArtworkPage() {
   }
 
   return (
-    <div className="min-h-screen py-20 bg-soft-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Back Button */}
         <Button
           variant="ghost"
           onClick={() => setLocation("/prints")}
-          className="mb-6"
+          className="mb-8 hover:bg-slate-100 rounded-xl transition-all duration-300 animate-fadeIn"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Prints
         </Button>
 
+        {/* Hero Section */}
+        <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-6 animate-fadeIn">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            Premium Art Print
+          </div>
+          <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-4 animate-slideUp">
+            {print.title}
+          </h1>
+          <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed animate-slideUp animation-delay-200">
+            Museum-quality reproduction available in multiple sizes and materials
+          </p>
+        </div>
+
         <div className="grid lg:grid-cols-12 gap-8">
           {/* Left Column - Images (50%) */}
-          <div className="lg:col-span-6">
+          <div className="lg:col-span-6 animate-slideLeft">
             <div className="space-y-6">
               {/* Main Image */}
-              <div className="relative">
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
                 <img 
                   src={print.images[currentImageIndex]} 
                   alt={`${print.title} - Image ${currentImageIndex + 1}`}
-                  className="w-full rounded-lg shadow-lg object-cover aspect-[3/4] max-h-[600px]"
+                  className="relative w-full rounded-3xl shadow-2xl object-cover aspect-[3/4] max-h-[600px] border border-slate-200/50 transform group-hover:scale-105 transition-transform duration-700"
                 />
                 
                 {print.images.length > 1 && (
@@ -222,21 +237,21 @@ export default function PrintArtworkPage() {
                       variant="ghost"
                       size="sm"
                       onClick={prevImage}
-                      className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white shadow-md"
+                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 backdrop-blur-sm hover:bg-white shadow-xl rounded-full w-12 h-12 transition-all duration-300 hover:scale-110"
                     >
-                      <ChevronLeft className="h-4 w-4" />
+                      <ChevronLeft className="h-5 w-5 text-slate-700" />
                     </Button>
                     
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={nextImage}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white shadow-md"
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 backdrop-blur-sm hover:bg-white shadow-xl rounded-full w-12 h-12 transition-all duration-300 hover:scale-110"
                     >
-                      <ChevronRight className="h-4 w-4" />
+                      <ChevronRight className="h-5 w-5 text-slate-700" />
                     </Button>
                     
-                    <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
+                    <div className="absolute bottom-4 right-4 bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium">
                       {currentImageIndex + 1} / {print.images.length}
                     </div>
                   </>
@@ -245,21 +260,21 @@ export default function PrintArtworkPage() {
 
               {/* Thumbnails */}
               {print.images.length > 1 && (
-                <div className="grid grid-cols-6 gap-2">
+                <div className="grid grid-cols-6 gap-3">
                   {print.images.map((image, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentImageIndex(index)}
-                      className={`relative rounded overflow-hidden transition-all ${
+                      className={`relative rounded-2xl overflow-hidden transition-all duration-300 ${
                         index === currentImageIndex 
-                          ? 'ring-2 ring-deep-blue ring-offset-2' 
-                          : 'hover:opacity-80'
+                          ? 'ring-2 ring-blue-500 ring-offset-2 scale-105' 
+                          : 'hover:opacity-80 hover:scale-105'
                       }`}
                     >
                       <img 
                         src={image} 
                         alt={`${print.title} thumbnail ${index + 1}`}
-                        className="w-full h-12 object-cover"
+                        className="w-full h-16 object-cover"
                       />
                     </button>
                   ))}
@@ -290,65 +305,87 @@ export default function PrintArtworkPage() {
           </div>
 
           {/* Right Column - Print Options (50%) */}
-          <div className="lg:col-span-6">
-            <div className="space-y-6">
+          <div className="lg:col-span-6 animate-slideRight">
+            <div className="space-y-8">
               {/* Material Selection */}
               {availableMaterials.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="font-playfair text-xl text-deep-blue">
-                      Choose Material
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-3">
-                      {availableMaterials.map((material) => (
-                        <button
-                          key={material}
-                          onClick={() => setSelectedMaterial(material as "paper" | "canvas")}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 ${
-                            selectedMaterial === material
-                              ? 'border-deep-blue bg-blue-50 text-deep-blue'
-                              : 'border-gray-200 hover:border-gray-300 text-charcoal'
-                          }`}
-                        >
-                          <div className="text-center">
-                            <div className="font-semibold capitalize">{material}</div>
-                          </div>
-                        </button>
-                      ))}
+                <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 p-8 hover:shadow-3xl transition-shadow duration-500">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V9a4 4 0 00-4-4z" />
+                      </svg>
                     </div>
-                  </CardContent>
-                </Card>
+                    <h3 className="text-2xl font-bold text-slate-900">Choose Material</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {availableMaterials.map((material) => (
+                      <button
+                        key={material}
+                        onClick={() => setSelectedMaterial(material as "paper" | "canvas")}
+                        className={`p-6 rounded-2xl border-2 transition-all duration-300 transform hover:scale-105 ${
+                          selectedMaterial === material
+                            ? 'border-blue-500 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-lg'
+                            : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <div className="font-semibold text-lg capitalize">{material}</div>
+                          <div className="text-sm opacity-80 mt-1">
+                            {material === 'canvas' ? 'Premium texture' : 'Smooth finish'}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
 
               {/* Available Sizes - same sizes for all materials, only prices change */}
               {allSizes.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="font-playfair text-xl text-deep-blue">
-                      Available Print Sizes - {selectedMaterial.charAt(0).toUpperCase() + selectedMaterial.slice(1)}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 p-8 hover:shadow-3xl transition-shadow duration-500">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4a1 1 0 011-1h4m10 0h4a1 1 0 011 1v4m0 10v4a1 1 0 01-1 1h-4m-10 0H4a1 1 0 01-1-1v-4" />
+                      </svg>
+                    </div>
+                    <h3 className="text-2xl font-bold text-slate-900">
+                      Available Sizes - {selectedMaterial.charAt(0).toUpperCase() + selectedMaterial.slice(1)}
+                    </h3>
+                  </div>
+                  <div className="space-y-3">
                     {allSizes.map((size: any, index: number) => (
-                      <div key={index} className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                      <div key={index} 
+                           className="group flex justify-between items-center p-6 border border-slate-200 rounded-2xl hover:bg-gradient-to-r hover:from-slate-50 hover:to-slate-100 cursor-pointer transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
                            onClick={() => setSelectedSize({width: size.width, height: size.height, material: selectedMaterial})}>
-                        <div>
-                          <div className="font-medium text-charcoal">
-                            {size.width} × {size.height} cm
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
                           </div>
-                          <div className="text-sm text-soft-gray capitalize">
-                            {selectedMaterial}
+                          <div>
+                            <div className="font-semibold text-lg text-slate-900">
+                              {size.width} × {size.height} cm
+                            </div>
+                            <div className="text-sm text-slate-500 capitalize">
+                              {selectedMaterial} • Premium quality
+                            </div>
                           </div>
                         </div>
-                        <div className="text-lg font-semibold text-deep-blue">
-                          €{calculatePrice(size.width, size.height, selectedMaterial).toFixed(2)}
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-blue-600">
+                            €{calculatePrice(size.width, size.height, selectedMaterial).toFixed(2)}
+                          </div>
+                          <div className="text-sm text-slate-500">
+                            {(size.width * size.height / 100).toFixed(1)} cm² area
+                          </div>
                         </div>
                       </div>
                     ))}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
 
               {/* Custom Size Calculator */}

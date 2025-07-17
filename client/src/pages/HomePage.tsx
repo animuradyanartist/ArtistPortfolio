@@ -31,37 +31,66 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       {/* Hero Section */}
-      <div className="relative min-h-screen">
+      <div className="relative min-h-screen overflow-hidden">
+        {/* Animated Background */}
         <div 
-          className="absolute inset-0 bg-cover bg-center"
+          className="absolute inset-0 bg-cover bg-center transform scale-105 animate-float"
           style={{
             backgroundImage: `url('${homepageSettings?.heroImage || backgroundImage}')`
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-900/60 via-slate-900/40 to-slate-900/60" />
+        
+        {/* Gradient Overlays */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-900/50 to-slate-900/70" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent" />
+        
+        {/* Animated Particles */}
+        <div className="absolute inset-0">
+          <div className="absolute top-20 left-20 w-2 h-2 bg-white/20 rounded-full animate-pulse"></div>
+          <div className="absolute top-40 right-32 w-1 h-1 bg-blue-400/30 rounded-full animate-pulse animation-delay-200"></div>
+          <div className="absolute bottom-32 left-40 w-1.5 h-1.5 bg-indigo-400/20 rounded-full animate-pulse animation-delay-400"></div>
+          <div className="absolute bottom-20 right-20 w-2 h-2 bg-white/10 rounded-full animate-pulse animation-delay-600"></div>
+        </div>
+        
         <div className="relative h-full flex items-center justify-center text-center text-white">
-          <div className="max-w-6xl px-4 fade-in">
-            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-6 py-3 rounded-full text-sm font-medium text-white mb-8">
-              <div className="w-2 h-2 bg-white rounded-full"></div>
-              Abstract Realism Artist from Armenia
+          <div className="max-w-6xl px-4">
+            <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-8 py-4 rounded-full text-sm font-medium text-white mb-10 animate-fadeIn border border-white/20">
+              <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full animate-pulse"></div>
+              <span className="text-base">Abstract Realism Artist from Armenia</span>
             </div>
-            <h1 className="text-6xl md:text-8xl font-bold mb-6 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent">
+            
+            <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp">
               Ani Muradyan
             </h1>
-            <blockquote className="text-2xl md:text-4xl italic mb-12 text-slate-200 font-light leading-relaxed">
+            
+            <blockquote className="text-2xl md:text-4xl lg:text-5xl italic mb-16 text-slate-200 font-light leading-relaxed max-w-5xl mx-auto animate-slideUp animation-delay-200">
               "{homepageSettings?.heroQuote || 'Art must bring hope into people\'s lives.'}"
             </blockquote>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/artworks">
-                <Button className="h-14 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-xl">
-                  <span className="text-lg">View Artworks</span>
+            
+            <div className="flex flex-col sm:flex-row gap-6 justify-center animate-slideUp animation-delay-400">
+              <Link href="/prints">
+                <Button className="group h-16 px-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-500 transform hover:scale-105 shadow-2xl hover:shadow-blue-500/25">
+                  <span className="text-lg group-hover:text-white transition-colors">View Prints</span>
+                  <div className="ml-2 transform group-hover:translate-x-1 transition-transform">
+                    <ExternalLink className="w-5 h-5" />
+                  </div>
                 </Button>
               </Link>
               <Link href="/about">
-                <Button className="h-14 px-8 bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20 font-medium rounded-2xl transition-all duration-300 transform hover:scale-105">
-                  <span className="text-lg">About the Artist</span>
+                <Button className="group h-16 px-10 bg-white/10 backdrop-blur-md text-white border border-white/30 hover:bg-white/20 hover:border-white/50 font-medium rounded-2xl transition-all duration-500 transform hover:scale-105 shadow-xl">
+                  <span className="text-lg group-hover:text-white transition-colors">About the Artist</span>
                 </Button>
               </Link>
+            </div>
+            
+            {/* Scroll Indicator */}
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-fadeIn animation-delay-600">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center">
+                  <div className="w-1 h-3 bg-white/50 rounded-full animate-pulse mt-2"></div>
+                </div>
+                <span className="text-white/60 text-sm">Scroll to explore</span>
+              </div>
             </div>
           </div>
         </div>
