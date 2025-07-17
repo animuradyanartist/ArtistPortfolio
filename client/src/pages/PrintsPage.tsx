@@ -136,20 +136,19 @@ export default function PrintsPage() {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-10 gap-8">
-          {/* Left Column - Prints Grid (80%) */}
-          <div className="lg:col-span-8">
-            <h2 className="font-playfair text-2xl font-semibold text-deep-blue mb-6">
-              Available Print Editions ({activePrints.length})
-            </h2>
-            
-            {activePrints.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-soft-gray text-lg">No print editions available at the moment.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {activePrints.map((print, index) => (
+        {/* Full Width Layout */}
+        <div className="mb-16">
+          <h2 className="font-playfair text-2xl font-semibold text-deep-blue mb-6 text-center">
+            Available Print Editions ({activePrints.length})
+          </h2>
+          
+          {activePrints.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-soft-gray text-lg">No print editions available at the moment.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              {activePrints.map((print, index) => (
                   <div
                     key={print.id}
                     className="animate-in fade-in-0 slide-in-from-bottom-8 duration-700 ease-out"
@@ -196,55 +195,43 @@ export default function PrintsPage() {
                 ))}
               </div>
             )}
-          </div>
+        </div>
 
-          {/* Right Column - Price Calculator (20%) */}
-          <div className="lg:col-span-2">
-            <Card className="sticky top-24">
-              <CardHeader>
-                <CardTitle className="font-playfair text-xl text-deep-blue">
-                  Price Calculator
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Width Input */}
+        {/* Price Calculator - Full Width Card */}
+        <div className="max-w-2xl mx-auto">
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-playfair text-xl text-deep-blue text-center">
+                Price Calculator
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="width" className="text-sm font-medium text-charcoal">
-                    Width (cm)
-                  </Label>
+                  <Label htmlFor="width">Width (cm)</Label>
                   <Input
                     id="width"
                     type="number"
-                    placeholder="30"
-                    value={width || ''}
+                    value={width || ""}
                     onChange={(e) => setWidth(Number(e.target.value))}
-                    className="w-full"
+                    placeholder="Enter width"
                   />
                 </div>
-
-                {/* Height Input */}
                 <div className="space-y-2">
-                  <Label htmlFor="height" className="text-sm font-medium text-charcoal">
-                    Height (cm)
-                  </Label>
+                  <Label htmlFor="height">Height (cm)</Label>
                   <Input
                     id="height"
                     type="number"
-                    placeholder="40"
-                    value={height || ''}
+                    value={height || ""}
                     onChange={(e) => setHeight(Number(e.target.value))}
-                    className="w-full"
+                    placeholder="Enter height"
                   />
                 </div>
-
-                {/* Material Selection */}
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-charcoal">
-                    Material
-                  </Label>
+                  <Label htmlFor="material">Material</Label>
                   <Select value={material} onValueChange={setMaterial}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select material" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="paper">Paper</SelectItem>
@@ -252,34 +239,19 @@ export default function PrintsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Price Calculation Results */}
-                <div className="pt-4 border-t border-gray-200">
-                  {calculatedPrice ? (
-                    <div className="space-y-3 text-center">
-                      <div className="text-sm text-soft-gray">
-                        Area: {calculatedPrice.area.toLocaleString()} cm²
-                      </div>
-                      <div className="text-lg font-semibold text-deep-blue">
-                        Final Price: €{calculatedPrice.finalPrice.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-soft-gray mt-2">
-                        Contact me for ordering and shipping details
-                      </div>
+              </div>
+              {calculatedPrice && (
+                <div className="pt-4 border-t mt-4">
+                  <div className="text-center space-y-2">
+                    <p className="text-sm text-soft-gray">
+                      Area: {calculatedPrice.area.toFixed(1)} cm²
+                    </p>
+                    <p className="text-lg font-semibold text-deep-blue">
+                      Price: ${calculatedPrice.finalPrice.toFixed(2)}
+                    </p>
+                    <div className="text-xs text-soft-gray mt-2">
+                      Contact me for ordering and shipping details
                     </div>
-                  ) : (
-                    <div className="text-center text-soft-gray text-sm">
-                      Enter dimensions to calculate price
-                    </div>
-                  )}
-                </div>
-
-                {/* Contact Information */}
-                {calculatedPrice && (
-                  <div className="bg-soft-white/50 border border-muted-pink/30 rounded-lg p-4 mt-4">
-                    <h4 className="font-semibold text-deep-blue mb-2 text-sm">
-                      Ready to order?
-                    </h4>
                     <div className="space-y-1 text-xs">
                       <div>
                         <a 
@@ -301,11 +273,12 @@ export default function PrintsPage() {
                       </div>
                     </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
+
       </div>
     </div>
   );
