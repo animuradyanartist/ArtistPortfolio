@@ -270,82 +270,118 @@ export default function AdminPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-center font-playfair text-2xl text-deep-blue">
-              Admin Login
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="relative">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pr-10"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-2 rounded-full text-sm font-medium text-blue-700 mb-4">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              Admin Access
+            </div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-2">
+              Admin Portal
+            </h1>
+            <p className="text-slate-600">Enter your credentials to access the admin dashboard</p>
+          </div>
+          
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
+            <div className="p-8">
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div className="space-y-3">
+                  <label htmlFor="password" className="text-sm font-medium text-slate-700">Password</label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter admin password"
+                      className="h-12 text-base border-slate-200 focus:border-blue-500 focus:ring-blue-500/20 pr-12"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                </div>
+                <Button 
+                  type="submit" 
+                  className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl transition-all duration-200"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  Sign In
                 </Button>
-              </div>
-              <Button type="submit" className="w-full bg-deep-blue hover:bg-deep-blue/90">
-                Login
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+              </form>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen py-20 bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="font-playfair text-3xl font-semibold text-deep-blue">
-            Admin Panel
-          </h1>
-          <Button onClick={handleLogout} variant="outline">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-between items-center mb-12">
+          <div>
+            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-2 rounded-full text-sm font-medium text-blue-700 mb-4">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              Admin Dashboard
+            </div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+              Content Management
+            </h1>
+          </div>
+          <Button 
+            onClick={handleLogout} 
+            variant="outline"
+            className="h-10 px-6 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
             Logout
           </Button>
         </div>
 
-        {/* Optimized Tabs */}
-        <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-sm mb-8">
-          {(['homepage', 'artworks', 'prints', 'exhibitions', 'artist'] as const).map((tab) => (
-            <Button
-              key={tab}
-              variant={activeTab === tab ? 'default' : 'ghost'}
-              onClick={() => setActiveTab(tab)}
-              className={`capitalize ${
-                activeTab === tab 
-                  ? 'bg-deep-blue text-white hover:bg-deep-blue/90' 
-                  : 'text-charcoal hover:bg-gray-100'
-              }`}
-            >
-              {tab === 'artist' ? 'About Artist' : tab}
-            </Button>
-          ))}
+        {/* Modern Tabs */}
+        <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-2 mb-8">
+          <div className="flex space-x-1">
+            {(['homepage', 'artworks', 'prints', 'exhibitions', 'artist'] as const).map((tab) => (
+              <Button
+                key={tab}
+                variant="ghost"
+                onClick={() => setActiveTab(tab)}
+                className={`capitalize flex-1 h-10 rounded-xl transition-all duration-200 ${
+                  activeTab === tab 
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' 
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                {tab === 'artist' ? 'About Artist' : tab}
+              </Button>
+            ))}
+          </div>
         </div>
 
         {/* Homepage Tab */}
         {activeTab === 'homepage' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-playfair text-xl text-deep-blue">
-                Homepage Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
+            <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-8 py-6 border-b border-slate-200/50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-slate-900">Homepage Settings</h3>
+                  <p className="text-sm text-slate-600">Configure your homepage appearance and content</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-8">
               {homepageLoading ? (
                 <div className="animate-pulse space-y-4">
                   <div className="h-4 bg-gray-200 rounded w-1/4"></div>
@@ -424,30 +460,44 @@ export default function AdminPage() {
                     <Button 
                       type="submit" 
                       disabled={updateHomepageMutation.isPending}
-                      className="bg-deep-blue hover:bg-deep-blue/90"
+                      className="h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl transition-all duration-200"
                     >
                       {updateHomepageMutation.isPending ? "Saving..." : "Save Changes"}
                     </Button>
                   </form>
                 </Form>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
 
         {/* Artworks Tab - Optimized */}
         {activeTab === 'artworks' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="font-playfair text-2xl text-deep-blue">Artworks</h2>
-              <Button
-                onClick={() => setLocation("/admin/create-artwork")}
-                className="bg-deep-blue hover:bg-deep-blue/90"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add New Artwork
-              </Button>
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
+            <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-8 py-6 border-b border-slate-200/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-900">Artworks</h3>
+                    <p className="text-sm text-slate-600">Manage your artwork collection</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => setLocation("/admin/create-artwork")}
+                  className="h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl transition-all duration-200"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add New Artwork
+                </Button>
+              </div>
             </div>
+            
+            <div className="p-8">
             
             {artworksLoading ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -550,6 +600,7 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+            </div>
           </div>
         )}
 
