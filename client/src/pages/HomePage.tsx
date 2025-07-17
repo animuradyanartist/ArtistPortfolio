@@ -31,7 +31,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       {/* Hero Section */}
-      <div className="relative min-h-screen overflow-hidden">
+      <div className="relative h-screen overflow-hidden">
         {/* Animated Background */}
         <div 
           className="absolute inset-0 bg-cover bg-center transform scale-105 animate-float"
@@ -52,35 +52,37 @@ export default function HomePage() {
           <div className="absolute bottom-20 right-20 w-2 h-2 bg-white/10 rounded-full animate-pulse animation-delay-600"></div>
         </div>
         
-        <div className="relative h-full flex items-center justify-center text-center text-white">
-          <div className="max-w-6xl px-4 flex flex-col items-center justify-center">
-            <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-8 py-4 rounded-full text-sm font-medium text-white mb-10 animate-fadeIn border border-white/20">
-              <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full animate-pulse"></div>
-              <span className="text-base">Abstract Realism Artist from Armenia</span>
-            </div>
-            
-            <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">
-              Ani Muradyan
-            </h1>
-            
-            <blockquote className="text-2xl md:text-4xl lg:text-5xl italic mb-16 text-slate-200 font-light leading-relaxed max-w-5xl text-center animate-slideUp animation-delay-200">
-              "{homepageSettings?.heroQuote || 'Art must bring hope into people\'s lives.'}"
-            </blockquote>
-            
-            <div className="flex flex-col sm:flex-row gap-6 items-center justify-center animate-slideUp animation-delay-400">
-              <Link href="/prints">
-                <Button className="group h-16 px-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-500 transform hover:scale-105 shadow-2xl hover:shadow-blue-500/25">
-                  <span className="text-lg group-hover:text-white transition-colors">View Prints</span>
-                  <div className="ml-2 transform group-hover:translate-x-1 transition-transform">
-                    <ExternalLink className="w-5 h-5" />
-                  </div>
-                </Button>
-              </Link>
-              <Link href="/about">
-                <Button className="group h-16 px-10 bg-white/10 backdrop-blur-md text-white border border-white/30 hover:bg-white/20 hover:border-white/50 font-medium rounded-2xl transition-all duration-500 transform hover:scale-105 shadow-xl">
-                  <span className="text-lg group-hover:text-white transition-colors">About the Artist</span>
-                </Button>
-              </Link>
+        <div className="relative h-screen flex items-center justify-center text-center text-white">
+          <div className="w-full max-w-6xl px-4">
+            <div className="flex flex-col items-center justify-center h-full">
+              <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-8 py-4 rounded-full text-sm font-medium text-white mb-10 animate-fadeIn border border-white/20">
+                <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full animate-pulse"></div>
+                <span className="text-base">Abstract Realism Artist from Armenia</span>
+              </div>
+              
+              <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">
+                Ani Muradyan
+              </h1>
+              
+              <blockquote className="text-2xl md:text-4xl lg:text-5xl italic mb-16 text-slate-200 font-light leading-relaxed max-w-5xl text-center animate-slideUp animation-delay-200">
+                "{homepageSettings?.heroQuote || 'Art must bring hope into people\'s lives.'}"
+              </blockquote>
+              
+              <div className="flex flex-col sm:flex-row gap-6 items-center justify-center animate-slideUp animation-delay-400">
+                <Link href="/prints">
+                  <Button className="group h-16 px-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-500 transform hover:scale-105 shadow-2xl hover:shadow-blue-500/25">
+                    <span className="text-lg group-hover:text-white transition-colors">View Prints</span>
+                    <div className="ml-2 transform group-hover:translate-x-1 transition-transform">
+                      <ExternalLink className="w-5 h-5" />
+                    </div>
+                  </Button>
+                </Link>
+                <Link href="/about">
+                  <Button className="group h-16 px-10 bg-white/10 backdrop-blur-md text-white border border-white/30 hover:bg-white/20 hover:border-white/50 font-medium rounded-2xl transition-all duration-500 transform hover:scale-105 shadow-xl">
+                    <span className="text-lg group-hover:text-white transition-colors">About the Artist</span>
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
           
