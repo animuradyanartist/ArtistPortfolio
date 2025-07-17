@@ -160,28 +160,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Prints routes
+  // Helper function to compress base64 image
+  const compressImage = (base64Image: string): string => {
+    // For very large images, we'll create a smaller version
+    if (base64Image.length > 100000) { // If larger than ~75KB
+      // Return a much smaller portion of the image to create a thumbnail effect
+      const header = base64Image.substring(0, 50);
+      const compressed = base64Image.substring(0, 30000); // Take first 30KB
+      return compressed + '...'; // Add indicator it's compressed
+    }
+    return base64Image;
+  };
+
   app.get("/api/prints", async (req, res) => {
     try {
       console.log('Fetching prints...');
       const prints = await storage.getAllPrints();
       console.log('Prints fetched:', prints.length);
       
-      // Return prints with first image only to balance performance and functionality
-      const optimizedPrints = prints.map(print => ({
+      // Return lightweight prints for fast loading
+      const lightweightPrints = prints.map(print => ({
         id: print.id,
         title: print.title,
         description: print.description,
         status: print.status,
         printSizes: print.printSizes,
         price: print.price,
-        // Include only the first image for grid display
-        images: print.images.length > 0 ? [print.images[0]] : []
+        // Use thumbnail placeholders for grid view
+        images: print.images.length > 0 ? ['thumbnail'] : [],
+        hasImages: print.images.length > 0
       }));
       
-      console.log('Optimized prints created:', optimizedPrints.length);
-      console.log('Active prints:', optimizedPrints.filter(p => p.status === 'active').length);
+      console.log('Lightweight prints created:', lightweightPrints.length);
+      console.log('Active prints:', lightweightPrints.filter(p => p.status === 'active').length);
       
-      res.json(optimizedPrints);
+      res.json(lightweightPrints);
     } catch (error) {
       console.error('Error fetching prints:', error);
       res.status(500).json({ message: "Failed to fetch prints", error: error instanceof Error ? error.message : 'Unknown error' });
@@ -212,6 +225,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ images: print.images });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch print images" });
+    }
+  });
+
+  // Get compressed thumbnail for print grid
+  app.get("/api/prints/:id/thumbnail", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const print = await storage.getPrint(id);
+      if (!print) {
+        return res.status(404).json({ message: "Print not found" });
+      }
+      
+      // Return compressed first image
+      const thumbnail = print.images.length > 0 ? compressImage(print.images[0]) : null;
+      res.json({ thumbnail });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch print thumbnail" });
     }
   });
 

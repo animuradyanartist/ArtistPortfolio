@@ -7,6 +7,54 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import type { Print } from "@shared/schema";
 
+// Lazy loading image component
+function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
+  
+  useEffect(() => {
+    const loadThumbnail = async () => {
+      try {
+        const response = await fetch(`/api/prints/${printId}/thumbnail`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.thumbnail && data.thumbnail !== 'thumbnail') {
+            setImageSrc(data.thumbnail);
+          } else {
+            setImageError(true);
+          }
+        } else {
+          setImageError(true);
+        }
+      } catch (error) {
+        setImageError(true);
+      }
+    };
+    
+    loadThumbnail();
+  }, [printId]);
+  
+  if (imageError || !imageSrc) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-600">
+        <div className="text-center">
+          <div className="text-4xl mb-2">🖼️</div>
+          <div className="text-sm font-medium">{title}</div>
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <img 
+      src={imageSrc} 
+      alt={title}
+      className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-110"
+      onError={() => setImageError(true)}
+    />
+  );
+}
+
 export default function PrintsPage() {
   const [, setLocation] = useLocation();
   
@@ -116,28 +164,7 @@ export default function PrintsPage() {
                     >
                       <div className="relative aspect-[3/4] overflow-hidden">
                         <div className="absolute inset-0 transform transition-transform duration-700 ease-out group-hover:scale-110">
-                          {print.images && print.images.length > 0 ? (
-                            <img 
-                              src={print.images[0]} 
-                              alt={print.title}
-                              className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-110"
-                              onError={(e) => {
-                                // Fallback if image fails to load
-                                (e.target as HTMLImageElement).style.display = 'none';
-                                const fallback = document.createElement('div');
-                                fallback.className = 'w-full h-full flex items-center justify-center bg-gray-200 text-gray-600';
-                                fallback.innerHTML = `<div class="text-center"><div class="text-4xl mb-2">🖼️</div><div class="text-sm font-medium">${print.title}</div></div>`;
-                                (e.target as HTMLImageElement).parentNode?.appendChild(fallback);
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-600">
-                              <div className="text-center">
-                                <div className="text-4xl mb-2">🖼️</div>
-                                <div className="text-sm font-medium">{print.title}</div>
-                              </div>
-                            </div>
-                          )}
+                          <LazyThumbnail printId={print.id} title={print.title} />
                         </div>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500">
                           <div className="absolute bottom-4 left-4 right-4 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 delay-100">
