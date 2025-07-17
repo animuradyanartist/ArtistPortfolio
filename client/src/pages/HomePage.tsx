@@ -53,21 +53,21 @@ export default function HomePage() {
         </div>
         
         <div className="relative h-full flex items-center justify-center text-center text-white">
-          <div className="max-w-6xl px-4">
+          <div className="max-w-6xl px-4 flex flex-col items-center justify-center">
             <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-8 py-4 rounded-full text-sm font-medium text-white mb-10 animate-fadeIn border border-white/20">
               <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full animate-pulse"></div>
               <span className="text-base">Abstract Realism Artist from Armenia</span>
             </div>
             
-            <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp">
+            <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">
               Ani Muradyan
             </h1>
             
-            <blockquote className="text-2xl md:text-4xl lg:text-5xl italic mb-16 text-slate-200 font-light leading-relaxed max-w-5xl mx-auto animate-slideUp animation-delay-200">
+            <blockquote className="text-2xl md:text-4xl lg:text-5xl italic mb-16 text-slate-200 font-light leading-relaxed max-w-5xl text-center animate-slideUp animation-delay-200">
               "{homepageSettings?.heroQuote || 'Art must bring hope into people\'s lives.'}"
             </blockquote>
             
-            <div className="flex flex-col sm:flex-row gap-6 justify-center animate-slideUp animation-delay-400">
+            <div className="flex flex-col sm:flex-row gap-6 items-center justify-center animate-slideUp animation-delay-400">
               <Link href="/prints">
                 <Button className="group h-16 px-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-500 transform hover:scale-105 shadow-2xl hover:shadow-blue-500/25">
                   <span className="text-lg group-hover:text-white transition-colors">View Prints</span>
@@ -82,15 +82,15 @@ export default function HomePage() {
                 </Button>
               </Link>
             </div>
-            
-            {/* Scroll Indicator */}
-            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-fadeIn animation-delay-600">
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center">
-                  <div className="w-1 h-3 bg-white/50 rounded-full animate-pulse mt-2"></div>
-                </div>
-                <span className="text-white/60 text-sm">Scroll to explore</span>
+          </div>
+          
+          {/* Scroll Indicator */}
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-fadeIn animation-delay-600">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center">
+                <div className="w-1 h-3 bg-white/50 rounded-full animate-pulse mt-2"></div>
               </div>
+              <span className="text-white/60 text-sm">Scroll to explore</span>
             </div>
           </div>
         </div>
