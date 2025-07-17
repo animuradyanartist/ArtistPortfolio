@@ -116,11 +116,19 @@ export default function PrintsPage() {
                     >
                       <div className="relative aspect-[3/4] overflow-hidden">
                         <div className="absolute inset-0 transform transition-transform duration-700 ease-out group-hover:scale-110">
-                          {print.images && print.images.length > 0 && print.images[0] !== 'placeholder' ? (
+                          {print.images && print.images.length > 0 ? (
                             <img 
                               src={print.images[0]} 
                               alt={print.title}
                               className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-110"
+                              onError={(e) => {
+                                // Fallback if image fails to load
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                const fallback = document.createElement('div');
+                                fallback.className = 'w-full h-full flex items-center justify-center bg-gray-200 text-gray-600';
+                                fallback.innerHTML = `<div class="text-center"><div class="text-4xl mb-2">🖼️</div><div class="text-sm font-medium">${print.title}</div></div>`;
+                                (e.target as HTMLImageElement).parentNode?.appendChild(fallback);
+                              }}
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-600">

@@ -166,22 +166,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const prints = await storage.getAllPrints();
       console.log('Prints fetched:', prints.length);
       
-      // Return prints without images to minimize response size
-      const simplifiedPrints = prints.map(print => ({
+      // Return prints with first image only to balance performance and functionality
+      const optimizedPrints = prints.map(print => ({
         id: print.id,
         title: print.title,
         description: print.description,
         status: print.status,
         printSizes: print.printSizes,
         price: print.price,
-        // Use placeholder or thumbnail instead of full image
-        images: print.images.length > 0 ? ['placeholder'] : []
+        // Include only the first image for grid display
+        images: print.images.length > 0 ? [print.images[0]] : []
       }));
       
-      console.log('Simplified prints created:', simplifiedPrints.length);
-      console.log('Active prints:', simplifiedPrints.filter(p => p.status === 'active').length);
+      console.log('Optimized prints created:', optimizedPrints.length);
+      console.log('Active prints:', optimizedPrints.filter(p => p.status === 'active').length);
       
-      res.json(simplifiedPrints);
+      res.json(optimizedPrints);
     } catch (error) {
       console.error('Error fetching prints:', error);
       res.status(500).json({ message: "Failed to fetch prints", error: error instanceof Error ? error.message : 'Unknown error' });
