@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://rest-express-bglhw.replit.app/sitemap.xml
+
+# Allow all search engines to crawl the site
+Crawl-delay: 1
+
+# Important pages for indexing
+Allow: /
+Allow: /about
+Allow: /artworks
+Allow: /prints
+Allow: /contact
+Allow: /artworks/*
+Allow: /prints/*
+
+# Block admin areas if any exist
+Disallow: /admin
+Disallow: /api
