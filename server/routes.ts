@@ -184,8 +184,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         title: print.title,
         description: print.description,
         status: print.status,
-        printSizes: print.printSizes,
-        price: print.price,
+        availableSizes: print.availableSizes,
+        preferredMaterial: print.preferredMaterial,
         // Use thumbnail placeholders for grid view
         images: print.images.length > 0 ? ['thumbnail'] : [],
         hasImages: print.images.length > 0
@@ -237,10 +237,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Print not found" });
       }
       
-      // Return compressed first image
-      const thumbnail = print.images.length > 0 ? compressImage(print.images[0]) : null;
+      // Return first image directly (already compressed from admin upload)
+      const thumbnail = print.images.length > 0 ? print.images[0] : null;
       res.json({ thumbnail });
     } catch (error) {
+      console.error(`Error fetching thumbnail for print ${req.params.id}:`, error);
       res.status(500).json({ message: "Failed to fetch print thumbnail" });
     }
   });
