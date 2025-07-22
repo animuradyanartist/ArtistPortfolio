@@ -16,6 +16,7 @@ export interface IStorage {
   deleteArtwork(id: number): Promise<boolean>;
   getFeaturedArtworks(): Promise<Artwork[]>;
   reorderArtwork(id: number, direction: 'up' | 'down'): Promise<Artwork[]>;
+  reorderArtworkDrag(sourceId: number, targetId: number): Promise<Artwork[]>;
 
   // Prints
   getAllPrints(): Promise<Print[]>;
@@ -303,6 +304,38 @@ export class MemStorage implements IStorage {
     return Array.from(this.artworks.values()).sort((a, b) => (a.position || 0) - (b.position || 0));
   }
 
+  async reorderArtworkDrag(sourceId: number, targetId: number): Promise<Artwork[]> {
+    const sourceArtwork = this.artworks.get(sourceId);
+    const targetArtwork = this.artworks.get(targetId);
+    
+    if (!sourceArtwork || !targetArtwork) {
+      return Array.from(this.artworks.values()).sort((a, b) => (a.position || 0) - (b.position || 0));
+    }
+    
+    // Get all artworks sorted by position
+    const artworksList = Array.from(this.artworks.values()).sort((a, b) => (a.position || 0) - (b.position || 0));
+    const sourceIndex = artworksList.findIndex(artwork => artwork.id === sourceId);
+    const targetIndex = artworksList.findIndex(artwork => artwork.id === targetId);
+    
+    if (sourceIndex === -1 || targetIndex === -1) {
+      return artworksList;
+    }
+    
+    // Remove source from its current position
+    const [movedArtwork] = artworksList.splice(sourceIndex, 1);
+    
+    // Insert at target position
+    artworksList.splice(targetIndex, 0, movedArtwork);
+    
+    // Update positions for all artworks
+    artworksList.forEach((artwork, index) => {
+      artwork.position = index;
+      this.artworks.set(artwork.id, artwork);
+    });
+    
+    return artworksList;
+  }
+
   // Prints methods
   async getAllPrints(): Promise<Print[]> {
     return Array.from(this.prints.values());
@@ -531,6 +564,33 @@ export class DatabaseStorage implements IStorage {
     await db.update(artworks)
       .set({ position: currentArtwork.position })
       .where(eq(artworks.id, swapArtwork.id));
+    
+    // Return updated artwork list
+    return await db.select().from(artworks).orderBy(artworks.position);
+  }
+
+  async reorderArtworkDrag(sourceId: number, targetId: number): Promise<Artwork[]> {
+    // Get all artworks ordered by position
+    const allArtworks = await db.select().from(artworks).orderBy(artworks.position);
+    const sourceIndex = allArtworks.findIndex(artwork => artwork.id === sourceId);
+    const targetIndex = allArtworks.findIndex(artwork => artwork.id === targetId);
+    
+    if (sourceIndex === -1 || targetIndex === -1) {
+      return allArtworks;
+    }
+    
+    // Remove source from its current position
+    const [movedArtwork] = allArtworks.splice(sourceIndex, 1);
+    
+    // Insert at target position
+    allArtworks.splice(targetIndex, 0, movedArtwork);
+    
+    // Update positions for all artworks in a transaction
+    for (let i = 0; i < allArtworks.length; i++) {
+      await db.update(artworks)
+        .set({ position: i })
+        .where(eq(artworks.id, allArtworks[i].id));
+    }
     
     // Return updated artwork list
     return await db.select().from(artworks).orderBy(artworks.position);

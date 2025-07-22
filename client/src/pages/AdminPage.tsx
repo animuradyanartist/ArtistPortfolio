@@ -21,6 +21,10 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [activeTab, setActiveTab] = useState<'homepage' | 'artworks' | 'prints' | 'exhibitions' | 'artist'>('homepage');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Drag and drop state
+  const [draggedArtwork, setDraggedArtwork] = useState<number | null>(null);
+  const [dragOverArtwork, setDragOverArtwork] = useState<number | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -197,6 +201,20 @@ export default function AdminPage() {
     },
   });
 
+  // Drag and drop reordering mutation
+  const dragReorderMutation = useMutation({
+    mutationFn: async ({ sourceId, targetId }: { sourceId: number; targetId: number }) => {
+      return apiRequest("POST", `/api/artworks/reorder-drag`, { sourceId, targetId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
+      toast({ title: "Artwork position updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update artwork position", variant: "destructive" });
+    },
+  });
+
   // Helper functions for file uploads
   const handleImageUpload = (file: File, callback: (imagePath: string) => void) => {
     uploadImageMutation.mutate(file, {
@@ -208,6 +226,37 @@ export default function AdminPage() {
 
   const handleReorderArtwork = (artworkId: number, direction: 'up' | 'down') => {
     reorderArtworkMutation.mutate({ id: artworkId, direction });
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, artworkId: number) => {
+    setDraggedArtwork(artworkId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', ''); // Required for Firefox
+  };
+
+  const handleDragOver = (e: React.DragEvent, artworkId: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverArtwork(artworkId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverArtwork(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: number) => {
+    e.preventDefault();
+    if (draggedArtwork && draggedArtwork !== targetId) {
+      dragReorderMutation.mutate({ sourceId: draggedArtwork, targetId });
+    }
+    setDraggedArtwork(null);
+    setDragOverArtwork(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedArtwork(null);
+    setDragOverArtwork(null);
   };
 
   const deleteArtworkMutation = useMutation({
@@ -511,9 +560,24 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {artworks.map((artwork) => (
-                  <Card key={artwork.id} className="overflow-hidden">
-                    <div className="aspect-video bg-gray-100">
+                {artworks
+                  .sort((a, b) => (a.position || 0) - (b.position || 0))
+                  .map((artwork) => (
+                  <Card 
+                    key={artwork.id} 
+                    className={`overflow-hidden transition-all duration-200 cursor-move ${
+                      draggedArtwork === artwork.id ? 'opacity-50 scale-95' : ''
+                    } ${
+                      dragOverArtwork === artwork.id ? 'ring-2 ring-blue-500 shadow-lg scale-105' : ''
+                    }`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, artwork.id)}
+                    onDragOver={(e) => handleDragOver(e, artwork.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, artwork.id)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <div className="aspect-video bg-gray-100 relative">
                       {artwork.images?.[0] && (
                         <img 
                           src={artwork.images[0]} 
@@ -526,6 +590,13 @@ export default function AdminPage() {
                           }}
                         />
                       )}
+                      {/* Drag indicator */}
+                      <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-xs flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+                        </svg>
+                        Drag
+                      </div>
                     </div>
                     <CardContent className="p-4">
                       <h3 className="font-semibold text-lg mb-1">{artwork.title}</h3>

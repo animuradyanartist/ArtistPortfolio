@@ -453,6 +453,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Drag and drop reordering route
+  app.post("/api/artworks/reorder-drag", async (req, res) => {
+    try {
+      const { sourceId, targetId } = req.body;
+      
+      if (!sourceId || !targetId) {
+        return res.status(400).json({ message: "sourceId and targetId are required" });
+      }
+      
+      const artworks = await storage.reorderArtworkDrag(sourceId, targetId);
+      res.json(artworks);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to reorder artwork via drag", error });
+    }
+  });
+
   // Contact form submission
   app.post("/api/contact", async (req, res) => {
     try {
