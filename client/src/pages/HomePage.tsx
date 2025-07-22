@@ -57,7 +57,7 @@ export default function HomePage() {
             <div className="flex flex-col items-center justify-center h-full">
               <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-8 py-4 rounded-full text-sm font-medium text-white mb-10 animate-fadeIn border border-white/20">
                 <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full animate-pulse"></div>
-                <span className="text-base">Abstract Realism Artist from Armenia</span>
+                <span className="text-base">Ani Muradyan • Abstract Realism Artist from Armenia</span>
               </div>
               
               <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">
@@ -145,7 +145,7 @@ export default function HomePage() {
                   <div className="flex justify-center">
                     {latestArtwork.availability === 'available' ? (
                       <Button 
-                        onClick={() => handleBuyNow(latestArtwork.saatchiUrl)}
+                        onClick={() => handleBuyNow(latestArtwork.saatchiUrl || undefined)}
                         className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg"
                       >
                         <ExternalLink className="w-5 h-5 mr-2" />

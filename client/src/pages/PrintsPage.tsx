@@ -91,6 +91,11 @@ function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
 export default function PrintsPage() {
   const [, setLocation] = useLocation();
   
+  // Set page title for SEO
+  useEffect(() => {
+    document.title = "Art Prints by Ani Muradyan | Museum-Quality Canvas & Paper Prints";
+  }, []);
+  
   // Price calculator state
   const [width, setWidth] = useState<number>(0);
   const [height, setHeight] = useState<number>(0);
@@ -169,10 +174,10 @@ export default function PrintsPage() {
             Art Print Collection
           </div>
           <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6 animate-slideUp">
-            Premium Art Prints
+            Ani Muradyan Art Prints
           </h1>
           <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed animate-slideUp animation-delay-200">
-            Museum-quality prints of original artwork. Each piece is carefully reproduced on premium paper or canvas to preserve the artistic integrity.
+            Museum-quality prints of Ani Muradyan's original abstract realism artwork. Each piece is carefully reproduced on premium paper or canvas to preserve the artistic integrity and emotional depth.
           </p>
         </div>
 

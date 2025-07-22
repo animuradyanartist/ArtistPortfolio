@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,6 +7,10 @@ import ArtworkModal from "@/components/ArtworkModal";
 import type { Artwork } from "@shared/schema";
 
 export default function ArtworksPage() {
+  // Set page title for SEO
+  useEffect(() => {
+    document.title = "Original Artworks by Ani Muradyan | Abstract Realism Gallery";
+  }, []);
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   

@@ -1,0 +1,69 @@
+Please update my Replit project with the following:
+
+🔹 1. Show 3 artworks per row
+On both the Artworks and Prints pages, display artworks in a responsive 3-column grid (3 artworks per row).
+
+Make it adjust well on smaller screens (responsive design).
+
+🔹 2. Improve SEO so Google can find my website when people search “Ani Muradyan”
+Add SEO meta tags including title, description, and keywords with my name.
+
+Include Open Graph tags for better social sharing.
+
+Make sure my name “Ani Muradyan” appears in the homepage content and title.
+
+Add a sitemap.xml and robots.txt file to help Google index my site.
+
+If possible, add support for a custom domain and submit to Google Search Console.
+
+🧩 SEO <head> Code to Paste in Your HTML (example for index.html)
+html
+Copy
+Edit
+<head>
+  <title>Ani Muradyan | Contemporary Artist</title>
+  <meta name="description" content="Discover the art of Ani Muradyan – original paintings and fine art prints. Abstract realism with emotional depth.">
+  <meta name="keywords" content="Ani Muradyan, artist, paintings, abstract realism, art prints, contemporary art, Armenian artist">
+  <meta name="author" content="Ani Muradyan">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:title" content="Ani Muradyan | Contemporary Artist">
+  <meta property="og:description" content="Explore artworks by Ani Muradyan – oil paintings and prints that inspire.">
+  <meta property="og:image" content="https://yourdomain.com/images/featured.jpg">
+  <meta property="og:url" content="https://yourdomain.com">
+  <meta property="og:type" content="website">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+</head>
+Replace https://yourdomain.com with your actual domain.
+
+📄 robots.txt (create this file in your project root)
+txt
+Copy
+Edit
+User-agent: *
+Allow: /
+Sitemap: https://yourdomain.com/sitemap.xml
+📄 sitemap.xml (create this file in your project root)
+xml
+Copy
+Edit
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://yourdomain.com/</loc>
+    <lastmod>2025-07-22</lastmod>
+    <priority>1.00</priority>
+  </url>
+  <url>
+    <loc>https://yourdomain.com/artworks</loc>
+    <priority>0.80</priority>
+  </url>
+  <url>
+    <loc>https://yourdomain.com/prints</loc>
+    <priority>0.80</priority>
+  </url>
+</urlset>

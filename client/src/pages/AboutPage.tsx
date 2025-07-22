@@ -1,7 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import type { ArtistBio, Exhibition } from "@shared/schema";
 
 export default function AboutPage() {
+  // Set page title for SEO
+  useEffect(() => {
+    document.title = "About Ani Muradyan | Contemporary Armenian Artist Biography";
+  }, []);
   // Fetch artist bio data from the API
   const { data: artistBio, isLoading: bioLoading } = useQuery<ArtistBio>({
     queryKey: ["/api/artist-bio"],
@@ -52,7 +57,7 @@ export default function AboutPage() {
         <div className="text-center mb-20">
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-8 animate-fadeIn">
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-            About the Artist
+            About Ani Muradyan
           </div>
           <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6 animate-slideUp">
             Ani Muradyan
