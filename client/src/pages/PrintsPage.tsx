@@ -199,7 +199,7 @@ export default function PrintsPage() {
               <p className="text-slate-500">No prints available at the moment.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {activePrints.map((print: Print, index: number) => (
                 <div
                   key={print.id}
