@@ -488,6 +488,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Feedback submission
+  app.post("/api/feedback", async (req, res) => {
+    try {
+      const { rating, message } = req.body;
+      
+      if (!rating || !message) {
+        return res.status(400).json({ message: "Rating and message are required" });
+      }
+
+      if (rating < 1 || rating > 5) {
+        return res.status(400).json({ message: "Rating must be between 1 and 5" });
+      }
+
+      const feedback = await storage.createFeedback({ rating, message });
+      console.log("Feedback submitted:", feedback);
+      
+      res.status(201).json({ message: "Feedback submitted successfully", feedback });
+    } catch (error) {
+      console.error("Error submitting feedback:", error);
+      res.status(500).json({ message: "Failed to submit feedback" });
+    }
+  });
+
+  // Get all feedback (admin only)
+  app.get("/api/feedback", async (req, res) => {
+    try {
+      const feedbacks = await storage.getAllFeedback();
+      res.json(feedbacks);
+    } catch (error) {
+      console.error("Error fetching feedback:", error);
+      res.status(500).json({ message: "Failed to fetch feedback" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

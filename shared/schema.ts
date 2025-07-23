@@ -110,3 +110,18 @@ export type InsertHomepageSettings = z.infer<typeof insertHomepageSettingsSchema
 export type HomepageSettings = typeof homepageSettings.$inferSelect;
 export type InsertArtistBio = z.infer<typeof insertArtistBioSchema>;
 export type ArtistBio = typeof artistBio.$inferSelect;
+
+// Feedback table
+export const feedback = pgTable('feedback', {
+  id: serial('id').primaryKey(),
+  rating: integer('rating').notNull(),
+  message: text('message').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertFeedbackSchema = createInsertSchema(feedback).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
+export type Feedback = typeof feedback.$inferSelect;

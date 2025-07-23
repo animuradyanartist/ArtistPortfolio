@@ -1,4 +1,4 @@
-import { users, artworks, prints, exhibitions, homepageSettings, artistBio, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio } from "@shared/schema";
+import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -42,6 +42,10 @@ export interface IStorage {
   // Artist Bio
   getArtistBio(): Promise<ArtistBio | undefined>;
   updateArtistBio(bio: InsertArtistBio): Promise<ArtistBio>;
+
+  // Feedback
+  createFeedback(feedback: InsertFeedback): Promise<Feedback>;
+  getAllFeedback(): Promise<Feedback[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -51,20 +55,24 @@ export class MemStorage implements IStorage {
   private exhibitions: Map<number, Exhibition>;
   private homepageSettings: HomepageSettings | undefined;
   private artistBio: ArtistBio | undefined;
+  private feedbacks: Map<number, Feedback>;
   private currentUserId: number;
   private currentArtworkId: number;
   private currentPrintId: number;
   private currentExhibitionId: number;
+  private currentFeedbackId: number;
 
   constructor() {
     this.users = new Map();
     this.artworks = new Map();
     this.prints = new Map();
     this.exhibitions = new Map();
+    this.feedbacks = new Map();
     this.currentUserId = 1;
     this.currentArtworkId = 1;
     this.currentPrintId = 1;
     this.currentExhibitionId = 1;
+    this.currentFeedbackId = 1;
     
     // Initialize with default homepage settings
     this.homepageSettings = {
@@ -107,14 +115,7 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: true,
-        position: 0,
-        availableForPrint: true,
-        printSizes: JSON.stringify([
-          { width: 30, height: 40, material: "paper" },
-          { width: 40, height: 50, material: "canvas" },
-          { width: 50, height: 70, material: "paper" }
-        ]),
-        preferredPrintMaterial: "paper"
+        position: 0
       },
       {
         id: 2,
@@ -131,13 +132,7 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: true,
-        position: 1,
-        availableForPrint: true,
-        printSizes: JSON.stringify([
-          { width: 25, height: 35, material: "paper" },
-          { width: 35, height: 45, material: "canvas" }
-        ]),
-        preferredPrintMaterial: "canvas"
+        position: 1
       },
       {
         id: 3,
@@ -154,10 +149,7 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: true,
-        position: 2,
-        availableForPrint: false,
-        printSizes: null,
-        preferredPrintMaterial: "paper"
+        position: 2
       },
       {
         id: 4,
@@ -174,10 +166,7 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: false,
-        position: 3,
-        availableForPrint: false,
-        printSizes: null,
-        preferredPrintMaterial: "paper"
+        position: 3
       }
     ];
 
@@ -353,6 +342,7 @@ export class MemStorage implements IStorage {
       status: insertPrint.status || "active",
       featured: insertPrint.featured || false,
       position: insertPrint.position ?? 0,
+      artworkId: insertPrint.artworkId ?? null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -479,6 +469,21 @@ export class MemStorage implements IStorage {
       awards: bio.awards ?? null
     };
     return this.artistBio;
+  }
+
+  async createFeedback(insertFeedback: InsertFeedback): Promise<Feedback> {
+    const id = this.currentFeedbackId++;
+    const feedback: Feedback = {
+      ...insertFeedback,
+      id,
+      createdAt: new Date(),
+    };
+    this.feedbacks.set(id, feedback);
+    return feedback;
+  }
+
+  async getAllFeedback(): Promise<Feedback[]> {
+    return Array.from(this.feedbacks.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 }
 
@@ -750,6 +755,18 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  async createFeedback(insertFeedback: InsertFeedback): Promise<Feedback> {
+    const [feedbackRecord] = await db
+      .insert(feedback)
+      .values(insertFeedback)
+      .returning();
+    return feedbackRecord;
+  }
+
+  async getAllFeedback(): Promise<Feedback[]> {
+    return await db.select().from(feedback).orderBy(feedback.createdAt);
   }
 }
 

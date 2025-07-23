@@ -1,0 +1,98 @@
+<!-- Custom Review Form -->
+<div id="feedback-widget-2" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;">
+  <button onclick="openCustomFeedbackForm(2)" 
+          style="background: #3b82f6; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+    Give Feedback
+  </button>
+</div>
+
+<script>
+function openCustomFeedbackForm(formId) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+  
+  const container = document.createElement('div');
+  container.style.cssText = 'background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3);';
+  
+  container.innerHTML = `
+    <h2 style="margin: 0 0 10px 0; color: #1f2937; font-size: 24px;">We value your feedback</h2>
+    <form id="custom-feedback-form-${formId}">
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #374151;">How would you rate your experience? *</label>
+        <div id="rating-1" style="display: flex; gap: 4px;">
+          <span onclick="setRating(1, 1)" style="cursor: pointer; font-size: 24px; color: #d1d5db;">★</span>
+          <span onclick="setRating(1, 2)" style="cursor: pointer; font-size: 24px; color: #d1d5db;">★</span>
+          <span onclick="setRating(1, 3)" style="cursor: pointer; font-size: 24px; color: #d1d5db;">★</span>
+          <span onclick="setRating(1, 4)" style="cursor: pointer; font-size: 24px; color: #d1d5db;">★</span>
+          <span onclick="setRating(1, 5)" style="cursor: pointer; font-size: 24px; color: #d1d5db;">★</span>
+        </div>
+        <input type="hidden" name="rating" id="rating-input-1" required>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #374151;">Tell us more about your experience *</label>
+        <textarea name="message" placeholder="Share your thoughts..." required 
+                  style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; resize: vertical;" rows="4"></textarea>
+      </div>
+
+      <div style="display: flex; gap: 12px; margin-top: 30px;">
+        <button type="submit" style="flex: 1; background: #3b82f6; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: 500; cursor: pointer;">
+          Submit Feedback
+        </button>
+        <button type="button" onclick="closeCustomFeedbackForm()" style="background: #f3f4f6; color: #374151; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer;">
+          Cancel
+        </button>
+      </div>
+    </form>
+  `;
+
+  overlay.appendChild(container);
+  document.body.appendChild(overlay);
+
+  document.getElementById(`custom-feedback-form-${formId}`).addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+
+    try {
+      const response = await fetch(`https://68c59dfa-80d0-4ba5-9fed-5439293b3245-00-yhareiohe4ue.riker.replit.dev/api/feedback/${formId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      if (response.ok) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 40px;">
+            <h3 style="color: #10b981; margin-bottom: 10px;">✓ Thank you for your feedback!</h3>
+            <button onclick="closeCustomFeedbackForm()" style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Close</button>
+          </div>`;
+      } else {
+        alert('Error submitting feedback. Please try again.');
+      }
+    } catch (error) {
+      alert('Error submitting feedback. Please try again.');
+    }
+  });
+
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeCustomFeedbackForm();
+  });
+}
+
+function closeCustomFeedbackForm() {
+  const overlay = document.querySelector('div[style*="position: fixed"][style*="z-index: 10000"]');
+  if (overlay) overlay.remove();
+}
+
+function setRating(fieldIndex, rating) {
+  const stars = document.querySelectorAll(`#rating-${fieldIndex} span`);
+  const input = document.getElementById(`rating-input-${fieldIndex}`);
+
+  stars.forEach((star, index) => {
+    star.style.color = index < rating ? '#3b82f6' : '#d1d5db';
+  });
+
+  input.value = rating;
+}
+</script>
