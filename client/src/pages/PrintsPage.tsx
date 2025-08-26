@@ -46,20 +46,39 @@ async function batchLoadThumbnails(printIds: number[]) {
   }
 }
 
-// Optimized image loading component with caching  
+// Intersection Observer for lazy loading
+const useIntersectionObserver = (callback: () => void, threshold = 0.1) => {
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (node) {
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            callback();
+            observer.unobserve(node);
+          }
+        },
+        { threshold, rootMargin: '50px' }
+      );
+      observer.observe(node);
+      return () => observer.unobserve(node);
+    }
+  }, [callback, threshold]);
+  
+  return ref;
+};
+
+// Optimized image loading component with lazy loading and caching  
 function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
   const [imageSrc, setImageSrc] = useState<string | null>(() => {
-    // Check cache immediately
     return thumbnailCache.get(printId) || null;
   });
   const [imageLoading, setImageLoading] = useState(() => {
-    // If we have cached image, don't show loading
     return !thumbnailCache.has(printId);
   });
   const [imageError, setImageError] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
   
   const loadThumbnail = useCallback(async () => {
-    // If already cached, use it
     if (thumbnailCache.has(printId)) {
       const cached = thumbnailCache.get(printId)!;
       setImageSrc(cached);
@@ -68,10 +87,7 @@ function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
       return;
     }
 
-    // If already loading, skip
-    if (loadingSet.has(printId)) {
-      return;
-    }
+    if (loadingSet.has(printId)) return;
 
     loadingSet.add(printId);
     
@@ -79,11 +95,17 @@ function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
       setImageLoading(true);
       setImageError(false);
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
       const response = await fetch(`/api/prints/${printId}/thumbnail`, {
+        signal: controller.signal,
         headers: {
-          'Cache-Control': 'max-age=3600'
+          'Cache-Control': 'max-age=86400'
         }
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch: ${response.status}`);
@@ -95,12 +117,14 @@ function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
         thumbnailCache.set(printId, data.thumbnail);
         setImageSrc(data.thumbnail);
       } else {
-        thumbnailCache.set(printId, ''); // Cache the fact that no image exists
+        thumbnailCache.set(printId, '');
         setImageError(true);
       }
     } catch (error) {
-      console.error(`Error loading thumbnail for print ${printId}:`, error);
-      thumbnailCache.set(printId, ''); // Cache the error state
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error(`Error loading thumbnail for print ${printId}:`, error);
+      }
+      thumbnailCache.set(printId, '');
       setImageError(true);
     } finally {
       setImageLoading(false);
@@ -108,16 +132,30 @@ function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
     }
   }, [printId]);
   
-  useEffect(() => {
-    loadThumbnail();
-  }, [loadThumbnail]);
+  // Intersection observer ref
+  const intersectionRef = useIntersectionObserver(() => {
+    setShouldLoad(true);
+  });
   
-  if (imageLoading) {
+  useEffect(() => {
+    if (shouldLoad && !thumbnailCache.has(printId)) {
+      loadThumbnail();
+    }
+  }, [shouldLoad, loadThumbnail, printId]);
+  
+  if (imageLoading || !shouldLoad) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300 animate-pulse">
-        <div className="w-8 h-8 bg-slate-300 rounded-full animate-spin">
-          <div className="w-2 h-2 bg-slate-500 rounded-full mt-1 ml-1"></div>
-        </div>
+      <div 
+        ref={intersectionRef}
+        className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300"
+      >
+        {shouldLoad ? (
+          <div className="w-8 h-8 bg-slate-300 rounded-full animate-spin">
+            <div className="w-2 h-2 bg-slate-500 rounded-full mt-1 ml-1"></div>
+          </div>
+        ) : (
+          <div className="w-12 h-12 bg-slate-300 rounded-lg opacity-50"></div>
+        )}
       </div>
     );
   }
@@ -142,8 +180,20 @@ function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
       src={imageSrc} 
       alt={title}
       className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
+      loading="lazy"
+      decoding="async"
+      style={{
+        imageRendering: 'optimizeQuality',
+        willChange: 'transform'
+      }}
       onError={() => setImageError(true)}
-      onLoad={() => setImageLoading(false)}
+      onLoad={() => {
+        setImageLoading(false);
+        // Ensure image stays cached
+        if (imageSrc) {
+          thumbnailCache.set(printId, imageSrc);
+        }
+      }}
     />
   );
 }
@@ -190,20 +240,30 @@ export default function PrintsPage() {
     return filtered;
   }, [prints]);
 
-  // Pre-load visible thumbnails in batches
+  // Pre-load visible thumbnails in smaller batches for better performance
   useEffect(() => {
     if (activePrints.length > 0) {
-      // Load first 6 prints immediately (visible ones)
-      const visibleIds = activePrints.slice(0, 6).map(p => p.id);
-      batchLoadThumbnails(visibleIds);
+      // Load first 3 prints immediately (above the fold)
+      const firstBatch = activePrints.slice(0, 3).map(p => p.id);
+      if (firstBatch.length > 0) {
+        batchLoadThumbnails(firstBatch);
+      }
       
-      // Load remaining prints after a short delay
+      // Load next 6 prints after a short delay
       setTimeout(() => {
-        const remainingIds = activePrints.slice(6).map(p => p.id);
+        const secondBatch = activePrints.slice(3, 9).map(p => p.id);
+        if (secondBatch.length > 0) {
+          batchLoadThumbnails(secondBatch);
+        }
+      }, 500);
+      
+      // Load remaining prints after a longer delay
+      setTimeout(() => {
+        const remainingIds = activePrints.slice(9).map(p => p.id);
         if (remainingIds.length > 0) {
           batchLoadThumbnails(remainingIds);
         }
-      }, 1000);
+      }, 2000);
     }
   }, [activePrints]);
 

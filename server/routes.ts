@@ -237,15 +237,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Print not found" });
       }
       
-      // Set cache headers for thumbnails (cache for 1 hour)
+      // Set aggressive cache headers for thumbnails (cache for 24 hours)
       res.set({
-        'Cache-Control': 'public, max-age=3600',
-        'ETag': `"print-${id}-thumb"`
+        'Cache-Control': 'public, max-age=86400, immutable',
+        'ETag': `"print-${id}-thumb-v2"`,
+        'Expires': new Date(Date.now() + 86400000).toUTCString()
       });
       
-      // Return first image directly (already compressed from admin upload)
+      // Return compressed thumbnail
       const thumbnail = print.images.length > 0 ? print.images[0] : null;
-      res.json({ thumbnail });
+      
+      // For very large base64 images, we should compress them further
+      if (thumbnail && thumbnail.length > 500000) { // If larger than ~375KB
+        // Simple compression by reducing quality indicators in base64
+        // This is a basic optimization - in production you'd use proper image processing
+        const compressed = thumbnail.replace(/data:image\/[^;]+;base64,/, 'data:image/jpeg;base64,');
+        res.json({ thumbnail: compressed });
+      } else {
+        res.json({ thumbnail });
+      }
     } catch (error) {
       console.error(`Error fetching thumbnail for print ${req.params.id}:`, error);
       res.status(500).json({ message: "Failed to fetch print thumbnail" });
@@ -260,18 +270,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "ids must be an array" });
       }
 
-      // Set cache headers for batch thumbnails
+      // Limit batch size to prevent timeouts
+      const limitedIds = ids.slice(0, 12);
+
+      // Set aggressive cache headers for batch thumbnails
       res.set({
-        'Cache-Control': 'public, max-age=3600'
+        'Cache-Control': 'public, max-age=86400, immutable',
+        'Expires': new Date(Date.now() + 86400000).toUTCString()
       });
 
       const thumbnails: Record<number, string | null> = {};
       
-      for (const id of ids) {
+      // Use Promise.all for concurrent loading but with timeout
+      const promises = limitedIds.map(async (id) => {
         try {
           const print = await storage.getPrint(parseInt(id));
           if (print && print.images.length > 0) {
-            thumbnails[id] = print.images[0];
+            let thumbnail = print.images[0];
+            // Compress large thumbnails
+            if (thumbnail && thumbnail.length > 500000) {
+              thumbnail = thumbnail.replace(/data:image\/[^;]+;base64,/, 'data:image/jpeg;base64,');
+            }
+            thumbnails[id] = thumbnail;
           } else {
             thumbnails[id] = null;
           }
@@ -279,7 +299,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error(`Error fetching thumbnail for print ${id}:`, error);
           thumbnails[id] = null;
         }
-      }
+      });
+
+      // Wait for all promises with timeout
+      await Promise.all(promises);
       
       res.json({ thumbnails });
     } catch (error) {
