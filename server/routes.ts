@@ -237,12 +237,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Print not found" });
       }
       
+      // Set cache headers for thumbnails (cache for 1 hour)
+      res.set({
+        'Cache-Control': 'public, max-age=3600',
+        'ETag': `"print-${id}-thumb"`
+      });
+      
       // Return first image directly (already compressed from admin upload)
       const thumbnail = print.images.length > 0 ? print.images[0] : null;
       res.json({ thumbnail });
     } catch (error) {
       console.error(`Error fetching thumbnail for print ${req.params.id}:`, error);
       res.status(500).json({ message: "Failed to fetch print thumbnail" });
+    }
+  });
+
+  // Batch thumbnail endpoint for faster loading
+  app.post("/api/prints/thumbnails", async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({ message: "ids must be an array" });
+      }
+
+      // Set cache headers for batch thumbnails
+      res.set({
+        'Cache-Control': 'public, max-age=3600'
+      });
+
+      const thumbnails: Record<number, string | null> = {};
+      
+      for (const id of ids) {
+        try {
+          const print = await storage.getPrint(parseInt(id));
+          if (print && print.images.length > 0) {
+            thumbnails[id] = print.images[0];
+          } else {
+            thumbnails[id] = null;
+          }
+        } catch (error) {
+          console.error(`Error fetching thumbnail for print ${id}:`, error);
+          thumbnails[id] = null;
+        }
+      }
+      
+      res.json({ thumbnails });
+    } catch (error) {
+      console.error('Error in batch thumbnails:', error);
+      res.status(500).json({ message: "Failed to fetch thumbnails" });
     }
   });
 

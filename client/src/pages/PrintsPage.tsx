@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,50 +7,110 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import type { Print } from "@shared/schema";
 
-// Optimized image loading component  
+// Thumbnail cache for better performance
+const thumbnailCache = new Map<number, string>();
+const loadingSet = new Set<number>();
+
+// Batch loading function for better performance
+async function batchLoadThumbnails(printIds: number[]) {
+  const uncachedIds = printIds.filter(id => !thumbnailCache.has(id) && !loadingSet.has(id));
+  
+  if (uncachedIds.length === 0) return;
+  
+  // Mark as loading
+  uncachedIds.forEach(id => loadingSet.add(id));
+  
+  try {
+    const response = await fetch('/api/prints/thumbnails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'max-age=3600'
+      },
+      body: JSON.stringify({ ids: uncachedIds })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      // Cache all thumbnails
+      Object.entries(data.thumbnails).forEach(([id, thumbnail]) => {
+        thumbnailCache.set(parseInt(id), thumbnail as string || '');
+      });
+    }
+  } catch (error) {
+    console.error('Batch thumbnail loading failed:', error);
+  } finally {
+    // Remove from loading set
+    uncachedIds.forEach(id => loadingSet.delete(id));
+  }
+}
+
+// Optimized image loading component with caching  
 function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [imageLoading, setImageLoading] = useState(true);
+  const [imageSrc, setImageSrc] = useState<string | null>(() => {
+    // Check cache immediately
+    return thumbnailCache.get(printId) || null;
+  });
+  const [imageLoading, setImageLoading] = useState(() => {
+    // If we have cached image, don't show loading
+    return !thumbnailCache.has(printId);
+  });
   const [imageError, setImageError] = useState(false);
   
-  useEffect(() => {
-    let isMounted = true;
+  const loadThumbnail = useCallback(async () => {
+    // If already cached, use it
+    if (thumbnailCache.has(printId)) {
+      const cached = thumbnailCache.get(printId)!;
+      setImageSrc(cached);
+      setImageLoading(false);
+      setImageError(!cached);
+      return;
+    }
+
+    // If already loading, skip
+    if (loadingSet.has(printId)) {
+      return;
+    }
+
+    loadingSet.add(printId);
     
-    const loadThumbnail = async () => {
-      try {
-        setImageLoading(true);
-        setImageError(false);
-        
-        const response = await fetch(`/api/prints/${printId}/thumbnail`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch: ${response.status}`);
+    try {
+      setImageLoading(true);
+      setImageError(false);
+      
+      const response = await fetch(`/api/prints/${printId}/thumbnail`, {
+        headers: {
+          'Cache-Control': 'max-age=3600'
         }
-        
-        const data = await response.json();
-        
-        if (isMounted && data.thumbnail && data.thumbnail.startsWith('data:image/')) {
-          setImageSrc(data.thumbnail);
-        } else if (isMounted) {
-          setImageError(true);
-        }
-      } catch (error) {
-        console.error(`Error loading thumbnail for print ${printId}:`, error);
-        if (isMounted) {
-          setImageError(true);
-        }
-      } finally {
-        if (isMounted) {
-          setImageLoading(false);
-        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch: ${response.status}`);
       }
-    };
-    
-    loadThumbnail();
-    
-    return () => {
-      isMounted = false;
-    };
+      
+      const data = await response.json();
+      
+      if (data.thumbnail && data.thumbnail.startsWith('data:image/')) {
+        thumbnailCache.set(printId, data.thumbnail);
+        setImageSrc(data.thumbnail);
+      } else {
+        thumbnailCache.set(printId, ''); // Cache the fact that no image exists
+        setImageError(true);
+      }
+    } catch (error) {
+      console.error(`Error loading thumbnail for print ${printId}:`, error);
+      thumbnailCache.set(printId, ''); // Cache the error state
+      setImageError(true);
+    } finally {
+      setImageLoading(false);
+      loadingSet.delete(printId);
+    }
   }, [printId]);
+  
+  useEffect(() => {
+    loadThumbnail();
+  }, [loadThumbnail]);
   
   if (imageLoading) {
     return (
@@ -129,6 +189,23 @@ export default function PrintsPage() {
     console.log('Active prints:', filtered);
     return filtered;
   }, [prints]);
+
+  // Pre-load visible thumbnails in batches
+  useEffect(() => {
+    if (activePrints.length > 0) {
+      // Load first 6 prints immediately (visible ones)
+      const visibleIds = activePrints.slice(0, 6).map(p => p.id);
+      batchLoadThumbnails(visibleIds);
+      
+      // Load remaining prints after a short delay
+      setTimeout(() => {
+        const remainingIds = activePrints.slice(6).map(p => p.id);
+        if (remainingIds.length > 0) {
+          batchLoadThumbnails(remainingIds);
+        }
+      }, 1000);
+    }
+  }, [activePrints]);
 
   // Price calculation
   const calculatedPrice = useMemo(() => {
