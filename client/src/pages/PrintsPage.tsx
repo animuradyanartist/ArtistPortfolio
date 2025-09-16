@@ -10,40 +10,54 @@ import type { Print } from "@shared/schema";
 // Thumbnail cache for better performance
 const thumbnailCache = new Map<number, string>();
 const loadingSet = new Set<number>();
+const pendingPromises = new Map<number, Promise<void>>();
 
 // Batch loading function for better performance
-async function batchLoadThumbnails(printIds: number[]) {
+async function batchLoadThumbnails(printIds: number[]): Promise<void> {
   const uncachedIds = printIds.filter(id => !thumbnailCache.has(id) && !loadingSet.has(id));
   
   if (uncachedIds.length === 0) return;
   
-  // Mark as loading
-  uncachedIds.forEach(id => loadingSet.add(id));
-  
-  try {
-    const response = await fetch('/api/prints/thumbnails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'max-age=3600'
-      },
-      body: JSON.stringify({ ids: uncachedIds })
-    });
+  // Create a promise for this batch and track it
+  const batchPromise = (async () => {
+    // Mark as loading
+    uncachedIds.forEach(id => loadingSet.add(id));
     
-    if (response.ok) {
-      const data = await response.json();
+    try {
+      const response = await fetch('/api/prints/thumbnails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'max-age=3600'
+        },
+        body: JSON.stringify({ ids: uncachedIds })
+      });
       
-      // Cache all thumbnails
-      Object.entries(data.thumbnails).forEach(([id, thumbnail]) => {
-        thumbnailCache.set(parseInt(id), thumbnail as string || '');
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Cache all thumbnails
+        Object.entries(data.thumbnails).forEach(([id, thumbnail]) => {
+          thumbnailCache.set(parseInt(id), thumbnail as string || '');
+        });
+      }
+    } catch (error) {
+      console.error('Batch thumbnail loading failed:', error);
+    } finally {
+      // Remove from loading set and pending promises
+      uncachedIds.forEach(id => {
+        loadingSet.delete(id);
+        pendingPromises.delete(id);
       });
     }
-  } catch (error) {
-    console.error('Batch thumbnail loading failed:', error);
-  } finally {
-    // Remove from loading set
-    uncachedIds.forEach(id => loadingSet.delete(id));
-  }
+  })();
+  
+  // Track this promise for all IDs in the batch
+  uncachedIds.forEach(id => {
+    pendingPromises.set(id, batchPromise);
+  });
+  
+  await batchPromise;
 }
 
 // Intersection Observer for lazy loading
@@ -106,6 +120,27 @@ const LazyThumbnail = memo(function LazyThumbnail({ printId, title }: { printId:
       return;
     }
 
+    // If already pending, wait for the existing promise
+    if (pendingPromises.has(printId)) {
+      try {
+        await pendingPromises.get(printId);
+        // Check cache again after promise resolves
+        const cached = thumbnailCache.get(printId);
+        if (cached) {
+          setImageSrc(cached);
+          setImageError(!cached);
+        } else {
+          setImageError(true);
+        }
+        setImageLoading(false);
+        return;
+      } catch (error) {
+        setImageError(true);
+        setImageLoading(false);
+        return;
+      }
+    }
+
     // Only use batch loading - trigger batch load for this item
     await batchLoadThumbnails([printId]);
     
@@ -131,19 +166,24 @@ const LazyThumbnail = memo(function LazyThumbnail({ printId, title }: { printId:
     }
   }, [shouldLoad, loadThumbnail, printId]);
   
-  if (imageLoading || !shouldLoad) {
+  // Show cached images immediately, or skeleton if not loaded yet
+  if (!shouldLoad && !imageSrc) {
     return (
       <div 
         ref={intersectionRef}
         className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300"
       >
-        {shouldLoad ? (
-          <div className="w-8 h-8 bg-slate-300 rounded-full animate-spin">
-            <div className="w-2 h-2 bg-slate-500 rounded-full mt-1 ml-1"></div>
-          </div>
-        ) : (
-          <div className="w-12 h-12 bg-slate-300 rounded-lg opacity-50"></div>
-        )}
+        <div className="w-12 h-12 bg-slate-300 rounded-lg opacity-50"></div>
+      </div>
+    );
+  }
+  
+  if (imageLoading && !imageSrc) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300">
+        <div className="w-8 h-8 bg-slate-300 rounded-full animate-spin">
+          <div className="w-2 h-2 bg-slate-500 rounded-full mt-1 ml-1"></div>
+        </div>
       </div>
     );
   }
@@ -171,7 +211,6 @@ const LazyThumbnail = memo(function LazyThumbnail({ printId, title }: { printId:
       loading="lazy"
       decoding="async"
       style={{
-        imageRendering: 'optimizeQuality',
         willChange: 'transform'
       }}
       onError={() => setImageError(true)}
@@ -227,7 +266,7 @@ export default function PrintsPage() {
       }
       
       // Load next 6 prints after a short delay
-      setTimeout(() => {
+      const timer1 = setTimeout(() => {
         const secondBatch = activePrints.slice(3, 9).map(p => p.id);
         if (secondBatch.length > 0) {
           batchLoadThumbnails(secondBatch);
@@ -235,12 +274,18 @@ export default function PrintsPage() {
       }, 500);
       
       // Load remaining prints after a longer delay
-      setTimeout(() => {
+      const timer2 = setTimeout(() => {
         const remainingIds = activePrints.slice(9).map(p => p.id);
         if (remainingIds.length > 0) {
           batchLoadThumbnails(remainingIds);
         }
       }, 2000);
+      
+      // Cleanup timers on unmount or dependency change
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
     }
   }, [activePrints]);
 
