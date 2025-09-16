@@ -1,14 +1,20 @@
 import { db } from "./db";
 import { users, artworks, exhibitions, homepageSettings, artistBio } from "@shared/schema";
+import bcrypt from "bcrypt";
 
 async function seed() {
   console.log("Seeding database...");
 
-  // Create admin user
-  await db.insert(users).values({
-    username: "admin",
-    password: "$2b$12$LQv3c1yqBwEUaepTj/z0EeqJ2OzxbdgTrJdxI3zZ9PQpJ9xQ3vXZO" // admin123
-  }).onConflictDoNothing();
+  // Create admin user only in development
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (adminPassword && process.env.NODE_ENV !== "production") {
+    const hashedPassword = await bcrypt.hash(adminPassword, 12);
+    await db.insert(users).values({
+      username: process.env.SEED_ADMIN_USERNAME || "admin",
+      password: hashedPassword
+    }).onConflictDoNothing();
+    console.log("Admin user created for development");
+  }
 
   // Create homepage settings
   await db.insert(homepageSettings).values({
