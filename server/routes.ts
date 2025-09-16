@@ -162,12 +162,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Prints routes
   // Helper function to compress base64 image
   const compressImage = (base64Image: string): string => {
-    // For very large images, we'll create a smaller version
-    if (base64Image.length > 100000) { // If larger than ~75KB
-      // Return a much smaller portion of the image to create a thumbnail effect
-      const header = base64Image.substring(0, 50);
-      const compressed = base64Image.substring(0, 30000); // Take first 30KB
-      return compressed + '...'; // Add indicator it's compressed
+    // For very large images, we'll apply basic compression
+    if (base64Image.length > 500000) { // If larger than ~375KB
+      // Convert to JPEG format for smaller size
+      // This is a simple format conversion - in production use proper image processing
+      if (base64Image.includes('data:image/png')) {
+        return base64Image.replace('data:image/png;base64,', 'data:image/jpeg;base64,');
+      }
     }
     return base64Image;
   };
@@ -247,15 +248,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return compressed thumbnail
       const thumbnail = print.images.length > 0 ? print.images[0] : null;
       
-      // For very large base64 images, we should compress them further
-      if (thumbnail && thumbnail.length > 500000) { // If larger than ~375KB
-        // Simple compression by reducing quality indicators in base64
-        // This is a basic optimization - in production you'd use proper image processing
-        const compressed = thumbnail.replace(/data:image\/[^;]+;base64,/, 'data:image/jpeg;base64,');
-        res.json({ thumbnail: compressed });
-      } else {
-        res.json({ thumbnail });
-      }
+      // Apply compression for large images
+      const processedThumbnail = compressImage(thumbnail || '');
+      res.json({ thumbnail: processedThumbnail || null });
     } catch (error) {
       console.error(`Error fetching thumbnail for print ${req.params.id}:`, error);
       res.status(500).json({ message: "Failed to fetch print thumbnail" });
@@ -281,28 +276,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const thumbnails: Record<number, string | null> = {};
       
-      // Use Promise.all for concurrent loading but with timeout
-      const promises = limitedIds.map(async (id) => {
+      // Use Promise.allSettled for better error handling and add timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Batch timeout')), 15000)
+      );
+      
+      const thumbnailPromises = limitedIds.map(async (id) => {
         try {
           const print = await storage.getPrint(parseInt(id));
           if (print && print.images.length > 0) {
             let thumbnail = print.images[0];
-            // Compress large thumbnails
-            if (thumbnail && thumbnail.length > 500000) {
-              thumbnail = thumbnail.replace(/data:image\/[^;]+;base64,/, 'data:image/jpeg;base64,');
-            }
-            thumbnails[id] = thumbnail;
+            // Apply compression
+            thumbnail = compressImage(thumbnail);
+            return { id, thumbnail };
           } else {
-            thumbnails[id] = null;
+            return { id, thumbnail: null };
           }
         } catch (error) {
           console.error(`Error fetching thumbnail for print ${id}:`, error);
-          thumbnails[id] = null;
+          return { id, thumbnail: null };
         }
       });
 
-      // Wait for all promises with timeout
-      await Promise.all(promises);
+      try {
+        const results = await Promise.race([
+          Promise.allSettled(thumbnailPromises),
+          timeoutPromise
+        ]);
+        
+        if (Array.isArray(results)) {
+          results.forEach((result) => {
+            if (result.status === 'fulfilled' && result.value) {
+              thumbnails[result.value.id] = result.value.thumbnail;
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Batch thumbnail timeout or error:', error);
+        // Return empty thumbnails on timeout
+      }
       
       res.json({ thumbnails });
     } catch (error) {
