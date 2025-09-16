@@ -3,7 +3,9 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import { storage } from "./storage";
-import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema } from "@shared/schema";
+import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, prints } from "@shared/schema";
+import { db } from "./db";
+import { eq, sql } from "drizzle-orm";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -175,27 +177,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/prints", async (req, res) => {
     try {
-      console.log('Fetching prints...');
-      const prints = await storage.getAllPrints();
-      console.log('Prints fetched:', prints.length);
+      // Use lightweight query without images for fast initial load
+      const lightweightPrints = await db.select({
+        id: prints.id,
+        title: prints.title,
+        description: prints.description,
+        status: prints.status,
+        availableSizes: prints.availableSizes,
+        preferredMaterial: prints.preferredMaterial,
+        position: prints.position,
+        // Check if images exist without loading them
+        hasImages: sql<boolean>`CASE WHEN ${prints.images} IS NOT NULL AND array_length(${prints.images}, 1) > 0 THEN true ELSE false END`
+      })
+      .from(prints)
+      .where(eq(prints.status, 'active'))
+      .orderBy(prints.position);
       
-      // Return lightweight prints for fast loading
-      const lightweightPrints = prints.map(print => ({
-        id: print.id,
-        title: print.title,
-        description: print.description,
-        status: print.status,
-        availableSizes: print.availableSizes,
-        preferredMaterial: print.preferredMaterial,
-        // Use thumbnail placeholders for grid view
-        images: print.images.length > 0 ? ['thumbnail'] : [],
-        hasImages: print.images.length > 0
+      // Transform to expected format
+      const transformedPrints = lightweightPrints.map(print => ({
+        ...print,
+        images: print.hasImages ? ['thumbnail'] : [],
+        hasImages: print.hasImages
       }));
       
-      console.log('Lightweight prints created:', lightweightPrints.length);
-      console.log('Active prints:', lightweightPrints.filter(p => p.status === 'active').length);
       
-      res.json(lightweightPrints);
+      res.json(transformedPrints);
     } catch (error) {
       console.error('Error fetching prints:', error);
       res.status(500).json({ message: "Failed to fetch prints", error: error instanceof Error ? error.message : 'Unknown error' });
