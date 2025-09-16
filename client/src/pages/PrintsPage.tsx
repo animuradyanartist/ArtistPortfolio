@@ -86,7 +86,7 @@ const useIntersectionObserver = (callback: () => void, threshold = 0.1) => {
 };
 
 // Optimized image loading component with lazy loading and caching  
-function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
+const LazyThumbnail = memo(function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
   const [imageSrc, setImageSrc] = useState<string | null>(() => {
     return thumbnailCache.get(printId) || null;
   });
@@ -97,6 +97,7 @@ function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
   const [shouldLoad, setShouldLoad] = useState(false);
   
   const loadThumbnail = useCallback(async () => {
+    // Check cache first
     if (thumbnailCache.has(printId)) {
       const cached = thumbnailCache.get(printId)!;
       setImageSrc(cached);
@@ -105,49 +106,18 @@ function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
       return;
     }
 
-    if (loadingSet.has(printId)) return;
-
-    loadingSet.add(printId);
+    // Only use batch loading - trigger batch load for this item
+    await batchLoadThumbnails([printId]);
     
-    try {
-      setImageLoading(true);
-      setImageError(false);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-      
-      const response = await fetch(`/api/prints/${printId}/thumbnail`, {
-        signal: controller.signal,
-        headers: {
-          'Cache-Control': 'max-age=86400'
-        }
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.thumbnail && data.thumbnail.startsWith('data:image/')) {
-        thumbnailCache.set(printId, data.thumbnail);
-        setImageSrc(data.thumbnail);
-      } else {
-        thumbnailCache.set(printId, '');
-        setImageError(true);
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        console.error(`Error loading thumbnail for print ${printId}:`, error);
-      }
-      thumbnailCache.set(printId, '');
+    // Update state based on cached result
+    const cached = thumbnailCache.get(printId);
+    if (cached) {
+      setImageSrc(cached);
+      setImageError(!cached);
+    } else {
       setImageError(true);
-    } finally {
-      setImageLoading(false);
-      loadingSet.delete(printId);
     }
+    setImageLoading(false);
   }, [printId]);
   
   // Intersection observer ref
@@ -214,7 +184,7 @@ function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
       }}
     />
   );
-}
+});
 
 export default function PrintsPage() {
   const [, setLocation] = useLocation();
@@ -239,23 +209,12 @@ export default function PrintsPage() {
     refetchOnWindowFocus: false
   });
 
-  // Debug logging
-  useEffect(() => {
-    console.log('Prints query state:', { 
-      isLoading, 
-      error: error?.message, 
-      printsCount: Array.isArray(prints) ? prints.length : 0,
-      activePrints: Array.isArray(prints) ? prints.filter((p: Print) => p.status === 'active').length : 0
-    });
-  }, [prints, isLoading, error]);
+  // Removed debug logging for performance
 
   // Filter active prints
   const activePrints = useMemo(() => {
-    console.log('All prints:', prints);
     if (!Array.isArray(prints)) return [];
-    const filtered = prints.filter((print: Print) => print.status === 'active');
-    console.log('Active prints:', filtered);
-    return filtered;
+    return prints.filter((print: Print) => print.status === 'active');
   }, [prints]);
 
   // Pre-load visible thumbnails in smaller batches for better performance
