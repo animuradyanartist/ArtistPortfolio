@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, memo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,21 +48,39 @@ async function batchLoadThumbnails(printIds: number[]) {
 
 // Intersection Observer for lazy loading
 const useIntersectionObserver = (callback: () => void, threshold = 0.1) => {
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  
   const ref = useCallback((node: HTMLDivElement | null) => {
+    // Clean up previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+    
     if (node) {
-      const observer = new IntersectionObserver(
+      observerRef.current = new IntersectionObserver(
         ([entry]) => {
           if (entry.isIntersecting) {
             callback();
-            observer.unobserve(node);
+            if (observerRef.current) {
+              observerRef.current.unobserve(node);
+            }
           }
         },
         { threshold, rootMargin: '50px' }
       );
-      observer.observe(node);
-      return () => observer.unobserve(node);
+      observerRef.current.observe(node);
     }
   }, [callback, threshold]);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, []);
   
   return ref;
 };
