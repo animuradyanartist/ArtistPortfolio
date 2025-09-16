@@ -246,7 +246,7 @@ export default function HomePage() {
               <h4 className="font-semibold mb-4">Connect</h4>
               <div className="flex space-x-4">
                 <a 
-                  href="https://instagram.com/animuradyan.artist" 
+                  href="https://www.instagram.com/animuradyan.art/" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-300 hover:text-white transition-colors duration-300"
@@ -256,7 +256,7 @@ export default function HomePage() {
                   </svg>
                 </a>
                 <a 
-                  href="https://saatchiart.com/animuradyan" 
+                  href="https://www.saatchiart.com/account/profile/1980379" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-300 hover:text-white transition-colors duration-300"

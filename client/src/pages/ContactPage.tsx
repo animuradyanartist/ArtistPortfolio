@@ -225,7 +225,7 @@ export default function ContactPage() {
               </div>
               <div className="space-y-4">
                 <a 
-                  href="https://instagram.com/animuradyan.artist" 
+                  href="https://www.instagram.com/animuradyan.art/" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="flex items-center gap-4 p-4 bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl hover:from-pink-100 hover:to-purple-100 transition-all duration-300 transform hover:scale-105"
@@ -235,11 +235,11 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <p className="text-slate-700 font-medium">Instagram</p>
-                    <p className="text-slate-600 text-sm">@animuradyan.artist</p>
+                    <p className="text-slate-600 text-sm">@animuradyan.art</p>
                   </div>
                 </a>
                 <a 
-                  href="https://saatchiart.com/animuradyan" 
+                  href="https://www.saatchiart.com/account/profile/1980379" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl hover:from-blue-100 hover:to-indigo-100 transition-all duration-300 transform hover:scale-105"
