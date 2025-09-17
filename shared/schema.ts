@@ -24,6 +24,10 @@ export const artworks = pgTable("artworks", {
   buyLink: text("buy_link"),
   featured: boolean("featured").default(false),
   position: integer("position").default(0),
+  // Print-related fields
+  availableForPrint: boolean("available_for_print").default(false),
+  printSizes: text("print_sizes"), 
+  preferredPrintMaterial: text("preferred_print_material"),
 });
 
 export const prints = pgTable("prints", {
@@ -112,6 +116,15 @@ export type InsertArtistBio = z.infer<typeof insertArtistBioSchema>;
 export type ArtistBio = typeof artistBio.$inferSelect;
 
 // Feedback table
+export const contactSettings = pgTable("contact_settings", {
+  id: serial("id").primaryKey(),
+  instagramUrl: text("instagram_url").notNull(),
+  saatchiUrl: text("saatchi_url").notNull(),
+  email: text("email").notNull(),
+  location: text("location").notNull(),
+  instagramHandle: text("instagram_handle").notNull(),
+});
+
 export const feedback = pgTable('feedback', {
   id: serial('id').primaryKey(),
   rating: integer('rating').notNull(),
@@ -119,9 +132,16 @@ export const feedback = pgTable('feedback', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+export const insertContactSettingsSchema = createInsertSchema(contactSettings).omit({
+  id: true,
+});
+
 export const insertFeedbackSchema = createInsertSchema(feedback).omit({
   id: true,
   createdAt: true,
 });
+
+export type InsertContactSettings = z.infer<typeof insertContactSettingsSchema>;
+export type ContactSettings = typeof contactSettings.$inferSelect;
 export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
 export type Feedback = typeof feedback.$inferSelect;
