@@ -1,4 +1,4 @@
-import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback } from "@shared/schema";
+import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, contactSettings, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback, type ContactSettings, type InsertContactSettings } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -46,6 +46,10 @@ export interface IStorage {
   // Feedback
   createFeedback(feedback: InsertFeedback): Promise<Feedback>;
   getAllFeedback(): Promise<Feedback[]>;
+
+  // Contact Settings
+  getContactSettings(): Promise<ContactSettings | undefined>;
+  updateContactSettings(settings: InsertContactSettings): Promise<ContactSettings>;
 }
 
 export class MemStorage implements IStorage {
@@ -55,6 +59,7 @@ export class MemStorage implements IStorage {
   private exhibitions: Map<number, Exhibition>;
   private homepageSettings: HomepageSettings | undefined;
   private artistBio: ArtistBio | undefined;
+  private contactSettings: ContactSettings | undefined;
   private feedbacks: Map<number, Feedback>;
   private currentUserId: number;
   private currentArtworkId: number;
@@ -93,6 +98,16 @@ export class MemStorage implements IStorage {
       awards: "Best Emerging Artist 2023, Contemporary Art Society"
     };
 
+    // Initialize with default contact settings
+    this.contactSettings = {
+      id: 1,
+      instagramUrl: "https://www.instagram.com/animuradyan.art/",
+      saatchiUrl: "https://www.saatchiart.com/account/profile/1980379",
+      email: "animuradyan.artist@gmail.com",
+      location: "Yerevan, Armenia",
+      instagramHandle: "@animuradyan.art"
+    };
+
     // Initialize with sample data
     this.initializeSampleData();
   }
@@ -115,7 +130,10 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: true,
-        position: 0
+        position: 0,
+        availableForPrint: false,
+        printSizes: null,
+        preferredPrintMaterial: null
       },
       {
         id: 2,
@@ -132,7 +150,10 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: true,
-        position: 1
+        position: 1,
+        availableForPrint: false,
+        printSizes: null,
+        preferredPrintMaterial: null
       },
       {
         id: 3,
@@ -149,7 +170,10 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: true,
-        position: 2
+        position: 2,
+        availableForPrint: false,
+        printSizes: null,
+        preferredPrintMaterial: null
       },
       {
         id: 4,
@@ -166,7 +190,10 @@ export class MemStorage implements IStorage {
         saatchiUrl: "https://saatchiart.com",
         buyLink: null,
         featured: false,
-        position: 3
+        position: 3,
+        availableForPrint: false,
+        printSizes: null,
+        preferredPrintMaterial: null
       }
     ];
 
@@ -343,6 +370,7 @@ export class MemStorage implements IStorage {
       featured: insertPrint.featured || false,
       position: insertPrint.position ?? 0,
       artworkId: insertPrint.artworkId ?? null,
+      preferredMaterial: insertPrint.preferredMaterial || "paper",
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -484,6 +512,19 @@ export class MemStorage implements IStorage {
 
   async getAllFeedback(): Promise<Feedback[]> {
     return Array.from(this.feedbacks.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getContactSettings(): Promise<ContactSettings | undefined> {
+    return this.contactSettings;
+  }
+
+  async updateContactSettings(settings: InsertContactSettings): Promise<ContactSettings> {
+    const updated: ContactSettings = {
+      id: this.contactSettings?.id || 1,
+      ...settings
+    };
+    this.contactSettings = updated;
+    return updated;
   }
 }
 
@@ -767,6 +808,32 @@ export class DatabaseStorage implements IStorage {
 
   async getAllFeedback(): Promise<Feedback[]> {
     return await db.select().from(feedback).orderBy(feedback.createdAt);
+  }
+
+  async getContactSettings(): Promise<ContactSettings | undefined> {
+    const [settings] = await db.select().from(contactSettings).limit(1);
+    return settings || undefined;
+  }
+
+  async updateContactSettings(settings: InsertContactSettings): Promise<ContactSettings> {
+    // First try to update existing record
+    const [existing] = await db.select().from(contactSettings).limit(1);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(contactSettings)
+        .set(settings)
+        .where(eq(contactSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new record if none exists
+      const [created] = await db
+        .insert(contactSettings)
+        .values(settings)
+        .returning();
+      return created;
+    }
   }
 }
 
