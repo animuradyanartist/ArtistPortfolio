@@ -9,18 +9,21 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import { useAdmin } from "@/hooks/useAdmin";
 import { apiRequest } from "@/lib/queryClient";
-import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema } from "@shared/schema";
-import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio } from "@shared/schema";
+import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema, insertContactSettingsSchema } from "@shared/schema";
+import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings } from "@shared/schema";
 import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function AdminPage() {
   const [, setLocation] = useLocation();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<'homepage' | 'artworks' | 'prints' | 'exhibitions' | 'artist'>('homepage');
+  const [activeTab, setActiveTab] = useState<'homepage' | 'artworks' | 'prints' | 'exhibitions' | 'artist' | 'contact'>('homepage');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  
+  const { isAuthenticated, isLoading, login, logout } = useAdmin();
   
   // Drag and drop state
   const [draggedArtwork, setDraggedArtwork] = useState<number | null>(null);
@@ -29,32 +32,51 @@ export default function AdminPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const authenticated = localStorage.getItem('admin-authenticated') === 'true';
-    setIsAuthenticated(authenticated);
-  }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === 'artist123') {
-      setIsAuthenticated(true);
-      localStorage.setItem('admin-authenticated', 'true');
+    setIsLoggingIn(true);
+    
+    try {
+      const success = await login(password);
+      if (success) {
+        toast({
+          title: "Login successful",
+          description: "Welcome to the admin panel",
+        });
+        setPassword("");
+      } else {
+        toast({
+          title: "Invalid password",
+          description: "Please try again",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
       toast({
-        title: "Login successful",
-        description: "Welcome to the admin panel",
-      });
-    } else {
-      toast({
-        title: "Invalid password",
+        title: "Login failed",
         description: "Please try again",
         variant: "destructive",
       });
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('admin-authenticated');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast({
+        title: "Logged out successfully",
+        description: "You have been logged out",
+      });
+    } catch (error) {
+      toast({
+        title: "Logout failed",
+        description: "There was an error logging out",
+        variant: "destructive",
+      });
+    }
     setPassword("");
   };
 
@@ -79,6 +101,12 @@ export default function AdminPage() {
 
   const { data: artistBio, isLoading: artistBioLoading } = useQuery<ArtistBio>({
     queryKey: ["/api/artist-bio"],
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: contactSettings, isLoading: contactLoading } = useQuery<ContactSettings>({
+    queryKey: ["/api/contact-settings"],
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });
@@ -120,6 +148,17 @@ export default function AdminPage() {
     },
   });
 
+  const contactForm = useForm({
+    resolver: zodResolver(insertContactSettingsSchema),
+    defaultValues: contactSettings || {
+      instagramUrl: "",
+      saatchiUrl: "",
+      email: "",
+      location: "",
+      instagramHandle: ""
+    },
+  });
+
   // Update forms when data loads
   useEffect(() => {
     if (homepageSettings) {
@@ -132,6 +171,12 @@ export default function AdminPage() {
       artistForm.reset(artistBio);
     }
   }, [artistBio, artistForm]);
+
+  useEffect(() => {
+    if (contactSettings) {
+      contactForm.reset(contactSettings);
+    }
+  }, [contactSettings, contactForm]);
 
   // Optimized mutations
   const updateHomepageMutation = useMutation({
@@ -153,6 +198,17 @@ export default function AdminPage() {
     },
     onError: () => {
       toast({ title: "Failed to update artist bio", variant: "destructive" });
+    },
+  });
+
+  const updateContactMutation = useMutation({
+    mutationFn: async (data: any) => apiRequest("PUT", "/api/contact-settings", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contact-settings"] });
+      toast({ title: "Contact settings updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update contact settings", variant: "destructive" });
     },
   });
 
@@ -313,6 +369,10 @@ export default function AdminPage() {
     updateArtistBioMutation.mutate(data);
   };
 
+  const handleContactSubmit = (data: any) => {
+    updateContactMutation.mutate(data);
+  };
+
   const handleExhibitionSubmit = (data: any) => {
     createExhibitionMutation.mutate(data);
   };
@@ -357,9 +417,10 @@ export default function AdminPage() {
                 </div>
                 <Button 
                   type="submit" 
+                  disabled={isLoggingIn || isLoading}
                   className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl transition-all duration-200"
                 >
-                  Sign In
+                  {isLoggingIn || isLoading ? "Signing In..." : "Sign In"}
                 </Button>
               </form>
             </div>
@@ -397,7 +458,7 @@ export default function AdminPage() {
         {/* Modern Tabs */}
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-2 mb-8">
           <div className="flex space-x-1">
-            {(['homepage', 'artworks', 'prints', 'exhibitions', 'artist'] as const).map((tab) => (
+            {(['homepage', 'artworks', 'prints', 'exhibitions', 'artist', 'contact'] as const).map((tab) => (
               <Button
                 key={tab}
                 variant="ghost"
@@ -946,7 +1007,7 @@ export default function AdminPage() {
                         <FormItem>
                           <FormLabel>Artist Statement</FormLabel>
                           <FormControl>
-                            <Textarea {...field} rows={3} />
+                            <Textarea {...field} value={field.value || ''} rows={3} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -960,7 +1021,7 @@ export default function AdminPage() {
                         <FormItem>
                           <FormLabel>Education</FormLabel>
                           <FormControl>
-                            <Textarea {...field} rows={2} />
+                            <Textarea {...field} value={field.value || ''} rows={2} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -974,7 +1035,7 @@ export default function AdminPage() {
                         <FormItem>
                           <FormLabel>Awards & Recognition</FormLabel>
                           <FormControl>
-                            <Textarea {...field} rows={2} />
+                            <Textarea {...field} value={field.value || ''} rows={2} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -987,6 +1048,110 @@ export default function AdminPage() {
                       className="bg-deep-blue hover:bg-deep-blue/90"
                     >
                       {updateArtistBioMutation.isPending ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </form>
+                </Form>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Contact Settings Tab */}
+        {activeTab === 'contact' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-playfair text-xl text-deep-blue">
+                Contact Settings
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {contactLoading ? (
+                <div className="animate-pulse space-y-4">
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-10 bg-gray-200 rounded"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-10 bg-gray-200 rounded"></div>
+                </div>
+              ) : (
+                <Form {...contactForm}>
+                  <form onSubmit={contactForm.handleSubmit(handleContactSubmit)} className="space-y-6">
+                    <FormField
+                      control={contactForm.control}
+                      name="instagramUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Instagram URL</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="https://www.instagram.com/animuradyan.art/" data-testid="input-instagram-url" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={contactForm.control}
+                      name="instagramHandle"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Instagram Handle</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="@animuradyan.art" data-testid="input-instagram-handle" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={contactForm.control}
+                      name="saatchiUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Saatchi Art URL</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="https://www.saatchiart.com/account/profile/1980379" data-testid="input-saatchi-url" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={contactForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email Address</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="email" placeholder="animuradyan.artist@gmail.com" data-testid="input-email" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={contactForm.control}
+                      name="location"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Location</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Yerevan, Armenia" data-testid="input-location" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <Button 
+                      type="submit" 
+                      disabled={updateContactMutation.isPending}
+                      className="bg-deep-blue hover:bg-deep-blue/90"
+                      data-testid="button-save-contact-settings"
+                    >
+                      {updateContactMutation.isPending ? "Saving..." : "Save Contact Settings"}
                     </Button>
                   </form>
                 </Form>

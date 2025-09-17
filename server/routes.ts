@@ -3,9 +3,10 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import { storage } from "./storage";
-import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, prints } from "@shared/schema";
+import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, prints } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
+import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -33,6 +34,52 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Authentication endpoints
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { password } = req.body;
+      
+      if (!password) {
+        return res.status(400).json({ message: "Password is required" });
+      }
+      
+      if (authenticateAdminSession(req, password)) {
+        res.json({ 
+          message: "Login successful", 
+          authenticated: true 
+        });
+      } else {
+        res.status(401).json({ 
+          message: "Invalid password", 
+          authenticated: false 
+        });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Login failed", error });
+    }
+  });
+  
+  app.post("/api/auth/logout", async (req, res) => {
+    try {
+      logoutAdminSession(req);
+      res.json({ 
+        message: "Logout successful", 
+        authenticated: false 
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Logout failed", error });
+    }
+  });
+  
+  app.get("/api/auth/status", async (req, res) => {
+    try {
+      const authenticated = req.session?.isAdminAuthenticated === true;
+      res.json({ authenticated });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to check auth status", error });
+    }
+  });
+
   // Health check and data integrity endpoint
   app.get("/api/health", async (req, res) => {
     try {
@@ -81,7 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/artworks", async (req, res) => {
+  app.post("/api/artworks", requireAdminAuth, async (req, res) => {
     try {
       const validatedData = insertArtworkSchema.parse(req.body);
       
@@ -108,7 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/artworks/:id", async (req, res) => {
+  app.put("/api/artworks/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertArtworkSchema.partial().parse(req.body);
@@ -139,7 +186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/artworks/:id", async (req, res) => {
+  app.delete("/api/artworks/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteArtwork(id);
@@ -329,7 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/prints", async (req, res) => {
+  app.post("/api/prints", requireAdminAuth, async (req, res) => {
     try {
       const validatedData = insertPrintSchema.parse(req.body);
       
@@ -350,7 +397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/prints/:id", async (req, res) => {
+  app.put("/api/prints/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertPrintSchema.partial().parse(req.body);
@@ -376,7 +423,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/prints/:id", async (req, res) => {
+  app.delete("/api/prints/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deletePrint(id);
@@ -427,7 +474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/exhibitions", async (req, res) => {
+  app.post("/api/exhibitions", requireAdminAuth, async (req, res) => {
     try {
       const validatedData = insertExhibitionSchema.parse(req.body);
       const exhibition = await storage.createExhibition(validatedData);
@@ -437,7 +484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/exhibitions/:id", async (req, res) => {
+  app.put("/api/exhibitions/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertExhibitionSchema.partial().parse(req.body);
@@ -451,7 +498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/exhibitions/:id", async (req, res) => {
+  app.delete("/api/exhibitions/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteExhibition(id);
@@ -474,7 +521,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/homepage-settings", async (req, res) => {
+  app.put("/api/homepage-settings", requireAdminAuth, async (req, res) => {
     try {
       const validatedData = insertHomepageSettingsSchema.parse(req.body);
       const settings = await storage.updateHomepageSettings(validatedData);
@@ -494,7 +541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/artist-bio", async (req, res) => {
+  app.put("/api/artist-bio", requireAdminAuth, async (req, res) => {
     try {
       const validatedData = insertArtistBioSchema.parse(req.body);
       const bio = await storage.updateArtistBio(validatedData);
@@ -505,7 +552,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // File upload route
-  app.post("/api/upload", upload.single('image'), async (req, res) => {
+  app.post("/api/upload", requireAdminAuth, upload.single('image'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -520,7 +567,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Artwork reordering route
-  app.post("/api/artworks/:id/reorder", async (req, res) => {
+  app.post("/api/artworks/:id/reorder", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { direction } = req.body;
@@ -537,7 +584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Drag and drop reordering route
-  app.post("/api/artworks/reorder-drag", async (req, res) => {
+  app.post("/api/artworks/reorder-drag", requireAdminAuth, async (req, res) => {
     try {
       const { sourceId, targetId } = req.body;
       
@@ -595,13 +642,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all feedback (admin only)
-  app.get("/api/feedback", async (req, res) => {
+  app.get("/api/feedback", requireAdminAuth, async (req, res) => {
     try {
       const feedbacks = await storage.getAllFeedback();
       res.json(feedbacks);
     } catch (error) {
       console.error("Error fetching feedback:", error);
       res.status(500).json({ message: "Failed to fetch feedback" });
+    }
+  });
+
+  // Contact Settings routes
+  app.get("/api/contact-settings", async (req, res) => {
+    try {
+      const settings = await storage.getContactSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching contact settings:", error);
+      res.status(500).json({ message: "Failed to fetch contact settings" });
+    }
+  });
+
+  app.put("/api/contact-settings", requireAdminAuth, async (req, res) => {
+    try {
+      const validated = insertContactSettingsSchema.parse(req.body);
+      const updated = await storage.updateContactSettings(validated);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating contact settings:", error);
+      res.status(500).json({ message: "Failed to update contact settings" });
     }
   });
 
