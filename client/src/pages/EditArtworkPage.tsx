@@ -129,10 +129,7 @@ export default function EditArtworkPage() {
 
   const updateArtworkMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest(`/api/artworks/${artworkId}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      });
+      return await apiRequest("PUT", `/api/artworks/${artworkId}`, data);
     },
     onSuccess: () => {
       toast({
