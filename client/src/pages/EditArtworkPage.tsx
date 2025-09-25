@@ -59,7 +59,7 @@ export default function EditArtworkPage() {
 
   // Fetch existing artwork data
   const { data: artwork, isLoading, error } = useQuery<Artwork>({
-    queryKey: ['/api/artworks', artworkId],
+    queryKey: [`/api/artworks/${artworkId}`],
     enabled: !!artworkId && !isNaN(artworkId)
   });
 
@@ -89,6 +89,8 @@ export default function EditArtworkPage() {
   // Update form and print data when artwork data is loaded
   useEffect(() => {
     if (artwork) {
+      console.log('Loading artwork data:', artwork);
+      console.log('Artwork images:', artwork.images);
 
       const formData = {
         title: artwork.title || "",
@@ -97,7 +99,7 @@ export default function EditArtworkPage() {
         dimensions: artwork.dimensions || "",
         year: artwork.year || new Date().getFullYear(),
         price: artwork.price || 0,
-        images: artwork.images && artwork.images.length > 0 ? artwork.images : [""],
+        images: artwork.images && artwork.images.length > 0 ? artwork.images : ["", "", ""],
         type: artwork.type || "oil",
         size: artwork.size || "medium",
         availability: artwork.availability || "available",
@@ -107,6 +109,9 @@ export default function EditArtworkPage() {
         availableForPrint: artwork.availableForPrint || false,
         preferredPrintMaterial: artwork.preferredPrintMaterial || "paper",
       };
+      
+      console.log('Form data being set:', formData);
+      console.log('Form images array:', formData.images);
       
       // Set print data
       setAvailableForPrint(artwork.availableForPrint || false);
@@ -137,7 +142,7 @@ export default function EditArtworkPage() {
         description: "Artwork updated successfully!",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/artworks'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/artworks', artworkId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/artworks/${artworkId}`] });
       setLocation("/admin");
     },
     onError: (error: any) => {
@@ -749,19 +754,27 @@ export default function EditArtworkPage() {
                               </label>
                             </div>
                             
-                            {field.value?.[imageIndex] && (
-                              <div className="w-32 h-32 border rounded-lg overflow-hidden bg-gray-50">
-                                <img
-                                  src={field.value[imageIndex]}
-                                  alt={`Preview ${imageIndex + 1}`}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    console.error('Image preview failed:', field.value?.[imageIndex]);
-                                    e.currentTarget.style.display = 'none';
-                                  }}
-                                />
-                              </div>
-                            )}
+                            {(() => {
+                              const imageValue = field.value?.[imageIndex];
+                              console.log(`Image ${imageIndex} value:`, imageValue);
+                              console.log(`Field value array:`, field.value);
+                              return imageValue && imageValue.trim() !== "" ? (
+                                <div className="w-32 h-32 border rounded-lg overflow-hidden bg-gray-50">
+                                  <img
+                                    src={imageValue}
+                                    alt={`Preview ${imageIndex + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      console.error('Image preview failed:', imageValue);
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                    onLoad={() => {
+                                      console.log(`Image ${imageIndex} loaded successfully:`, imageValue);
+                                    }}
+                                  />
+                                </div>
+                              ) : null;
+                            })()}
                           </div>
                           <FormMessage />
                         </FormItem>
