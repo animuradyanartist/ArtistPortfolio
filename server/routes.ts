@@ -674,6 +674,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // SEO Routes
+  app.get("/robots.txt", async (req, res) => {
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(`User-agent: *
+Allow: /
+Sitemap: https://animuradyanart.replit.app/sitemap.xml
+
+# Disallow admin pages from indexing
+User-agent: *
+Disallow: /admin
+`);
+  });
+
+  app.get("/sitemap.xml", async (req, res) => {
+    try {
+      const baseUrl = 'https://animuradyanart.replit.app';
+      const artworks = await storage.getAllArtworks();
+      const prints = await storage.getAllPrints();
+      
+      // Static pages
+      const staticPages = [
+        { url: '/', priority: '1.0', changefreq: 'weekly' },
+        { url: '/about', priority: '0.8', changefreq: 'monthly' },
+        { url: '/artworks', priority: '0.9', changefreq: 'weekly' },
+        { url: '/prints', priority: '0.9', changefreq: 'weekly' },
+        { url: '/contact', priority: '0.7', changefreq: 'monthly' }
+      ];
+      
+      // Build XML sitemap
+      let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+      
+      // Add static pages
+      staticPages.forEach(page => {
+        xml += '  <url>\n';
+        xml += `    <loc>${baseUrl}${page.url}</loc>\n`;
+        xml += `    <changefreq>${page.changefreq}</changefreq>\n`;
+        xml += `    <priority>${page.priority}</priority>\n`;
+        xml += '  </url>\n';
+      });
+      
+      // Add artwork pages
+      artworks.forEach(artwork => {
+        xml += '  <url>\n';
+        xml += `    <loc>${baseUrl}/artworks/${artwork.id}</loc>\n`;
+        xml += '    <changefreq>monthly</changefreq>\n';
+        xml += '    <priority>0.8</priority>\n';
+        xml += '  </url>\n';
+      });
+      
+      // Add print pages (only active prints)
+      const activePrints = prints.filter(print => print.status === 'active');
+      activePrints.forEach(print => {
+        xml += '  <url>\n';
+        xml += `    <loc>${baseUrl}/prints/${print.id}</loc>\n`;
+        xml += '    <changefreq>monthly</changefreq>\n';
+        xml += '    <priority>0.8</priority>\n';
+        xml += '  </url>\n';
+      });
+      
+      xml += '</urlset>';
+      
+      res.setHeader('Content-Type', 'application/xml');
+      res.send(xml);
+    } catch (error) {
+      console.error("Error generating sitemap:", error);
+      res.status(500).send('Error generating sitemap');
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
