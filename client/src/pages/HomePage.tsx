@@ -62,7 +62,7 @@ export default function HomePage() {
             <div className="flex flex-col items-center justify-center h-full">
               <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-8 py-4 rounded-full text-sm font-medium text-white mb-10 animate-fadeIn border border-white/20">
                 <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full animate-pulse"></div>
-                <span className="text-base">Ani Muradyan • Abstract Realism Artist from Armenia</span>
+                <span className="text-base">Contemporary Abstract Realism Artist • Oil Paintings & Fine Art Prints</span>
               </div>
               
               <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">
@@ -124,7 +124,7 @@ export default function HomePage() {
                 <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200">
                   <img 
                     src={latestArtwork.images[0]} 
-                    alt={`${latestArtwork.title} by Ani Muradyan – Armenian abstract realism painting`}
+                    alt={`${latestArtwork.title} by Ani Muradyan – contemporary abstract realism oil painting`}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -188,7 +188,7 @@ export default function HomePage() {
                 <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200">
                   <img 
                     src={artwork.images[0]} 
-                    alt={`${artwork.title} by Ani Muradyan – Armenian abstract realism painting`}
+                    alt={`${artwork.title} by Ani Muradyan – contemporary abstract realism oil painting`}
                     className="w-full h-full object-cover"
                   />
                 </div>
