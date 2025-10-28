@@ -27,9 +27,9 @@ export default function Navigation() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <Link href="/">
-              <h1 className="font-playfair text-2xl font-semibold text-deep-blue cursor-pointer">
+              <div className="font-playfair text-2xl font-semibold text-deep-blue cursor-pointer">
                 Ani Muradyan
-              </h1>
+              </div>
             </Link>
           </div>
           
