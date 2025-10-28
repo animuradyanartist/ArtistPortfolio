@@ -93,7 +93,7 @@ export default function ArtworkDetailPage() {
               {artwork.images && artwork.images.length > 0 ? (
                 <img 
                   src={artwork.images[currentImageIndex]} 
-                  alt={`${artwork.title} - Image ${currentImageIndex + 1}`}
+                  alt={`${artwork.title} by Ani Muradyan – Armenian abstract realism painting`}
                   className="w-full rounded-lg shadow-xl object-cover aspect-[3/4]"
                   data-testid={`img-artwork-main-${artworkId}`}
                 />
@@ -143,7 +143,7 @@ export default function ArtworkDetailPage() {
                   >
                     <img
                       src={image}
-                      alt={`${artwork.title} thumbnail ${index + 1}`}
+                      alt={`${artwork.title} by Ani Muradyan – Armenian abstract realism painting (view ${index + 1})`}
                       className="w-full h-full object-cover"
                     />
                   </button>

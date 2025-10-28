@@ -227,7 +227,7 @@ export default function PrintArtworkPage() {
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
                 <img 
                   src={print.images[currentImageIndex]} 
-                  alt={`${print.title} - Image ${currentImageIndex + 1}`}
+                  alt={`${print.title} by Ani Muradyan – Armenian abstract realism art print`}
                   className="relative w-full rounded-3xl shadow-2xl object-cover aspect-[3/4] max-h-[600px] border border-slate-200/50 transform group-hover:scale-105 transition-transform duration-700"
                 />
                 
@@ -273,7 +273,7 @@ export default function PrintArtworkPage() {
                     >
                       <img 
                         src={image} 
-                        alt={`${print.title} thumbnail ${index + 1}`}
+                        alt={`${print.title} by Ani Muradyan – Armenian abstract realism art print (view ${index + 1})`}
                         className="w-full h-16 object-cover"
                       />
                     </button>

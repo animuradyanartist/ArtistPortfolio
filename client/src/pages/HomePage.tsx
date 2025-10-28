@@ -119,7 +119,7 @@ export default function HomePage() {
                 <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200">
                   <img 
                     src={latestArtwork.images[0]} 
-                    alt={latestArtwork.title}
+                    alt={`${latestArtwork.title} by Ani Muradyan – Armenian abstract realism painting`}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -183,7 +183,7 @@ export default function HomePage() {
                 <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200">
                   <img 
                     src={artwork.images[0]} 
-                    alt={artwork.title}
+                    alt={`${artwork.title} by Ani Muradyan – Armenian abstract realism painting`}
                     className="w-full h-full object-cover"
                   />
                 </div>
