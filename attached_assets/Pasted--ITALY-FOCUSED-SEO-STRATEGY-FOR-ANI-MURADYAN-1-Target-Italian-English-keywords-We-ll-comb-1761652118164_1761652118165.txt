@@ -1,0 +1,97 @@
+🇮🇹 ITALY-FOCUSED SEO STRATEGY FOR ANI MURADYAN
+🎯 1. Target Italian + English keywords
+
+We’ll combine both languages so Google understands your relevance internationally and locally in Italy.
+
+Main bilingual keywords:
+
+Artista contemporanea armena
+
+Pittrice di arte astratta realista
+
+Ani Muradyan artista
+
+Armenian contemporary artist
+
+Abstract realism painter
+
+Modern fine art & oil paintings
+
+✅ We’ll include both Italian and English in your meta tags and structured data.
+✅ Add an Italian version of your homepage (I can translate and optimize it too).
+
+🌐 2. Localized SEO prompt for Replit (copy & paste)
+
+You can paste this into Replit’s “Ask Agent…” box:
+
+🇮🇹 Prompt: “Italy-Focused SEO Setup”
+
+Prompt:
+Localize my website SEO for Italy.
+Project: “ArtistPortfolio” (domain: https://animuradyanart.replit.app
+).
+
+Goal: Make the site appear in Google Italy results for both Italian and international searches, such as “artista contemporanea,” “pittrice armena,” “abstract realism artist,” and “modern painter.”
+
+Tasks:
+
+Add Italian-language meta tags:
+
+<title> → Ani Muradyan – Artista Contemporanea | Pittura Astratta Realista
+
+<meta name="description"> → Scopri Ani Muradyan, artista contemporanea armena che crea opere di pittura astratta realista con emozione e speranza.
+
+<meta name="keywords"> → artista contemporanea, pittrice, arte astratta, realismo astratto, olio su tela, Ani Muradyan, arte moderna
+
+Keep English meta tags alongside for international ranking.
+
+Add hreflang tags:
+
+hreflang="it" for Italian
+
+hreflang="en" for English
+
+Extend JSON-LD schema with Italian “alternateName”: “Artista Contemporanea Armena.”
+
+Update Open Graph and Twitter tags with bilingual titles/descriptions.
+
+Add Italian alt text for images:
+"Titolo dell’opera di Ani Muradyan – pittura astratta realista"
+
+Add <link rel="canonical" href="https://animuradyanart.replit.app/"> on all pages.
+
+Verify sitemap.xml and robots.txt include both /it/ and /en/ pages.
+
+After completion, show me which files were changed and confirm bilingual SEO readiness.
+
+💬 3. Google Business Profile (Italy)
+
+Create or edit your profile as “Ani Muradyan – Artista Contemporanea”
+
+Choose category: Artist / Visual artist / Contemporary artist
+
+Add photos of your paintings and exhibitions
+
+Use location: Rome (or any Italian city you want to be discovered in)
+
+🖼️ 4. External backlinks from Italy
+
+Let’s get links from:
+
+Italian art blogs (Artribune, Exibart, Artslife)
+
+Online galleries (Saatchi, Artmajeur Italy)
+
+Italian Facebook art groups
+
+Pinterest boards titled “Artisti Contemporanei Italiani”
+
+📈 5. Result timeline
+
+Once you localize and publish:
+
+Google Italy starts indexing in 3–5 days
+
+You’ll appear for “Ani Muradyan artista” searches first
+
+Within 3–6 weeks, you can rank for “artista contemporanea” and “pittrice astratta” depending on backlinks and traffic.
