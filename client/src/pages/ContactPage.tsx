@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Mail, MapPin, Instagram, Palette } from "lucide-react";
+import { updateCanonicalUrl } from "@/lib/seo";
 
 const contactSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name is too long"),
@@ -23,6 +24,10 @@ type ContactFormData = z.infer<typeof contactSchema>;
 
 export default function ContactPage() {
   const { toast } = useToast();
+  
+  useEffect(() => {
+    updateCanonicalUrl('/contact');
+  }, []);
   
   const form = useForm<ContactFormData>({
     resolver: zodResolver(contactSchema),

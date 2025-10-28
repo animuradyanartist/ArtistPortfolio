@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,8 +7,12 @@ import { Link } from "wouter";
 import { ExternalLink } from "lucide-react";
 import type { Artwork, HomepageSettings } from "@shared/schema";
 import backgroundImage from "@assets/1bg_1750936488071.png";
+import { updateCanonicalUrl } from "@/lib/seo";
 
 export default function HomePage() {
+  useEffect(() => {
+    updateCanonicalUrl('/');
+  }, []);
   const { data: homepageSettings } = useQuery<HomepageSettings>({
     queryKey: ["/api/homepage-settings"]
   });

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import type { Artwork } from "@shared/schema";
+import { updateCanonicalUrl } from "@/lib/seo";
 
 export default function ArtworkDetailPage() {
   const params = useParams();
@@ -18,14 +19,15 @@ export default function ArtworkDetailPage() {
     enabled: !!artworkId && !isNaN(artworkId)
   });
 
-  // Set page title for SEO and debug
+  // Set page title and canonical URL for SEO
   useEffect(() => {
     if (artwork) {
       console.log('Artwork data:', artwork);
       console.log('Artwork title:', artwork.title);
       document.title = `${artwork.title} | Original Artwork by Ani Muradyan`;
+      updateCanonicalUrl(`/artworks/${artworkId}`);
     }
-  }, [artwork]);
+  }, [artwork, artworkId]);
 
   const nextImage = () => {
     if (!artwork || !artwork.images || artwork.images.length === 0) return;

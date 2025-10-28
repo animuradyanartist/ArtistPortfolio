@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import type { ArtistBio, Exhibition } from "@shared/schema";
+import { updateCanonicalUrl } from "@/lib/seo";
 
 export default function AboutPage() {
-  // Set page title for SEO
+  // Set page title and canonical URL for SEO
   useEffect(() => {
     document.title = "About Ani Muradyan | Contemporary Armenian Artist Biography";
+    updateCanonicalUrl('/about');
   }, []);
   // Fetch artist bio data from the API
   const { data: artistBio, isLoading: bioLoading } = useQuery<ArtistBio>({

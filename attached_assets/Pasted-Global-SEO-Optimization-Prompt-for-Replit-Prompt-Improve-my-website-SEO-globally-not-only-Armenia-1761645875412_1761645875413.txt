@@ -1,0 +1,60 @@
+Global SEO Optimization Prompt for Replit
+
+Prompt:
+Improve my website SEO globally (not only Armenian).
+Project: “ArtistPortfolio” — domain: https://animuradyanart.replit.app
+
+Goal:
+Make the site appear in Google’s top results when users search not only “Armenian artists” but also “artists,” “contemporary artists,” “modern painters,” “abstract realism artist,” and “oil paintings.”
+
+Tasks:
+
+Update index.html (or the root React entry) with global SEO meta tags:
+
+<title> → Ani Muradyan – Contemporary Abstract Realism Artist | Anymoore Art
+
+<meta name="description"> → Explore the world of Ani Muradyan, a contemporary artist known for serene and emotional abstract realism oil paintings. View exhibitions, prints, and original works online.
+
+<meta name="keywords"> → artist, contemporary artist, modern painter, abstract realism artist, oil paintings, fine art, art prints, Ani Muradyan, Anymoore Art
+
+Add Open Graph (OG) and Twitter meta tags for sharing globally:
+
+og:title, og:description, og:image, og:url
+
+twitter:card, twitter:title, twitter:description
+
+Add multilingual structured data (JSON-LD schema) using @type: Person and @type: VisualArtwork:
+
+{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "Ani Muradyan",
+  "jobTitle": "Artist",
+  "nationality": "Armenian",
+  "description": "Contemporary abstract realism artist creating serene oil paintings and fine art prints.",
+  "worksFor": "Anymoore Art",
+  "url": "https://anymoore.am",
+  "sameAs": [
+    "https://www.instagram.com/animuradyan.art/",
+    "https://www.singulart.com/en/artist/ani-muradyan",
+    "https://animuradyanart.replit.app/"
+  ]
+}
+
+
+Add alt text to all images using this pattern:
+"Title of artwork by Ani Muradyan – contemporary abstract realism oil painting"
+
+Generate sitemap.xml and robots.txt so Google indexes all artwork pages and the homepage.
+
+Add <link rel="canonical" href="https://animuradyanart.replit.app/"> on every page.
+
+Ensure correct <h1>–<h3> structure for keyword clarity:
+
+H1: Ani Muradyan – Contemporary Abstract Realism Artist
+
+H2: Oil Paintings, Art Prints, Exhibitions
+
+H3: About, Contact, Shop
+
+Optimize website speed and accessibility (image compression, lazy loading, mobile view).

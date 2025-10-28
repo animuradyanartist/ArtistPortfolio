@@ -5,11 +5,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import ArtworkCard from "@/components/ArtworkCard";
 import ArtworkModal from "@/components/ArtworkModal";
 import type { Artwork } from "@shared/schema";
+import { updateCanonicalUrl } from "@/lib/seo";
 
 export default function ArtworksPage() {
-  // Set page title for SEO
+  // Set page title and canonical URL for SEO
   useEffect(() => {
     document.title = "Original Artworks by Ani Muradyan | Abstract Realism Gallery";
+    updateCanonicalUrl('/artworks');
   }, []);
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [modalOpen, setModalOpen] = useState(false);

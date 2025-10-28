@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import type { Print } from "@shared/schema";
+import { updateCanonicalUrl } from "@/lib/seo";
 
 // Thumbnail cache for better performance
 const thumbnailCache = new Map<number, string>();
@@ -228,9 +229,10 @@ const LazyThumbnail = memo(function LazyThumbnail({ printId, title }: { printId:
 export default function PrintsPage() {
   const [, setLocation] = useLocation();
   
-  // Set page title for SEO
+  // Set page title and canonical URL for SEO
   useEffect(() => {
     document.title = "Art Prints by Ani Muradyan | Museum-Quality Canvas & Paper Prints";
+    updateCanonicalUrl('/prints');
   }, []);
   
   // Price calculator state

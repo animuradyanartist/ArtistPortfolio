@@ -11,6 +11,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import PreviewOnWall from "@/components/PreviewOnWall";
 import ARPreview from "@/components/ARPreview";
 import type { Print } from "@shared/schema";
+import { updateCanonicalUrl } from "@/lib/seo";
 
 export default function PrintArtworkPage() {
   const params = useParams();
@@ -40,7 +41,12 @@ export default function PrintArtworkPage() {
     enabled: !!printId && !isNaN(printId)
   });
 
-
+  // Set canonical URL for SEO
+  useEffect(() => {
+    if (print) {
+      updateCanonicalUrl(`/prints/${printId}`);
+    }
+  }, [print, printId]);
 
   // Parse print sizes from JSON
   const printSizes = useMemo(() => {
