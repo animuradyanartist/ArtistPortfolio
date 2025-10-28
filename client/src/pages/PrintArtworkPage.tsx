@@ -290,9 +290,9 @@ export default function PrintArtworkPage() {
               {/* Print Info */}
               <div className="space-y-4">
                 <div>
-                  <h1 className="font-playfair text-3xl font-semibold text-deep-blue mb-2">
+                  <h2 className="font-playfair text-3xl font-semibold text-deep-blue mb-2">
                     {print.title}
-                  </h1>
+                  </h2>
                   <p className="text-soft-gray text-lg">
                     Print Edition • Preferred Material: {print.preferredMaterial}
                   </p>
