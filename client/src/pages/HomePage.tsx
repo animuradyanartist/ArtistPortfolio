@@ -316,7 +316,7 @@ export default function HomePage() {
       {/* Lightbox Dialog */}
       {featuredGalleryPhotos.length > 0 && (
         <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-          <DialogContent className="max-w-7xl w-full h-[90vh] p-0 bg-black/95 border-none">
+          <DialogContent className="w-[800px] h-[500px] p-0 bg-black/95 border-none">
             <div className="relative w-full h-full flex items-center justify-center">
               {/* Close Button */}
               <Button
