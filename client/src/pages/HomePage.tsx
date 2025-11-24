@@ -100,9 +100,9 @@ export default function HomePage() {
               </blockquote>
               
               <div className="flex flex-col sm:flex-row gap-6 items-center justify-center animate-slideUp animation-delay-400">
-                <Link href="/prints">
+                <Link href="/artworks">
                   <Button className="group h-16 px-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-500 transform hover:scale-105 shadow-2xl hover:shadow-blue-500/25">
-                    <span className="text-lg group-hover:text-white transition-colors">View Prints</span>
+                    <span className="text-lg group-hover:text-white transition-colors">View Artworks</span>
                     <div className="ml-2 transform group-hover:translate-x-1 transition-transform">
                       <ExternalLink className="w-5 h-5" />
                     </div>
@@ -129,69 +129,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* New Artwork Section */}
-      {latestArtwork && (
-        <div className="py-24 bg-gradient-to-br from-slate-50 to-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-20">
-              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-6">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                Latest Creation
-              </div>
-              <h2 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6">
-                {latestArtwork.title}
-              </h2>
-              <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
-                Discover my most recent work, where emotion meets abstract expression in perfect harmony.
-              </p>
-            </div>
-            <div className="max-w-5xl mx-auto">
-              <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 overflow-hidden">
-                <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200">
-                  <img 
-                    src={latestArtwork.images[0]} 
-                    alt={`${latestArtwork.title} by Ani Muradyan – contemporary abstract realism oil painting`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="p-8">
-                  <div className="flex justify-between items-start mb-6">
-                    <div>
-                      <h3 className="text-3xl font-bold text-slate-900 mb-2">
-                        {latestArtwork.title}
-                      </h3>
-                      <p className="text-slate-600 text-lg">
-                        {latestArtwork.medium}, {latestArtwork.dimensions}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-3xl font-bold text-slate-900">
-                        ${latestArtwork.price.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-slate-600 mb-8 text-lg leading-relaxed">
-                    {latestArtwork.description}
-                  </p>
-                  <div className="flex justify-center">
-                    {latestArtwork.availability === 'available' ? (
-                      <Button 
-                        onClick={() => handleBuyNow(latestArtwork.saatchiUrl || undefined)}
-                        className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg"
-                      >
-                        <ExternalLink className="w-5 h-5 mr-2" />
-                        View Details
-                      </Button>
-                    ) : (
-                      <Badge variant="destructive" className="h-12 px-8 text-lg">Sold</Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Featured Works Section */}
       <div className="py-24 bg-white">
