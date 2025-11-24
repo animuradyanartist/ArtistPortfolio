@@ -134,7 +134,7 @@ export const feedback = pgTable('feedback', {
 
 export const galleryPhotos = pgTable('gallery_photos', {
   id: serial('id').primaryKey(),
-  title: text('title').notNull(),
+  title: text('title'),
   image: text('image').notNull(),
   exhibitionName: text('exhibition_name'),
   location: text('location'),

@@ -262,16 +262,18 @@ export default function HomePage() {
                     <div className="aspect-square overflow-hidden">
                       <img
                         src={photo.image}
-                        alt={`${photo.title} by Ani Muradyan – contemporary abstract realism exhibition photo`}
+                        alt={`${photo.title || 'Exhibition photo'} by Ani Muradyan – contemporary abstract realism exhibition photo`}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                         loading="lazy"
                         data-testid={`img-homepage-gallery-${photo.id}`}
                       />
                     </div>
                     <div className="p-4">
-                      <h3 className="text-sm font-semibold text-slate-900 line-clamp-2">
-                        {photo.title}
-                      </h3>
+                      {photo.title && (
+                        <h3 className="text-sm font-semibold text-slate-900 line-clamp-2">
+                          {photo.title}
+                        </h3>
+                      )}
                       {photo.year && (
                         <p className="text-xs text-slate-600 mt-1">{photo.year}</p>
                       )}

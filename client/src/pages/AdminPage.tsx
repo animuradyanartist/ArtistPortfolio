@@ -167,11 +167,7 @@ export default function AdminPage() {
 
   const [galleryPhotoImage, setGalleryPhotoImage] = useState("");
   const galleryPhotoForm = useForm({
-    resolver: zodResolver(insertGalleryPhotoSchema.extend({
-      year: insertGalleryPhotoSchema.shape.year.optional(),
-      exhibitionName: insertGalleryPhotoSchema.shape.exhibitionName.optional(),
-      location: insertGalleryPhotoSchema.shape.location.optional(),
-    })),
+    resolver: zodResolver(insertGalleryPhotoSchema),
     defaultValues: {
       title: "",
       image: "",
@@ -1166,9 +1162,9 @@ export default function AdminPage() {
                       name="title"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Title / Caption</FormLabel>
+                          <FormLabel>Title / Caption (Optional)</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="Exhibition opening night, 2024" data-testid="input-gallery-title" />
+                            <Input {...field} value={field.value || ''} placeholder="Exhibition opening night, 2024" data-testid="input-gallery-title" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1282,13 +1278,13 @@ export default function AdminPage() {
                         <div className="flex gap-4">
                           <img 
                             src={photo.image} 
-                            alt={photo.title}
+                            alt={photo.title || 'Gallery photo'}
                             className="w-32 h-32 object-cover rounded"
                           />
                           <div className="flex-1">
                             <div className="flex items-start justify-between">
                               <div>
-                                <h3 className="font-semibold text-lg">{photo.title}</h3>
+                                <h3 className="font-semibold text-lg">{photo.title || `Photo #${photo.id}`}</h3>
                                 <div className="text-sm text-slate-600 space-y-1">
                                   {photo.exhibitionName && <p>Exhibition: {photo.exhibitionName}</p>}
                                   {photo.location && <p>Location: {photo.location}</p>}
@@ -1348,7 +1344,7 @@ export default function AdminPage() {
                                     <AlertDialogHeader>
                                       <AlertDialogTitle>Delete Gallery Photo</AlertDialogTitle>
                                       <AlertDialogDescription>
-                                        Are you sure you want to delete "{photo.title}"? This action cannot be undone.
+                                        Are you sure you want to delete "{photo.title || `Photo #${photo.id}`}"? This action cannot be undone.
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>

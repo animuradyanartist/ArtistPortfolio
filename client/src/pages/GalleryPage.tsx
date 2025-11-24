@@ -61,16 +61,18 @@ export default function GalleryPage() {
                   <div className="aspect-[4/3] overflow-hidden">
                     <img
                       src={photo.image}
-                      alt={`${photo.title} by Ani Muradyan – contemporary abstract realism exhibition photo`}
+                      alt={`${photo.title || 'Exhibition photo'} by Ani Muradyan – contemporary abstract realism exhibition photo`}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                       loading="lazy"
                       data-testid={`img-gallery-${photo.id}`}
                     />
                   </div>
                   <div className="p-6">
-                    <h2 className="text-xl font-semibold text-slate-900 mb-2">
-                      {photo.title}
-                    </h2>
+                    {photo.title && (
+                      <h2 className="text-xl font-semibold text-slate-900 mb-2">
+                        {photo.title}
+                      </h2>
+                    )}
                     {(photo.exhibitionName || photo.location || photo.year) && (
                       <div className="space-y-1 text-sm text-slate-600">
                         {photo.exhibitionName && (
