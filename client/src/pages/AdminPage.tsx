@@ -11,15 +11,15 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/hooks/useAdmin";
 import { apiRequest } from "@/lib/queryClient";
-import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema, insertContactSettingsSchema } from "@shared/schema";
-import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings } from "@shared/schema";
+import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema, insertContactSettingsSchema, insertGalleryPhotoSchema } from "@shared/schema";
+import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings, GalleryPhoto } from "@shared/schema";
 import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function AdminPage() {
   const [, setLocation] = useLocation();
   const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<'homepage' | 'artworks' | 'prints' | 'exhibitions' | 'artist' | 'contact'>('homepage');
+  const [activeTab, setActiveTab] = useState<'homepage' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact'>('homepage');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
@@ -111,6 +111,12 @@ export default function AdminPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: galleryPhotos = [], isLoading: galleryPhotosLoading } = useQuery<GalleryPhoto[]>({
+    queryKey: ["/api/gallery-photos"],
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Form configurations
   const homepageForm = useForm({
     resolver: zodResolver(insertHomepageSettingsSchema),
@@ -156,6 +162,24 @@ export default function AdminPage() {
       email: "",
       location: "",
       instagramHandle: ""
+    },
+  });
+
+  const [galleryPhotoImage, setGalleryPhotoImage] = useState("");
+  const galleryPhotoForm = useForm({
+    resolver: zodResolver(insertGalleryPhotoSchema.extend({
+      year: insertGalleryPhotoSchema.shape.year.optional(),
+      exhibitionName: insertGalleryPhotoSchema.shape.exhibitionName.optional(),
+      location: insertGalleryPhotoSchema.shape.location.optional(),
+    })),
+    defaultValues: {
+      title: "",
+      image: "",
+      exhibitionName: "",
+      location: "",
+      year: undefined,
+      featured: false,
+      position: 0,
     },
   });
 
@@ -360,6 +384,53 @@ export default function AdminPage() {
     },
   });
 
+  const createGalleryPhotoMutation = useMutation({
+    mutationFn: async (data: any) => apiRequest("POST", "/api/gallery-photos", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gallery-photos"] });
+      galleryPhotoForm.reset();
+      setGalleryPhotoImage("");
+      toast({ title: "Gallery photo added successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to add gallery photo", variant: "destructive" });
+    },
+  });
+
+  const deleteGalleryPhotoMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/gallery-photos/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gallery-photos"] });
+      toast({ title: "Gallery photo deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete gallery photo", variant: "destructive" });
+    },
+  });
+
+  const toggleGalleryPhotoFeaturedMutation = useMutation({
+    mutationFn: async ({ id, featured }: { id: number; featured: boolean }) =>
+      apiRequest("PATCH", `/api/gallery-photos/${id}`, { featured }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gallery-photos"] });
+      toast({ title: "Gallery photo updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update gallery photo", variant: "destructive" });
+    },
+  });
+
+  const reorderGalleryPhotoMutation = useMutation({
+    mutationFn: async ({ id, direction }: { id: number; direction: 'up' | 'down' }) =>
+      apiRequest("POST", `/api/gallery-photos/${id}/reorder`, { direction }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gallery-photos"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to reorder gallery photo", variant: "destructive" });
+    },
+  });
+
   // Form handlers
   const handleHomepageSubmit = (data: any) => {
     updateHomepageMutation.mutate(data);
@@ -375,6 +446,28 @@ export default function AdminPage() {
 
   const handleExhibitionSubmit = (data: any) => {
     createExhibitionMutation.mutate(data);
+  };
+
+  const handleGalleryPhotoSubmit = (data: any) => {
+    createGalleryPhotoMutation.mutate({
+      ...data,
+      image: galleryPhotoImage,
+    });
+  };
+
+  const handleGalleryPhotoImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setGalleryPhotoImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleReorderGalleryPhoto = (id: number, direction: 'up' | 'down') => {
+    reorderGalleryPhotoMutation.mutate({ id, direction });
   };
 
   if (!isAuthenticated) {
@@ -458,7 +551,7 @@ export default function AdminPage() {
         {/* Modern Tabs */}
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-2 mb-8">
           <div className="flex space-x-1">
-            {(['homepage', 'artworks', 'prints', 'exhibitions', 'artist', 'contact'] as const).map((tab) => (
+            {(['homepage', 'artworks', 'prints', 'exhibitions', 'gallery', 'artist', 'contact'] as const).map((tab) => (
               <Button
                 key={tab}
                 variant="ghost"
@@ -1054,6 +1147,232 @@ export default function AdminPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Gallery Photos Tab */}
+        {activeTab === 'gallery' && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-playfair text-xl text-deep-blue">
+                  Add New Gallery Photo
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Form {...galleryPhotoForm}>
+                  <form onSubmit={galleryPhotoForm.handleSubmit(handleGalleryPhotoSubmit)} className="space-y-4">
+                    <FormField
+                      control={galleryPhotoForm.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Title / Caption</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Exhibition opening night, 2024" data-testid="input-gallery-title" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={galleryPhotoForm.control}
+                        name="exhibitionName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Exhibition Name (Optional)</FormLabel>
+                            <FormControl>
+                              <Input {...field} value={field.value || ''} placeholder="Abstract Emotions 2024" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={galleryPhotoForm.control}
+                        name="location"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Location (Optional)</FormLabel>
+                            <FormControl>
+                              <Input {...field} value={field.value || ''} placeholder="Rome, Italy" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={galleryPhotoForm.control}
+                      name="year"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Year (Optional)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number"
+                              value={field.value || ''}
+                              onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                              placeholder={new Date().getFullYear().toString()}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="space-y-2">
+                      <FormLabel>Photo</FormLabel>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleGalleryPhotoImageUpload}
+                        data-testid="input-gallery-image"
+                      />
+                      {galleryPhotoImage && (
+                        <div className="mt-2">
+                          <img 
+                            src={galleryPhotoImage} 
+                            alt="Gallery photo preview" 
+                            className="w-48 h-48 object-cover rounded border"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <Button 
+                      type="submit" 
+                      disabled={createGalleryPhotoMutation.isPending || !galleryPhotoImage}
+                      className="bg-deep-blue hover:bg-deep-blue/90"
+                      data-testid="button-add-gallery-photo"
+                    >
+                      {createGalleryPhotoMutation.isPending ? "Adding..." : "Add Gallery Photo"}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+
+            {/* Gallery Photos List */}
+            {galleryPhotosLoading ? (
+              <div className="space-y-4">
+                {[1, 2].map((i) => (
+                  <div key={i} className="animate-pulse bg-white p-4 rounded-lg">
+                    <div className="h-32 bg-gray-200 rounded mb-2"></div>
+                    <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {galleryPhotos.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-8 text-center text-slate-600">
+                      No gallery photos yet. Add your first exhibition photo above!
+                    </CardContent>
+                  </Card>
+                ) : (
+                  galleryPhotos.map((photo) => (
+                    <Card key={photo.id}>
+                      <CardContent className="p-4">
+                        <div className="flex gap-4">
+                          <img 
+                            src={photo.image} 
+                            alt={photo.title}
+                            className="w-32 h-32 object-cover rounded"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <h3 className="font-semibold text-lg">{photo.title}</h3>
+                                <div className="text-sm text-slate-600 space-y-1">
+                                  {photo.exhibitionName && <p>Exhibition: {photo.exhibitionName}</p>}
+                                  {photo.location && <p>Location: {photo.location}</p>}
+                                  {photo.year && <p>Year: {photo.year}</p>}
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                  {photo.featured && (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                      Featured
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => toggleGalleryPhotoFeaturedMutation.mutate({
+                                    id: photo.id,
+                                    featured: !photo.featured
+                                  })}
+                                  disabled={toggleGalleryPhotoFeaturedMutation.isPending}
+                                >
+                                  {photo.featured ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </Button>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleReorderGalleryPhoto(photo.id, 'up')}
+                                    disabled={reorderGalleryPhotoMutation.isPending}
+                                    title="Move Up"
+                                  >
+                                    <ChevronUp className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleReorderGalleryPhoto(photo.id, 'down')}
+                                    disabled={reorderGalleryPhotoMutation.isPending}
+                                    title="Move Down"
+                                  >
+                                    <ChevronDown className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      disabled={deleteGalleryPhotoMutation.isPending}
+                                    >
+                                      <Trash className="w-4 h-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete Gallery Photo</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to delete "{photo.title}"? This action cannot be undone.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => deleteGalleryPhotoMutation.mutate(photo.id)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Contact Settings Tab */}
