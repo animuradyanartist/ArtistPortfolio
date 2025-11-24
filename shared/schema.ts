@@ -132,6 +132,18 @@ export const feedback = pgTable('feedback', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+export const galleryPhotos = pgTable('gallery_photos', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  image: text('image').notNull(),
+  exhibitionName: text('exhibition_name'),
+  location: text('location'),
+  year: integer('year'),
+  featured: boolean('featured').default(false),
+  position: integer('position').default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 export const insertContactSettingsSchema = createInsertSchema(contactSettings).omit({
   id: true,
 });
@@ -141,7 +153,14 @@ export const insertFeedbackSchema = createInsertSchema(feedback).omit({
   createdAt: true,
 });
 
+export const insertGalleryPhotoSchema = createInsertSchema(galleryPhotos).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertContactSettings = z.infer<typeof insertContactSettingsSchema>;
 export type ContactSettings = typeof contactSettings.$inferSelect;
 export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
 export type Feedback = typeof feedback.$inferSelect;
+export type InsertGalleryPhoto = z.infer<typeof insertGalleryPhotoSchema>;
+export type GalleryPhoto = typeof galleryPhotos.$inferSelect;
