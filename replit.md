@@ -29,10 +29,11 @@ This is a full-stack web application for an artist portfolio built with React, E
 ## Key Components
 
 ### Data Models
-The application manages four main entities:
+The application manages five main entities:
 - **Users**: Admin authentication system
 - **Artworks**: Core content with images, metadata, and pricing
 - **Exhibitions**: Solo and group exhibition records
+- **Gallery Photos**: Exhibition photos and behind-the-scenes moments
 - **Homepage Settings**: Configurable hero content
 - **Artist Bio**: Biographical information and statements
 
@@ -40,6 +41,7 @@ The application manages four main entities:
 RESTful API endpoints organized by resource:
 - `/api/artworks` - CRUD operations for artwork management
 - `/api/exhibitions` - Exhibition data management
+- `/api/gallery-photos` - Gallery photo management with featured toggle and reordering
 - `/api/homepage-settings` - Homepage configuration
 - `/api/artist-bio` - Artist biography management
 - `/api/health` - System health and data validation
@@ -108,6 +110,7 @@ The application is configured for deployment on Replit with the following setup:
 
 ## Changelog
 
+- November 24, 2025 (Gallery Feature): Added comprehensive exhibition gallery feature with complete backend and frontend implementation. Created new `galleryPhotos` database table with fields for title, image, exhibition name, location, year, featured status, and position ordering. Implemented full CRUD API routes with featured toggle and reorder functionality. Added dedicated Gallery management tab (7th tab) in admin panel with image upload, featured toggle, position reordering (up/down arrows), and delete capabilities. Created public Gallery page (/gallery) displaying all photos in responsive grid with metadata overlay. Added "Behind the Scenes" section to homepage showcasing up to 4 featured gallery photos with "View Full Gallery" button. Updated navigation menu with Gallery link between About and Contact. All features tested end-to-end with successful admin management, public display, and data persistence verification.
 - October 28, 2025 (Global SEO Update): Expanded SEO optimization to target international audiences beyond Armenian-specific searches. Updated meta tags to focus on global keywords: "artist", "contemporary artist", "modern painter", "abstract realism artist", "oil paintings". Changed page title to "Ani Muradyan – Contemporary Abstract Realism Artist | Anymoore Art". Updated meta description to emphasize "serene and emotional abstract realism oil paintings" with global appeal. Enhanced JSON-LD structured data description to "Contemporary abstract realism artist creating serene oil paintings and fine art prints". Updated all image alt attributes from "Armenian abstract realism" to "contemporary abstract realism oil painting" and "fine art print" for prints. Optimized homepage hero badge text to showcase "Contemporary Abstract Realism Artist • Oil Paintings & Fine Art Prints" for better international keyword targeting. These changes enable the portfolio to rank for broader art-related searches worldwide including "contemporary artists", "abstract realism", and "oil paintings".
 - October 28, 2025: Comprehensive SEO optimization implemented for improved Google search rankings. Updated index.html with optimized meta tags targeting "Armenian artist Ani Muradyan" and "Armenian artists" searches. Enhanced title, description, and keywords with Armenian-specific terms. Added Open Graph and Twitter Card meta tags for better social media sharing. Implemented JSON-LD structured data (schema.org/Person) including artist details, nationality (Armenia), WorksFor (Anymoore Art), and social media profiles. Added descriptive alt attributes to all artwork images following format: "{title} by Ani Muradyan – Armenian abstract realism painting/print". Created SEO utility function to dynamically update canonical URLs on all public pages. Implemented dynamic sitemap.xml (/sitemap.xml) and robots.txt (/robots.txt) generation via Express routes, automatically including all artworks and active prints. Fixed heading structure to ensure single h1 per page with proper hierarchical h2/h3 organization for optimal SEO and accessibility.
 - July 23, 2025: Implemented custom HTML/JavaScript feedback widget (blue "Give Feedback" button, bottom-right) replacing the previous React-based version. Widget collects star ratings (1-5) and detailed messages, storing data to PostgreSQL database via `/api/feedback` endpoint. Simplified feedback collection with single, efficient solution for visitor engagement and experience analysis.
