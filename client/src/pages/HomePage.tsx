@@ -17,18 +17,17 @@ export default function HomePage() {
     queryKey: ["/api/homepage-settings"]
   });
 
-  const { data: artworks = [] } = useQuery<Artwork[]>({
+  const { data: artworks = [], isLoading: artworksLoading } = useQuery<Artwork[]>({
     queryKey: ["/api/artworks"]
-  });
-
-  const { data: latestArtwork } = useQuery<Artwork>({
-    queryKey: ["/api/artworks/1"]
   });
 
   const { data: galleryPhotos = [] } = useQuery<GalleryPhoto[]>({
     queryKey: ["/api/gallery-photos"]
   });
 
+  // Get the latest artwork (most recent by ID)
+  const latestArtwork = artworks.length > 0 ? artworks[artworks.length - 1] : null;
+  
   const featuredArtworks = artworks.filter(artwork => artwork.featured).slice(0, 3);
   const featuredGalleryPhotos = galleryPhotos
     .filter(photo => photo.featured)
