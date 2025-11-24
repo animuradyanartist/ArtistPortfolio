@@ -451,16 +451,66 @@ export default function AdminPage() {
     });
   };
 
-  const handleGalleryPhotoImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // Resize if image is too large (max 1920px width)
+          const maxWidth = 1920;
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+          
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Compress to JPEG at 80% quality to ensure small file size
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          
+          // Check if compressed image is still too large (>3MB base64)
+          const sizeInMB = (compressedBase64.length * 3) / 4 / (1024 * 1024);
+          if (sizeInMB > 3) {
+            // Further compress if still too large
+            const furtherCompressed = canvas.toDataURL('image/jpeg', 0.6);
+            resolve(furtherCompressed);
+          } else {
+            resolve(compressedBase64);
+          }
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleGalleryPhotoImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const imageData = reader.result as string;
-        setGalleryPhotoImage(imageData);
-        galleryPhotoForm.setValue('image', imageData);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressedImage = await compressImage(file);
+        setGalleryPhotoImage(compressedImage);
+        galleryPhotoForm.setValue('image', compressedImage);
+      } catch (error) {
+        console.error('Error compressing image:', error);
+        toast({ title: "Failed to process image", variant: "destructive" });
+      }
     }
   };
 
