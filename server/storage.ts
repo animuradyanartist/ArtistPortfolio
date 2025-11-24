@@ -1,4 +1,4 @@
-import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, contactSettings, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback, type ContactSettings, type InsertContactSettings } from "@shared/schema";
+import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, contactSettings, galleryPhotos, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback, type ContactSettings, type InsertContactSettings, type GalleryPhoto, type InsertGalleryPhoto } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -50,6 +50,15 @@ export interface IStorage {
   // Contact Settings
   getContactSettings(): Promise<ContactSettings | undefined>;
   updateContactSettings(settings: InsertContactSettings): Promise<ContactSettings>;
+
+  // Gallery Photos
+  getAllGalleryPhotos(): Promise<GalleryPhoto[]>;
+  getGalleryPhoto(id: number): Promise<GalleryPhoto | undefined>;
+  createGalleryPhoto(photo: InsertGalleryPhoto): Promise<GalleryPhoto>;
+  updateGalleryPhoto(id: number, photo: Partial<InsertGalleryPhoto>): Promise<GalleryPhoto | undefined>;
+  deleteGalleryPhoto(id: number): Promise<boolean>;
+  getFeaturedGalleryPhotos(): Promise<GalleryPhoto[]>;
+  reorderGalleryPhoto(id: number, direction: 'up' | 'down'): Promise<GalleryPhoto[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -61,11 +70,13 @@ export class MemStorage implements IStorage {
   private artistBio: ArtistBio | undefined;
   private contactSettings: ContactSettings | undefined;
   private feedbacks: Map<number, Feedback>;
+  private galleryPhotos: Map<number, GalleryPhoto>;
   private currentUserId: number;
   private currentArtworkId: number;
   private currentPrintId: number;
   private currentExhibitionId: number;
   private currentFeedbackId: number;
+  private currentGalleryPhotoId: number;
 
   constructor() {
     this.users = new Map();
@@ -73,11 +84,13 @@ export class MemStorage implements IStorage {
     this.prints = new Map();
     this.exhibitions = new Map();
     this.feedbacks = new Map();
+    this.galleryPhotos = new Map();
     this.currentUserId = 1;
     this.currentArtworkId = 1;
     this.currentPrintId = 1;
     this.currentExhibitionId = 1;
     this.currentFeedbackId = 1;
+    this.currentGalleryPhotoId = 1;
     
     // Initialize with default homepage settings
     this.homepageSettings = {
@@ -526,6 +539,75 @@ export class MemStorage implements IStorage {
     this.contactSettings = updated;
     return updated;
   }
+
+  // Gallery Photos
+  async getAllGalleryPhotos(): Promise<GalleryPhoto[]> {
+    return Array.from(this.galleryPhotos.values()).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  }
+
+  async getGalleryPhoto(id: number): Promise<GalleryPhoto | undefined> {
+    return this.galleryPhotos.get(id);
+  }
+
+  async createGalleryPhoto(photo: InsertGalleryPhoto): Promise<GalleryPhoto> {
+    const newPhoto: GalleryPhoto = {
+      id: this.currentGalleryPhotoId++,
+      title: photo.title,
+      image: photo.image,
+      exhibitionName: photo.exhibitionName ?? null,
+      location: photo.location ?? null,
+      year: photo.year ?? null,
+      featured: photo.featured ?? false,
+      position: photo.position ?? 0,
+      createdAt: new Date()
+    };
+    this.galleryPhotos.set(newPhoto.id, newPhoto);
+    return newPhoto;
+  }
+
+  async updateGalleryPhoto(id: number, photo: Partial<InsertGalleryPhoto>): Promise<GalleryPhoto | undefined> {
+    const existing = this.galleryPhotos.get(id);
+    if (!existing) return undefined;
+    
+    const updated: GalleryPhoto = {
+      ...existing,
+      ...photo
+    };
+    this.galleryPhotos.set(id, updated);
+    return updated;
+  }
+
+  async deleteGalleryPhoto(id: number): Promise<boolean> {
+    return this.galleryPhotos.delete(id);
+  }
+
+  async getFeaturedGalleryPhotos(): Promise<GalleryPhoto[]> {
+    return Array.from(this.galleryPhotos.values())
+      .filter(photo => photo.featured)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  }
+
+  async reorderGalleryPhoto(id: number, direction: 'up' | 'down'): Promise<GalleryPhoto[]> {
+    const photos = await this.getAllGalleryPhotos();
+    const currentIndex = photos.findIndex(p => p.id === id);
+    
+    if (currentIndex === -1) return photos;
+    
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    
+    if (newIndex < 0 || newIndex >= photos.length) return photos;
+    
+    // Swap positions
+    const temp = photos[currentIndex].position;
+    photos[currentIndex].position = photos[newIndex].position;
+    photos[newIndex].position = temp;
+    
+    // Update in storage
+    this.galleryPhotos.set(photos[currentIndex].id, photos[currentIndex]);
+    this.galleryPhotos.set(photos[newIndex].id, photos[newIndex]);
+    
+    return this.getAllGalleryPhotos();
+  }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -834,6 +916,71 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  // Gallery Photos
+  async getAllGalleryPhotos(): Promise<GalleryPhoto[]> {
+    return await db.select().from(galleryPhotos).orderBy(galleryPhotos.position);
+  }
+
+  async getGalleryPhoto(id: number): Promise<GalleryPhoto | undefined> {
+    const [photo] = await db.select().from(galleryPhotos).where(eq(galleryPhotos.id, id));
+    return photo || undefined;
+  }
+
+  async createGalleryPhoto(photo: InsertGalleryPhoto): Promise<GalleryPhoto> {
+    const [created] = await db
+      .insert(galleryPhotos)
+      .values(photo)
+      .returning();
+    return created;
+  }
+
+  async updateGalleryPhoto(id: number, photo: Partial<InsertGalleryPhoto>): Promise<GalleryPhoto | undefined> {
+    const [updated] = await db
+      .update(galleryPhotos)
+      .set(photo)
+      .where(eq(galleryPhotos.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteGalleryPhoto(id: number): Promise<boolean> {
+    const result = await db.delete(galleryPhotos).where(eq(galleryPhotos.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getFeaturedGalleryPhotos(): Promise<GalleryPhoto[]> {
+    return await db
+      .select()
+      .from(galleryPhotos)
+      .where(eq(galleryPhotos.featured, true))
+      .orderBy(galleryPhotos.position);
+  }
+
+  async reorderGalleryPhoto(id: number, direction: 'up' | 'down'): Promise<GalleryPhoto[]> {
+    const photos = await this.getAllGalleryPhotos();
+    const currentIndex = photos.findIndex(p => p.id === id);
+    
+    if (currentIndex === -1) return photos;
+    
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    
+    if (newIndex < 0 || newIndex >= photos.length) return photos;
+    
+    // Swap positions
+    const tempPosition = photos[currentIndex].position;
+    await db
+      .update(galleryPhotos)
+      .set({ position: photos[newIndex].position })
+      .where(eq(galleryPhotos.id, photos[currentIndex].id));
+    
+    await db
+      .update(galleryPhotos)
+      .set({ position: tempPosition })
+      .where(eq(galleryPhotos.id, photos[newIndex].id));
+    
+    return this.getAllGalleryPhotos();
   }
 }
 
