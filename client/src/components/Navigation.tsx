@@ -12,6 +12,7 @@ export default function Navigation() {
     { name: "Artworks", href: "/artworks" },
     { name: "Prints", href: "/prints" },
     { name: "About", href: "/about" },
+    { name: "Gallery", href: "/gallery" },
     { name: "Contact", href: "/contact" },
   ];
 
