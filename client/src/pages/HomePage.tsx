@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Link } from "wouter";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { Artwork, HomepageSettings, GalleryPhoto } from "@shared/schema";
 import backgroundImage from "@assets/1bg_1750936488071.png";
 import { updateCanonicalUrl } from "@/lib/seo";
@@ -13,6 +14,9 @@ export default function HomePage() {
   useEffect(() => {
     updateCanonicalUrl('/');
   }, []);
+  
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const { data: homepageSettings } = useQuery<HomepageSettings>({
     queryKey: ["/api/homepage-settings"]
   });
@@ -39,6 +43,21 @@ export default function HomePage() {
       window.open(saatchiUrl, '_blank');
     }
   };
+
+  const openLightbox = (index: number) => {
+    setCurrentPhotoIndex(index);
+    setLightboxOpen(true);
+  };
+
+  const nextPhoto = () => {
+    setCurrentPhotoIndex((prev) => (prev + 1) % featuredGalleryPhotos.length);
+  };
+
+  const previousPhoto = () => {
+    setCurrentPhotoIndex((prev) => (prev - 1 + featuredGalleryPhotos.length) % featuredGalleryPhotos.length);
+  };
+
+  const currentPhoto = featuredGalleryPhotos[currentPhotoIndex];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
@@ -254,16 +273,17 @@ export default function HomePage() {
               {featuredGalleryPhotos.map((photo, index) => (
                 <div 
                   key={photo.id} 
-                  className="group relative animate-fadeIn"
+                  className="group relative animate-fadeIn cursor-pointer"
                   style={{ animationDelay: `${index * 100}ms` }}
+                  onClick={() => openLightbox(index)}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-0 group-hover:opacity-20 transition-opacity duration-500"></div>
                   <div className="relative bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden hover:shadow-2xl transition-all duration-500 transform group-hover:scale-105">
-                    <div className="aspect-square overflow-hidden">
+                    <div className="aspect-square overflow-hidden bg-slate-100 flex items-center justify-center">
                       <img
                         src={photo.image}
                         alt={`${photo.title || 'Exhibition photo'} by Ani Muradyan – contemporary abstract realism exhibition photo`}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-110"
                         loading="lazy"
                         data-testid={`img-homepage-gallery-${photo.id}`}
                       />
@@ -291,6 +311,80 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Lightbox Dialog */}
+      {featuredGalleryPhotos.length > 0 && (
+        <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
+          <DialogContent className="max-w-7xl w-full h-[90vh] p-0 bg-black/95 border-none">
+            <div className="relative w-full h-full flex items-center justify-center">
+              {/* Close Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-4 right-4 z-50 text-white hover:bg-white/20 rounded-full"
+                onClick={() => setLightboxOpen(false)}
+              >
+                <X className="w-6 h-6" />
+              </Button>
+
+              {/* Previous Button */}
+              {featuredGalleryPhotos.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute left-4 z-50 text-white hover:bg-white/20 rounded-full w-12 h-12"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    previousPhoto();
+                  }}
+                >
+                  <ChevronLeft className="w-8 h-8" />
+                </Button>
+              )}
+
+              {/* Photo */}
+              {currentPhoto && (
+                <div className="w-full h-full flex items-center justify-center p-4">
+                  <img
+                    src={currentPhoto.image}
+                    alt={currentPhoto.title || 'Exhibition photo'}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+              )}
+
+              {/* Next Button */}
+              {featuredGalleryPhotos.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-4 z-50 text-white hover:bg-white/20 rounded-full w-12 h-12"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    nextPhoto();
+                  }}
+                >
+                  <ChevronRight className="w-8 h-8" />
+                </Button>
+              )}
+
+              {/* Photo Info */}
+              {currentPhoto && (currentPhoto.title || currentPhoto.exhibitionName || currentPhoto.location || currentPhoto.year) && (
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8">
+                  {currentPhoto.title && (
+                    <h3 className="text-2xl font-semibold text-white mb-2">{currentPhoto.title}</h3>
+                  )}
+                  <div className="flex flex-wrap gap-4 text-sm text-white/80">
+                    {currentPhoto.exhibitionName && <span>{currentPhoto.exhibitionName}</span>}
+                    {currentPhoto.location && <span>{currentPhoto.location}</span>}
+                    {currentPhoto.year && <span>{currentPhoto.year}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Footer */}
