@@ -461,11 +461,16 @@ export default function AdminPage() {
           let width = img.width;
           let height = img.height;
           
-          // Resize if image is too large (max 1920px width)
-          const maxWidth = 1920;
-          if (width > maxWidth) {
-            height = (height * maxWidth) / width;
-            width = maxWidth;
+          // Resize if image is too large (max 1920px on longest side)
+          const maxDimension = 1920;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = (height * maxDimension) / width;
+              width = maxDimension;
+            } else {
+              width = (width * maxDimension) / height;
+              height = maxDimension;
+            }
           }
           
           canvas.width = width;
@@ -479,18 +484,26 @@ export default function AdminPage() {
           
           ctx.drawImage(img, 0, 0, width, height);
           
-          // Compress to JPEG at 80% quality to ensure small file size
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          // Try compressing at different quality levels until under 2.5MB
+          const targetSizeMB = 2.5; // Leave headroom under 5MB limit
+          let quality = 0.8;
+          let compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          let sizeInMB = (compressedBase64.length * 3) / 4 / (1024 * 1024);
           
-          // Check if compressed image is still too large (>3MB base64)
-          const sizeInMB = (compressedBase64.length * 3) / 4 / (1024 * 1024);
-          if (sizeInMB > 3) {
-            // Further compress if still too large
-            const furtherCompressed = canvas.toDataURL('image/jpeg', 0.6);
-            resolve(furtherCompressed);
-          } else {
-            resolve(compressedBase64);
+          // Iteratively reduce quality if needed
+          while (sizeInMB > targetSizeMB && quality > 0.3) {
+            quality -= 0.1;
+            compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+            sizeInMB = (compressedBase64.length * 3) / 4 / (1024 * 1024);
           }
+          
+          // If still too large after aggressive compression, reject
+          if (sizeInMB > targetSizeMB) {
+            reject(new Error(`Image is too large (${sizeInMB.toFixed(2)}MB). Please use a smaller image.`));
+            return;
+          }
+          
+          resolve(compressedBase64);
         };
         img.onerror = () => reject(new Error('Failed to load image'));
         img.src = e.target?.result as string;
