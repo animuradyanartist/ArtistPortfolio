@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import { storage } from "./storage";
-import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, prints } from "@shared/schema";
+import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, prints } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
@@ -671,6 +671,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating contact settings:", error);
       res.status(500).json({ message: "Failed to update contact settings" });
+    }
+  });
+
+  // Gallery Photos routes
+  app.get("/api/gallery-photos", async (req, res) => {
+    try {
+      const photos = await storage.getAllGalleryPhotos();
+      res.json(photos);
+    } catch (error) {
+      console.error("Error fetching gallery photos:", error);
+      res.status(500).json({ message: "Failed to fetch gallery photos" });
+    }
+  });
+
+  app.get("/api/gallery-photos/featured", async (req, res) => {
+    try {
+      const photos = await storage.getFeaturedGalleryPhotos();
+      res.json(photos);
+    } catch (error) {
+      console.error("Error fetching featured gallery photos:", error);
+      res.status(500).json({ message: "Failed to fetch featured gallery photos" });
+    }
+  });
+
+  app.get("/api/gallery-photos/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const photo = await storage.getGalleryPhoto(id);
+      
+      if (!photo) {
+        return res.status(404).json({ message: "Gallery photo not found" });
+      }
+      
+      res.json(photo);
+    } catch (error) {
+      console.error("Error fetching gallery photo:", error);
+      res.status(500).json({ message: "Failed to fetch gallery photo" });
+    }
+  });
+
+  app.post("/api/gallery-photos", requireAdminAuth, async (req, res) => {
+    try {
+      const validated = insertGalleryPhotoSchema.parse(req.body);
+      const created = await storage.createGalleryPhoto(validated);
+      res.json(created);
+    } catch (error) {
+      console.error("Error creating gallery photo:", error);
+      res.status(500).json({ message: "Failed to create gallery photo" });
+    }
+  });
+
+  app.patch("/api/gallery-photos/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updated = await storage.updateGalleryPhoto(id, req.body);
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Gallery photo not found" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating gallery photo:", error);
+      res.status(500).json({ message: "Failed to update gallery photo" });
+    }
+  });
+
+  app.delete("/api/gallery-photos/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteGalleryPhoto(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Gallery photo not found" });
+      }
+      
+      res.json({ message: "Gallery photo deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting gallery photo:", error);
+      res.status(500).json({ message: "Failed to delete gallery photo" });
+    }
+  });
+
+  app.post("/api/gallery-photos/:id/reorder", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { direction } = req.body;
+      
+      if (!direction || !['up', 'down'].includes(direction)) {
+        return res.status(400).json({ message: "Invalid direction" });
+      }
+      
+      const photos = await storage.reorderGalleryPhoto(id, direction);
+      res.json(photos);
+    } catch (error) {
+      console.error("Error reordering gallery photo:", error);
+      res.status(500).json({ message: "Failed to reorder gallery photo" });
     }
   });
 
