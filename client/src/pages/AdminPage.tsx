@@ -456,7 +456,9 @@ export default function AdminPage() {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setGalleryPhotoImage(reader.result as string);
+        const imageData = reader.result as string;
+        setGalleryPhotoImage(imageData);
+        galleryPhotoForm.setValue('image', imageData);
       };
       reader.readAsDataURL(file);
     }
