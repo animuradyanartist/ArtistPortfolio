@@ -80,11 +80,11 @@ export default function GalleryPage() {
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-0 group-hover:opacity-20 transition-opacity duration-500"></div>
                 <div className="relative bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden hover:shadow-2xl transition-all duration-500 transform group-hover:scale-105">
-                  <div className="aspect-[4/3] overflow-hidden bg-slate-100 flex items-center justify-center">
+                  <div className="aspect-[4/3] overflow-hidden">
                     <img
                       src={photo.image}
                       alt={`${photo.title || 'Exhibition photo'} by Ani Muradyan – contemporary abstract realism exhibition photo`}
-                      className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-110"
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                       loading="lazy"
                       data-testid={`img-gallery-${photo.id}`}
                     />
