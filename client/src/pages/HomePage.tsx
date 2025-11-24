@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { ExternalLink } from "lucide-react";
-import type { Artwork, HomepageSettings } from "@shared/schema";
+import type { Artwork, HomepageSettings, GalleryPhoto } from "@shared/schema";
 import backgroundImage from "@assets/1bg_1750936488071.png";
 import { updateCanonicalUrl } from "@/lib/seo";
 
@@ -25,7 +25,15 @@ export default function HomePage() {
     queryKey: ["/api/artworks/1"]
   });
 
+  const { data: galleryPhotos = [] } = useQuery<GalleryPhoto[]>({
+    queryKey: ["/api/gallery-photos"]
+  });
+
   const featuredArtworks = artworks.filter(artwork => artwork.featured).slice(0, 3);
+  const featuredGalleryPhotos = galleryPhotos
+    .filter(photo => photo.featured)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .slice(0, 4);
 
   const handleBuyNow = (saatchiUrl?: string) => {
     if (saatchiUrl) {
@@ -226,6 +234,63 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Gallery Section */}
+      {featuredGalleryPhotos.length > 0 && (
+        <div className="py-24 bg-gradient-to-br from-slate-50 to-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-20">
+              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-6">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                Exhibition Gallery
+              </div>
+              <h2 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6">
+                Behind the Scenes
+              </h2>
+              <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
+                Glimpses from exhibitions and special moments in the artistic journey.
+              </p>
+            </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {featuredGalleryPhotos.map((photo, index) => (
+                <div 
+                  key={photo.id} 
+                  className="group relative animate-fadeIn"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-0 group-hover:opacity-20 transition-opacity duration-500"></div>
+                  <div className="relative bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden hover:shadow-2xl transition-all duration-500 transform group-hover:scale-105">
+                    <div className="aspect-square overflow-hidden">
+                      <img
+                        src={photo.image}
+                        alt={`${photo.title} by Ani Muradyan – contemporary abstract realism exhibition photo`}
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        loading="lazy"
+                        data-testid={`img-homepage-gallery-${photo.id}`}
+                      />
+                    </div>
+                    <div className="p-4">
+                      <h3 className="text-sm font-semibold text-slate-900 line-clamp-2">
+                        {photo.title}
+                      </h3>
+                      {photo.year && (
+                        <p className="text-xs text-slate-600 mt-1">{photo.year}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="text-center mt-16">
+              <Link href="/gallery">
+                <Button className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg">
+                  <span className="text-lg">View Full Gallery</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="bg-black text-white py-12">
