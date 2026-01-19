@@ -109,6 +109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/artworks", async (req, res) => {
     try {
       const artworks = await storage.getAllArtworks();
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       res.json(artworks);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch artworks" });
@@ -122,6 +123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!artwork) {
         return res.status(404).json({ message: "Artwork not found" });
       }
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       res.json(artwork);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch artwork" });
@@ -247,7 +249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hasImages: print.hasImages
       }));
       
-      
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       res.json(transformedPrints);
     } catch (error) {
       console.error('Error fetching prints:', error);
@@ -262,6 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!print) {
         return res.status(404).json({ message: "Print not found" });
       }
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       res.json(print);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch print" });
@@ -515,6 +518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/homepage-settings", async (req, res) => {
     try {
       const settings = await storage.getHomepageSettings();
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       res.json(settings);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch homepage settings" });
@@ -535,6 +539,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/artist-bio", async (req, res) => {
     try {
       const bio = await storage.getArtistBio();
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       res.json(bio);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch artist bio" });
@@ -678,6 +683,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/gallery-photos", async (req, res) => {
     try {
       const photos = await storage.getAllGalleryPhotos();
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       res.json(photos);
     } catch (error) {
       console.error("Error fetching gallery photos:", error);

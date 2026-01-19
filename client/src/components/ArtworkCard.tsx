@@ -59,6 +59,7 @@ export default function ArtworkCard({ artwork, onViewDetails }: ArtworkCardProps
                 imageLoaded ? 'opacity-100' : 'opacity-0'
               } group-hover:brightness-110 group-hover:contrast-105`}
               onLoad={() => setImageLoaded(true)}
+              loading="lazy"
             />
           </div>
           

@@ -98,6 +98,7 @@ export default function ArtworkDetailPage() {
                   alt={`${artwork.title} by Ani Muradyan – contemporary abstract realism oil painting`}
                   className="w-full rounded-lg shadow-xl object-cover aspect-[3/4]"
                   data-testid={`img-artwork-main-${artworkId}`}
+                  loading="lazy"
                 />
               ) : (
                 <div className="w-full rounded-lg shadow-xl bg-gray-200 aspect-[3/4] flex items-center justify-center">
@@ -147,6 +148,7 @@ export default function ArtworkDetailPage() {
                       src={image}
                       alt={`${artwork.title} by Ani Muradyan – contemporary abstract realism oil painting (view ${index + 1})`}
                       className="w-full h-full object-cover"
+                      loading="lazy"
                     />
                   </button>
                 ))}

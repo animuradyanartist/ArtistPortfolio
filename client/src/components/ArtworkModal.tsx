@@ -67,6 +67,7 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                     src={artwork.images[currentImageIndex]} 
                     alt={`${artwork.title} - Image ${currentImageIndex + 1}`}
                     className="w-full rounded-lg shadow-lg object-cover aspect-[3/4]"
+                    loading="lazy"
                   />
                   
                   {artwork.images.length > 1 && (
@@ -114,6 +115,7 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                           src={image} 
                           alt={`${artwork.title} thumbnail ${index + 1}`}
                           className="w-full h-16 object-cover"
+                          loading="lazy"
                         />
                       </button>
                     ))}

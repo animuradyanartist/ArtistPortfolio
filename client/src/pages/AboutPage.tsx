@@ -83,6 +83,7 @@ export default function AboutPage() {
                   src={artistBio?.image || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800"} 
                   alt="Ani Muradyan artist portrait" 
                   className="relative w-full max-w-lg mx-auto rounded-3xl shadow-2xl aspect-[3/4] object-cover border border-slate-200/50 transform group-hover:scale-105 transition-transform duration-700"
+                  loading="lazy"
                   onError={(e) => {
                     e.currentTarget.src = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800";
                   }}

@@ -153,6 +153,7 @@ export default function HomePage() {
                     src={artwork.images[0]} 
                     alt={`${artwork.title} by Ani Muradyan – contemporary abstract realism oil painting`}
                     className="w-full h-full object-cover"
+                    loading="lazy"
                   />
                 </div>
                 <div className="p-6">
