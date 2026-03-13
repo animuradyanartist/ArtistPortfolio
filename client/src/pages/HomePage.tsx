@@ -123,7 +123,7 @@ export default function HomePage() {
         </div>
       </div>
       {/* Artist Introduction Section */}
-      <div className="py-24 bg-white">
+      <div className="py-24 bg-white text-[14px]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="prose prose-lg max-w-none text-slate-700 leading-relaxed space-y-6">
             <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-8 text-center">
