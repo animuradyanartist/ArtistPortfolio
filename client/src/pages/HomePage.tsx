@@ -132,7 +132,7 @@ export default function HomePage() {
             <p className="text-[14px]">
               Ani Muradyan is a contemporary Armenian artist whose practice bridges the worlds of abstraction and figurative art. Born and raised in Yerevan, Armenia, she developed a deep affinity for painting at an early age, drawn to the way color and form can convey what words often cannot. Her work sits at the crossroads of abstract realism — a style that retains the emotional truth of the subject while dissolving the boundaries of literal representation.
             </p>
-            <p>
+            <p className="text-[14px]">
               Working primarily in oil on canvas, Ani builds her paintings through layered brushwork and a rich, intuitive palette. Each piece begins with observation — a face, a gesture, a fleeting light — and gradually transforms into something more internal. The resulting works feel simultaneously familiar and mysterious, grounded in reality yet reaching toward something beyond it. Her abstract portrait paintings have been described as windows into inner landscapes, where the viewer is invited to project their own emotion and memory onto the canvas.
             </p>
             <p>
