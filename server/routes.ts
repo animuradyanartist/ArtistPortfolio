@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
+import fs from "fs";
+import sharp from "sharp";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, prints } from "@shared/schema";
 import { db } from "./db";
@@ -118,8 +120,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/artworks/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const artwork = await storage.getArtwork(id);
+      const param = req.params.id;
+      const isNumeric = /^\d+$/.test(param);
+      let artwork;
+      if (isNumeric) {
+        artwork = await storage.getArtwork(parseInt(param));
+      } else {
+        const allArtworks = await storage.getAllArtworks();
+        artwork = allArtworks.find(a => (a.slug || toSlug(a.title)) === param);
+      }
       if (!artwork) {
         return res.status(404).json({ message: "Artwork not found" });
       }
@@ -134,7 +143,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertArtworkSchema.parse(req.body);
       
-      // Validate images array
       if (validatedData.images && validatedData.images.length > 0) {
         for (const image of validatedData.images) {
           if (!image.startsWith('data:image/') && !image.startsWith('http')) {
@@ -142,10 +150,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
+
+      const artworkData = {
+        ...validatedData,
+        slug: validatedData.slug || toSlug(validatedData.title),
+      };
       
-      const artwork = await storage.createArtwork(validatedData);
+      const artwork = await storage.createArtwork(artworkData);
       
-      // Verify the artwork was created with images
       if (artwork.images.length !== validatedData.images.length) {
         console.warn('Image count mismatch after creation');
       }
@@ -259,8 +271,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/prints/:id", async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const print = await storage.getPrint(id);
+      const param = req.params.id;
+      const isNumeric = /^\d+$/.test(param);
+      let print;
+      if (isNumeric) {
+        print = await storage.getPrint(parseInt(param));
+      } else {
+        const allPrints = await storage.getAllPrints();
+        print = allPrints.find(p => (p.slug || toSlug(p.title)) === param);
+      }
       if (!print) {
         return res.status(404).json({ message: "Print not found" });
       }
@@ -383,7 +402,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertPrintSchema.parse(req.body);
       
-      // Validate images array
       if (validatedData.images && validatedData.images.length > 0) {
         for (const image of validatedData.images) {
           if (!image.startsWith('data:image/') && !image.startsWith('http')) {
@@ -391,8 +409,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
+
+      const printData = {
+        ...validatedData,
+        slug: validatedData.slug || toSlug(validatedData.title),
+      };
       
-      const print = await storage.createPrint(validatedData);
+      const print = await storage.createPrint(printData);
       res.status(201).json(print);
     } catch (error) {
       console.error('Print creation error:', error);
@@ -556,16 +579,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // File upload route
   app.post("/api/upload", requireAdminAuth, upload.single('image'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
-      
-      // Return the relative path for use in the frontend
-      const imagePath = `/uploads/${req.file.filename}`;
-      res.json({ imagePath });
+
+      const originalPath = req.file.path;
+      const ext = path.extname(req.file.filename).toLowerCase();
+      const titleHint = (req.body.title || '').trim();
+      const baseSlug = titleHint
+        ? toSlug(titleHint) + '-' + Date.now()
+        : req.file.filename.replace(/\.[^.]+$/, '');
+
+      if (['.jpg', '.jpeg', '.png', '.tiff', '.bmp'].includes(ext)) {
+        const webpFilename = `${baseSlug}.webp`;
+        const webpPath = path.join('public/uploads/', webpFilename);
+        try {
+          await sharp(originalPath)
+            .webp({ quality: 82 })
+            .toFile(webpPath);
+          fs.unlinkSync(originalPath);
+          return res.json({ imagePath: `/uploads/${webpFilename}` });
+        } catch (sharpError) {
+          console.error("WebP conversion failed, serving original:", sharpError);
+          return res.json({ imagePath: `/uploads/${req.file.filename}` });
+        }
+      }
+
+      res.json({ imagePath: `/uploads/${req.file.filename}` });
     } catch (error) {
       res.status(500).json({ message: "Failed to upload image", error });
     }
@@ -777,6 +819,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Slug helper
+  function toSlug(title: string): string {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+
   // SEO Routes
   const SEO_BASE_URL = 'https://anymoore.am';
 
@@ -784,12 +836,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader('Content-Type', 'text/plain');
     res.send(`User-agent: *
 Allow: /
+Allow: /about
+Allow: /artworks
+Allow: /artworks/*
+Allow: /prints
+Allow: /prints/*
+Allow: /gallery
+Allow: /exhibitions
+Allow: /contact
+
+Disallow: /admin
+Disallow: /api
+
 Sitemap: ${SEO_BASE_URL}/sitemap.xml
 Sitemap: ${SEO_BASE_URL}/image-sitemap.xml
 
-# Disallow admin pages from indexing
-User-agent: *
-Disallow: /admin
+Crawl-delay: 1
 `);
   });
 
@@ -797,13 +859,15 @@ Disallow: /admin
     try {
       const artworks = await storage.getAllArtworks();
       const prints = await storage.getAllPrints();
+      const today = new Date().toISOString().split('T')[0];
       
       const staticPages = [
         { url: '/', priority: '1.0', changefreq: 'weekly' },
         { url: '/about', priority: '0.8', changefreq: 'monthly' },
         { url: '/artworks', priority: '0.9', changefreq: 'weekly' },
-        { url: '/gallery', priority: '0.8', changefreq: 'weekly' },
         { url: '/prints', priority: '0.9', changefreq: 'weekly' },
+        { url: '/exhibitions', priority: '0.8', changefreq: 'monthly' },
+        { url: '/gallery', priority: '0.8', changefreq: 'monthly' },
         { url: '/contact', priority: '0.7', changefreq: 'monthly' }
       ];
       
@@ -813,14 +877,17 @@ Disallow: /admin
       staticPages.forEach(page => {
         xml += '  <url>\n';
         xml += `    <loc>${SEO_BASE_URL}${page.url}</loc>\n`;
+        xml += `    <lastmod>${today}</lastmod>\n`;
         xml += `    <changefreq>${page.changefreq}</changefreq>\n`;
         xml += `    <priority>${page.priority}</priority>\n`;
         xml += '  </url>\n';
       });
       
       artworks.forEach(artwork => {
+        const slug = artwork.slug || toSlug(artwork.title);
         xml += '  <url>\n';
-        xml += `    <loc>${SEO_BASE_URL}/artworks/${artwork.id}</loc>\n`;
+        xml += `    <loc>${SEO_BASE_URL}/artworks/${slug}</loc>\n`;
+        xml += `    <lastmod>${today}</lastmod>\n`;
         xml += '    <changefreq>monthly</changefreq>\n';
         xml += '    <priority>0.8</priority>\n';
         xml += '  </url>\n';
@@ -828,8 +895,10 @@ Disallow: /admin
       
       const activePrints = prints.filter(print => print.status === 'active');
       activePrints.forEach(print => {
+        const slug = print.slug || toSlug(print.title);
         xml += '  <url>\n';
-        xml += `    <loc>${SEO_BASE_URL}/prints/${print.id}</loc>\n`;
+        xml += `    <loc>${SEO_BASE_URL}/prints/${slug}</loc>\n`;
+        xml += `    <lastmod>${today}</lastmod>\n`;
         xml += '    <changefreq>monthly</changefreq>\n';
         xml += '    <priority>0.8</priority>\n';
         xml += '  </url>\n';

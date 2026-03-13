@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Images } from "lucide-react";
 import type { Artwork } from "@shared/schema";
+import { generateArtworkAlt } from "@/lib/seo";
 
 interface ArtworkCardProps {
   artwork: Artwork;
@@ -54,8 +55,7 @@ export default function ArtworkCard({ artwork, onViewDetails }: ArtworkCardProps
           <div className="absolute inset-0 transform transition-transform duration-700 ease-out group-hover:scale-110">
             <img 
               src={artwork.images[0]} 
-              alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title}`}
-              title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
+              alt={generateArtworkAlt(artwork.title, artwork.medium)}
               className={`w-full h-full object-cover transition-all duration-500 ${
                 imageLoaded ? 'opacity-100' : 'opacity-0'
               } group-hover:brightness-110 group-hover:contrast-105`}

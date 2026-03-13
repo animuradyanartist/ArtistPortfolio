@@ -15,6 +15,18 @@ export function updateCanonicalUrl(path: string) {
   }
 }
 
+export function updateMetaDescription(description: string) {
+  let meta = document.querySelector("meta[name='description']") as HTMLMetaElement;
+  if (meta) {
+    meta.content = description;
+  } else {
+    meta = document.createElement('meta');
+    meta.name = 'description';
+    meta.content = description;
+    document.head.appendChild(meta);
+  }
+}
+
 export function injectJsonLd(id: string, data: object) {
   let script = document.getElementById(id) as HTMLScriptElement | null;
   if (!script) {
@@ -29,4 +41,20 @@ export function injectJsonLd(id: string, data: object) {
 export function removeJsonLd(id: string) {
   const script = document.getElementById(id);
   if (script) script.remove();
+}
+
+export function toSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+export function generateArtworkAlt(title: string, medium?: string): string {
+  const base = medium
+    ? `${title} – ${medium} by Armenian artist Ani Muradyan`
+    : `${title} – original painting by Armenian artist Ani Muradyan`;
+  return base;
 }

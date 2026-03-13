@@ -8,10 +8,11 @@ import { Link } from "wouter";
 import { ExternalLink, ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { Artwork, HomepageSettings, GalleryPhoto } from "@shared/schema";
 import backgroundImage from "@assets/1bg_1750936488071.png";
-import { updateCanonicalUrl } from "@/lib/seo";
+import { updateCanonicalUrl, toSlug, generateArtworkAlt } from "@/lib/seo";
 
 export default function HomePage() {
   useEffect(() => {
+    document.title = "Ani Muradyan – Contemporary Armenian Artist | Abstract Realism Paintings";
     updateCanonicalUrl('/');
   }, []);
   
@@ -29,7 +30,6 @@ export default function HomePage() {
     queryKey: ["/api/gallery-photos"]
   });
 
-  // Get the latest artwork (most recent by ID)
   const latestArtwork = artworks.length > 0 ? artworks[artworks.length - 1] : null;
   
   const featuredArtworks = artworks.filter(artwork => artwork.featured).slice(0, 3);
@@ -63,7 +63,6 @@ export default function HomePage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       {/* Hero Section */}
       <div className="relative h-screen overflow-hidden">
-        {/* Animated Background */}
         <div 
           className="absolute inset-0 bg-cover bg-center transform scale-105 animate-float"
           style={{
@@ -71,11 +70,9 @@ export default function HomePage() {
           }}
         />
         
-        {/* Gradient Overlays */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-900/50 to-slate-900/70" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent" />
         
-        {/* Animated Particles */}
         <div className="absolute inset-0">
           <div className="absolute top-20 left-20 w-2 h-2 bg-white/20 rounded-full animate-pulse"></div>
           <div className="absolute top-40 right-32 w-1 h-1 bg-blue-400/30 rounded-full animate-pulse animation-delay-200"></div>
@@ -92,7 +89,7 @@ export default function HomePage() {
               </div>
               
               <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">
-                Ani Muradyan
+                Contemporary Armenian Artist – Ani Muradyan
               </h1>
               
               <blockquote className="text-2xl md:text-4xl lg:text-5xl italic mb-16 text-slate-200 font-light leading-relaxed max-w-5xl text-center animate-slideUp animation-delay-200">
@@ -117,7 +114,6 @@ export default function HomePage() {
             </div>
           </div>
           
-          {/* Scroll Indicator */}
           <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-fadeIn animation-delay-600">
             <div className="flex flex-col items-center gap-2">
               <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center">
@@ -129,9 +125,31 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Artist Introduction Section */}
+      <div className="py-24 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="prose prose-lg max-w-none text-slate-700 leading-relaxed space-y-6">
+            <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-8 text-center">
+              Abstract Realism Paintings
+            </h2>
+            <p>
+              Ani Muradyan is a contemporary Armenian artist whose practice bridges the worlds of abstraction and figurative art. Born and raised in Yerevan, Armenia, she developed a deep affinity for painting at an early age, drawn to the way color and form can convey what words often cannot. Her work sits at the crossroads of abstract realism — a style that retains the emotional truth of the subject while dissolving the boundaries of literal representation.
+            </p>
+            <p>
+              Working primarily in oil on canvas, Ani builds her paintings through layered brushwork and a rich, intuitive palette. Each piece begins with observation — a face, a gesture, a fleeting light — and gradually transforms into something more internal. The resulting works feel simultaneously familiar and mysterious, grounded in reality yet reaching toward something beyond it. Her abstract portrait paintings have been described as windows into inner landscapes, where the viewer is invited to project their own emotion and memory onto the canvas.
+            </p>
+            <p>
+              Ani's artistic philosophy is rooted in a belief that art should carry hope. She paints not to escape the world, but to look at it more carefully — to find beauty in quiet moments, resilience in human expression, and meaning in the everyday. This intentional warmth runs through every brushstroke, making her original oil paintings feel both contemplative and alive. Whether depicting a solitary figure or an abstract field of color, the emotional register of her work is always deeply personal, yet universally resonant.
+            </p>
+            <p>
+              Over the past several years, Ani has exhibited her work in solo and group shows across Armenia, Europe, and online platforms such as Saatchi Art and Singulart. Her paintings have found homes in private collections around the world, and her growing reputation as an Armenian contemporary artist reflects both the quality of her craft and the sincerity of her vision. She continues to paint from her studio in Yerevan, where the light and landscape of the Caucasus inform her work in subtle but unmistakable ways.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Featured Works Section */}
-      <div className="py-24 bg-white">
+      <div className="py-24 bg-gradient-to-br from-slate-50 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-20">
             <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-6">
@@ -139,56 +157,74 @@ export default function HomePage() {
               Featured Works
             </div>
             <h2 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6">
-              Curated Selection
+              Available Artworks
             </h2>
             <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
-              A curated selection of pieces that represent the essence of my artistic journey.
+              A curated selection of original oil paintings available for purchase, each piece telling its own story through color, texture, and emotion.
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             {featuredArtworks.map((artwork) => (
-              <div key={artwork.id} className="bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
-                <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200">
-                  <img 
-                    src={artwork.images[0]} 
-                    alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title}`}
-                    title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                </div>
-                <div className="p-6">
-                  <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                    {artwork.title}
-                  </h3>
-                  <p className="text-slate-600 text-sm mb-4">
-                    {artwork.medium}, {artwork.dimensions}
-                  </p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-2xl font-bold text-slate-900">
-                      ${artwork.price.toLocaleString()}
-                    </span>
-                    <Badge 
-                      variant={artwork.availability === 'available' ? 'default' : 'destructive'}
-                      className={artwork.availability === 'available' 
-                        ? 'bg-green-100 text-green-800 hover:bg-green-100' 
-                        : 'bg-red-100 text-red-800 hover:bg-red-100'
-                      }
-                    >
-                      {artwork.availability === 'available' ? 'Available' : 'Sold'}
-                    </Badge>
+              <Link key={artwork.id} href={`/artworks/${toSlug(artwork.title)}`}>
+                <div className="bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden hover:shadow-2xl transition-all duration-300 transform hover:scale-105 cursor-pointer">
+                  <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200">
+                    <img 
+                      src={artwork.images[0]} 
+                      alt={generateArtworkAlt(artwork.title, artwork.medium)}
+                      title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="p-6">
+                    <h3 className="text-2xl font-bold text-slate-900 mb-2">
+                      {artwork.title}
+                    </h3>
+                    <p className="text-slate-600 text-sm mb-4">
+                      {artwork.medium}, {artwork.dimensions}
+                    </p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-2xl font-bold text-slate-900">
+                        ${artwork.price.toLocaleString()}
+                      </span>
+                      <Badge 
+                        variant={artwork.availability === 'available' ? 'default' : 'destructive'}
+                        className={artwork.availability === 'available' 
+                          ? 'bg-green-100 text-green-800 hover:bg-green-100' 
+                          : 'bg-red-100 text-red-800 hover:bg-red-100'}
+                      >
+                        {artwork.availability === 'available' ? 'Available' : 'Sold'}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
           <div className="text-center mt-16">
             <Link href="/artworks">
               <Button className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg">
-                <span className="text-lg">View All Artworks</span>
+                <span className="text-lg">Browse all original artworks for sale</span>
               </Button>
             </Link>
           </div>
+        </div>
+      </div>
+
+      {/* Exhibitions Section */}
+      <div className="py-24 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6">
+            Exhibitions
+          </h2>
+          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed mb-10">
+            Ani Muradyan's abstract realism paintings have been exhibited in solo and group shows across Armenia and internationally. Her work continues to reach new audiences through galleries, art fairs, and curated online platforms.
+          </p>
+          <Link href="/exhibitions">
+            <Button className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg">
+              <span className="text-lg">View exhibition history</span>
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -221,7 +257,7 @@ export default function HomePage() {
                     <div className="aspect-square overflow-hidden">
                       <img
                         src={photo.image}
-                        alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${photo.title || 'Exhibition photo'}`}
+                        alt={`${photo.title || 'Exhibition photo'} – Ani Muradyan contemporary art exhibition${photo.location ? ' at ' + photo.location : ''}`}
                         title={`Abstract realism portrait painting – ${photo.title || 'Exhibition gallery'} – Ani Muradyan`}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                         loading="lazy"
@@ -258,7 +294,6 @@ export default function HomePage() {
         <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
           <DialogContent className="w-[800px] h-[500px] p-0 bg-black/95 border-none">
             <div className="relative w-full h-full flex items-center justify-center">
-              {/* Close Button */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -268,7 +303,6 @@ export default function HomePage() {
                 <X className="w-6 h-6" />
               </Button>
 
-              {/* Previous Button */}
               {featuredGalleryPhotos.length > 1 && (
                 <Button
                   variant="ghost"
@@ -283,19 +317,17 @@ export default function HomePage() {
                 </Button>
               )}
 
-              {/* Photo */}
               {currentPhoto && (
                 <div className="w-full h-full flex items-center justify-center p-4">
                   <img
                     src={currentPhoto.image}
-                    alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${currentPhoto.title || 'Exhibition photo'}`}
+                    alt={`${currentPhoto.title || 'Exhibition photo'} – Ani Muradyan art exhibition`}
                     title={`Abstract realism portrait painting – ${currentPhoto.title || 'Exhibition gallery'} – Ani Muradyan`}
                     className="max-w-full max-h-full object-contain"
                   />
                 </div>
               )}
 
-              {/* Next Button */}
               {featuredGalleryPhotos.length > 1 && (
                 <Button
                   variant="ghost"
@@ -310,7 +342,6 @@ export default function HomePage() {
                 </Button>
               )}
 
-              {/* Photo Info */}
               {currentPhoto && (currentPhoto.title || currentPhoto.exhibitionName || currentPhoto.location || currentPhoto.year) && (
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8">
                   {currentPhoto.title && (
@@ -335,16 +366,18 @@ export default function HomePage() {
             <div>
               <h3 className="font-playfair text-xl font-semibold mb-4">Ani Muradyan</h3>
               <p className="text-gray-300 text-sm">
-                Abstract Realism Artist from Armenia, creating works that bring hope and emotion into people's lives.
+                Armenian contemporary artist creating original abstract realism oil paintings that bring hope and emotion into people's lives.
               </p>
             </div>
             <div>
               <h4 className="font-semibold mb-4">Quick Links</h4>
               <ul className="space-y-2 text-sm">
                 <li><Link href="/" className="text-gray-300 hover:text-white transition-colors duration-300">Home</Link></li>
-                <li><Link href="/artworks" className="text-gray-300 hover:text-white transition-colors duration-300">Artworks</Link></li>
-                <li><Link href="/about" className="text-gray-300 hover:text-white transition-colors duration-300">About</Link></li>
+                <li><Link href="/artworks" className="text-gray-300 hover:text-white transition-colors duration-300">Original Artworks</Link></li>
+                <li><Link href="/prints" className="text-gray-300 hover:text-white transition-colors duration-300">Art Prints</Link></li>
+                <li><Link href="/about" className="text-gray-300 hover:text-white transition-colors duration-300">About the Artist</Link></li>
                 <li><Link href="/exhibitions" className="text-gray-300 hover:text-white transition-colors duration-300">Exhibitions</Link></li>
+                <li><Link href="/gallery" className="text-gray-300 hover:text-white transition-colors duration-300">Gallery</Link></li>
                 <li><Link href="/contact" className="text-gray-300 hover:text-white transition-colors duration-300">Contact</Link></li>
               </ul>
             </div>

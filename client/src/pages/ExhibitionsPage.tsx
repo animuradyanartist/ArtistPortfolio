@@ -1,11 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Exhibition } from "@shared/schema";
+import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 
 export default function ExhibitionsPage() {
+  useEffect(() => {
+    document.title = "Exhibitions by Ani Muradyan | Solo & Group Art Shows";
+    updateCanonicalUrl('/exhibitions');
+    updateMetaDescription('Explore solo and group exhibitions by Armenian contemporary artist Ani Muradyan. Abstract realism oil paintings exhibited internationally.');
+  }, []);
+
   const [activeTab, setActiveTab] = useState<'solo' | 'group'>('solo');
 
   const { data: exhibitions = [], isLoading } = useQuery<Exhibition[]>({
@@ -44,7 +51,6 @@ export default function ExhibitionsPage() {
           </p>
         </div>
 
-        {/* Exhibition Tabs */}
         <div className="flex justify-center mb-12">
           <div className="bg-white rounded-lg shadow-sm p-2">
             <Button
@@ -70,7 +76,6 @@ export default function ExhibitionsPage() {
           </div>
         </div>
 
-        {/* Exhibitions Grid */}
         {currentExhibitions.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-soft-gray text-lg">
@@ -84,7 +89,7 @@ export default function ExhibitionsPage() {
                 {exhibition.image && (
                   <img 
                     src={exhibition.image} 
-                    alt={`${exhibition.title} exhibition`}
+                    alt={`${exhibition.title} – ${exhibition.type} exhibition by Armenian artist Ani Muradyan at ${exhibition.venue}, ${exhibition.location}`}
                     className="w-full h-48 object-cover"
                   />
                 )}

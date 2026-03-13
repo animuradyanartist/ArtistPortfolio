@@ -11,12 +11,14 @@ import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import PreviewOnWall from "@/components/PreviewOnWall";
 import ARPreview from "@/components/ARPreview";
 import type { Print } from "@shared/schema";
-import { updateCanonicalUrl } from "@/lib/seo";
+import { updateCanonicalUrl, updateMetaDescription, toSlug } from "@/lib/seo";
 
 export default function PrintArtworkPage() {
   const params = useParams();
   const [, setLocation] = useLocation();
-  const printId = parseInt(params.id as string);
+  const idParam = params.id as string;
+  const isNumeric = /^\d+$/.test(idParam);
+  const printId = isNumeric ? parseInt(idParam) : 0;
   
   // Material selection state - Canvas selected by default
   const [selectedMaterial, setSelectedMaterial] = useState<"paper" | "canvas">("canvas");
@@ -35,18 +37,27 @@ export default function PrintArtworkPage() {
   // AR Preview state
   const [selectedSize, setSelectedSize] = useState<{width: number, height: number, material: string} | null>(null);
 
-  // Fetch print data
   const { data: print, isLoading, error } = useQuery<Print>({
-    queryKey: [`/api/prints/${printId}`],
-    enabled: !!printId && !isNaN(printId)
+    queryKey: ['/api/prints', idParam],
+    queryFn: async () => {
+      const res = await fetch(`/api/prints/${idParam}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      return res.json();
+    },
+    enabled: !!idParam
   });
 
-  // Set canonical URL for SEO
   useEffect(() => {
     if (print) {
-      updateCanonicalUrl(`/prints/${printId}`);
+      const slug = toSlug(print.title);
+      document.title = `${print.title} | Art Print by Ani Muradyan`;
+      updateCanonicalUrl(`/prints/${slug}`);
+      updateMetaDescription(`${print.title} – museum-quality fine art print by Armenian contemporary artist Ani Muradyan. Available on premium paper and canvas in multiple sizes.`);
+      if (isNumeric) {
+        window.history.replaceState(null, '', `/prints/${slug}`);
+      }
     }
-  }, [print, printId]);
+  }, [print, isNumeric]);
 
   // Parse print sizes from JSON
   const printSizes = useMemo(() => {
@@ -233,7 +244,7 @@ export default function PrintArtworkPage() {
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
                 <img 
                   src={print.images[currentImageIndex]} 
-                  alt={`${print.title} by Ani Muradyan – contemporary abstract realism fine art print`}
+                  alt={`${print.title} – museum-quality fine art print by Armenian artist Ani Muradyan`}
                   className="relative w-full rounded-3xl shadow-2xl object-cover aspect-[3/4] max-h-[600px] border border-slate-200/50 transform group-hover:scale-105 transition-transform duration-700"
                 />
                 
@@ -279,7 +290,7 @@ export default function PrintArtworkPage() {
                     >
                       <img 
                         src={image} 
-                        alt={`${print.title} by Ani Muradyan – contemporary abstract realism fine art print (view ${index + 1})`}
+                        alt={`${print.title} – fine art print by Ani Muradyan (view ${index + 1})`}
                         className="w-full h-16 object-cover"
                       />
                     </button>

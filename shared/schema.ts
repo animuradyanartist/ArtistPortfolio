@@ -11,6 +11,7 @@ export const users = pgTable("users", {
 export const artworks = pgTable("artworks", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
+  slug: text("slug"),
   description: text("description").notNull(),
   medium: text("medium").notNull(),
   dimensions: text("dimensions").notNull(),
@@ -24,7 +25,6 @@ export const artworks = pgTable("artworks", {
   buyLink: text("buy_link"),
   featured: boolean("featured").default(false),
   position: integer("position").default(0),
-  // Print-related fields
   availableForPrint: boolean("available_for_print").default(false),
   printSizes: text("print_sizes"), 
   preferredPrintMaterial: text("preferred_print_material"),
@@ -33,12 +33,13 @@ export const artworks = pgTable("artworks", {
 export const prints = pgTable("prints", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
+  slug: text("slug"),
   description: text("description").notNull(),
   images: text("images").array().notNull(),
-  artworkId: integer("artwork_id"), // Optional reference to original artwork
-  availableSizes: text("available_sizes").notNull(), // JSON string of {width, height, material, price?}[]
-  preferredMaterial: text("preferred_material").notNull().default("paper"), // paper, canvas
-  status: text("status").notNull().default("active"), // active, discontinued
+  artworkId: integer("artwork_id"),
+  availableSizes: text("available_sizes").notNull(),
+  preferredMaterial: text("preferred_material").notNull().default("paper"),
+  status: text("status").notNull().default("active"),
   featured: boolean("featured").default(false),
   position: integer("position").default(0),
   createdAt: timestamp("created_at").defaultNow(),

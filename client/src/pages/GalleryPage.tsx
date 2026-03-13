@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { GalleryPhoto } from "@shared/schema";
-import { updateCanonicalUrl } from "@/lib/seo";
+import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -9,8 +9,9 @@ import { Link } from "wouter";
 
 export default function GalleryPage() {
   useEffect(() => {
-    document.title = "Exhibition Gallery | Ani Muradyan – Contemporary Artist";
+    document.title = "Exhibition Gallery | Ani Muradyan – Contemporary Armenian Artist";
     updateCanonicalUrl('/gallery');
+    updateMetaDescription('Photo gallery from exhibitions by Armenian contemporary artist Ani Muradyan. Behind-the-scenes moments from solo and group art shows.');
   }, []);
 
   const { data: galleryPhotos = [], isLoading } = useQuery<GalleryPhoto[]>({

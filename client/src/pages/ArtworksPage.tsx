@@ -5,14 +5,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import ArtworkCard from "@/components/ArtworkCard";
 import ArtworkModal from "@/components/ArtworkModal";
 import type { Artwork } from "@shared/schema";
-import { updateCanonicalUrl } from "@/lib/seo";
+import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 import { Link } from "wouter";
 
 export default function ArtworksPage() {
   // Set page title and canonical URL for SEO
   useEffect(() => {
-    document.title = "Original Artworks by Ani Muradyan | Abstract Realism Gallery";
+    document.title = "Original Artworks by Ani Muradyan | Abstract Realism Oil Paintings for Sale";
     updateCanonicalUrl('/artworks');
+    updateMetaDescription('Browse original oil paintings for sale by Armenian contemporary artist Ani Muradyan. Abstract realism portraits, landscapes, and figurative works.');
   }, []);
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [modalOpen, setModalOpen] = useState(false);

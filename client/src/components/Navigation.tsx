@@ -12,6 +12,7 @@ export default function Navigation() {
     { name: "Artworks", href: "/artworks" },
     { name: "Prints", href: "/prints" },
     { name: "About", href: "/about" },
+    { name: "Exhibitions", href: "/exhibitions" },
     { name: "Gallery", href: "/gallery" },
     { name: "Contact", href: "/contact" },
   ];
@@ -65,7 +66,6 @@ export default function Navigation() {
         </div>
       </div>
 
-      {/* Mobile menu */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-white border-t">
           <div className="px-2 pt-2 pb-3 space-y-1">

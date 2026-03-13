@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Mail, MapPin, Instagram, Palette } from "lucide-react";
-import { updateCanonicalUrl } from "@/lib/seo";
+import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 import { Link } from "wouter";
 
 const contactSchema = z.object({
@@ -27,7 +27,9 @@ export default function ContactPage() {
   const { toast } = useToast();
   
   useEffect(() => {
+    document.title = "Contact Ani Muradyan | Commissions & Inquiries";
     updateCanonicalUrl('/contact');
+    updateMetaDescription('Contact Armenian contemporary artist Ani Muradyan for artwork inquiries, commissions, and collaborations. Based in Yerevan, Armenia.');
   }, []);
   
   const form = useForm<ContactFormData>({

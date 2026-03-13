@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import type { Print } from "@shared/schema";
-import { updateCanonicalUrl } from "@/lib/seo";
+import { updateCanonicalUrl, updateMetaDescription, toSlug } from "@/lib/seo";
 
 // Thumbnail cache for better performance
 const thumbnailCache = new Map<number, string>();
@@ -207,7 +207,7 @@ const LazyThumbnail = memo(function LazyThumbnail({ printId, title }: { printId:
   return (
     <img 
       src={imageSrc} 
-      alt={title}
+      alt={`${title} – fine art print by Armenian artist Ani Muradyan`}
       className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
       loading="lazy"
       decoding="async"
@@ -233,6 +233,7 @@ export default function PrintsPage() {
   useEffect(() => {
     document.title = "Art Prints by Ani Muradyan | Museum-Quality Canvas & Paper Prints";
     updateCanonicalUrl('/prints');
+    updateMetaDescription('Shop museum-quality fine art prints by Armenian contemporary artist Ani Muradyan. Available on premium paper and canvas in custom sizes.');
   }, []);
   
   // Price calculator state
@@ -370,7 +371,7 @@ export default function PrintsPage() {
                 <div
                   key={print.id}
                   className="group cursor-pointer"
-                  onClick={() => setLocation(`/prints/${print.id}`)}
+                  onClick={() => setLocation(`/prints/${toSlug(print.title)}`)}
                   style={{ 
                     animationDelay: `${index * 50}ms`,
                     animationFillMode: 'both'

@@ -1,14 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import type { ArtistBio, Exhibition } from "@shared/schema";
-import { updateCanonicalUrl } from "@/lib/seo";
 import { Link } from "wouter";
+import type { ArtistBio, Exhibition } from "@shared/schema";
+import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 
 export default function AboutPage() {
   // Set page title and canonical URL for SEO
   useEffect(() => {
     document.title = "About Ani Muradyan | Contemporary Armenian Artist Biography";
     updateCanonicalUrl('/about');
+    updateMetaDescription('Learn about Ani Muradyan, a contemporary Armenian artist known for abstract realism oil paintings. Biography, artist statement, education, and exhibition history.');
   }, []);
   // Fetch artist bio data from the API
   const { data: artistBio, isLoading: bioLoading } = useQuery<ArtistBio>({
@@ -213,6 +214,24 @@ export default function AboutPage() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-3xl p-8 shadow-xl border border-slate-200/50">
+              <h3 className="text-xl font-bold text-slate-900 mb-4">Explore More</h3>
+              <div className="space-y-3">
+                <p className="text-slate-600">
+                  <Link href="/artworks" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">Browse the complete collection of original artworks</Link> available for purchase.
+                </p>
+                <p className="text-slate-600">
+                  <Link href="/gallery" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">View the exhibition gallery</Link> for behind-the-scenes moments and exhibition photos.
+                </p>
+                <p className="text-slate-600">
+                  <Link href="/prints" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">Shop museum-quality art prints</Link> on premium paper and canvas.
+                </p>
+                <p className="text-slate-600">
+                  <Link href="/contact" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">Get in touch</Link> for commissions, inquiries, or collaborations.
+                </p>
+              </div>
             </div>
           </div>
         </div>

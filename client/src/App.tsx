@@ -25,9 +25,9 @@ function Router() {
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/artworks" component={ArtworksPage} />
-      <Route path="/artworks/:id" component={ArtworkDetailPage} />
+      <Route path="/artworks/:id" component={ArtworkDetailPage} />{/* :id accepts both numeric IDs and slug strings */}
       <Route path="/prints" component={PrintsPage} />
-      <Route path="/prints/:id" component={PrintArtworkPage} />
+      <Route path="/prints/:id" component={PrintArtworkPage} />{/* :id accepts both numeric IDs and slug strings */}
       <Route path="/about" component={AboutPage} />
       <Route path="/exhibitions" component={ExhibitionsPage} />
       <Route path="/gallery" component={GalleryPage} />

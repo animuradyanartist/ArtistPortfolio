@@ -5,25 +5,33 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import type { Artwork } from "@shared/schema";
-import { updateCanonicalUrl, injectJsonLd, removeJsonLd, BASE_URL } from "@/lib/seo";
+import { updateCanonicalUrl, updateMetaDescription, injectJsonLd, removeJsonLd, BASE_URL, toSlug, generateArtworkAlt } from "@/lib/seo";
 
 export default function ArtworkDetailPage() {
   const params = useParams();
   const [, setLocation] = useLocation();
-  const artworkId = parseInt(params.id as string);
+  const idParam = params.id as string;
+  const isNumeric = /^\d+$/.test(idParam);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // Fetch artwork data
   const { data: artwork, isLoading, error } = useQuery<Artwork>({
-    queryKey: [`/api/artworks/${artworkId}`],
-    enabled: !!artworkId && !isNaN(artworkId)
+    queryKey: ['/api/artworks', idParam],
+    queryFn: async () => {
+      const res = await fetch(`/api/artworks/${idParam}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      return res.json();
+    },
+    enabled: !!idParam
   });
 
   // Set page title, canonical URL, and per-artwork JSON-LD for SEO
   useEffect(() => {
     if (artwork) {
-      document.title = `${artwork.title} | Original Artwork by Ani Muradyan`;
-      updateCanonicalUrl(`/artworks/${artworkId}`);
+      const slug = toSlug(artwork.title);
+      document.title = `${artwork.title} | Original ${artwork.medium} by Ani Muradyan`;
+      updateCanonicalUrl(`/artworks/${slug}`);
+      updateMetaDescription(`${artwork.title} – original ${artwork.medium} painting by Armenian contemporary artist Ani Muradyan. ${artwork.dimensions}, ${artwork.year}. ${artwork.availability === 'available' ? 'Available for purchase.' : ''}`);
+
       injectJsonLd('artwork-jsonld', {
         "@context": "https://schema.org",
         "@type": "VisualArtwork",
@@ -37,7 +45,7 @@ export default function ArtworkDetailPage() {
         "image": artwork.images?.[0]
           ? (artwork.images[0].startsWith('http') ? artwork.images[0] : `${BASE_URL}${artwork.images[0]}`)
           : undefined,
-        "url": `${BASE_URL}/artworks/${artworkId}`,
+        "url": `${BASE_URL}/artworks/${slug}`,
         "creator": {
           "@type": ["Person", "VisualArtist"],
           "name": "Ani Muradyan",
@@ -51,9 +59,13 @@ export default function ArtworkDetailPage() {
           "availability": "https://schema.org/InStock"
         } : undefined
       });
+
+      if (isNumeric) {
+        window.history.replaceState(null, '', `/artworks/${slug}`);
+      }
     }
     return () => removeJsonLd('artwork-jsonld');
-  }, [artwork, artworkId]);
+  }, [artwork, isNumeric]);
 
   const nextImage = () => {
     if (!artwork || !artwork.images || artwork.images.length === 0) return;
@@ -102,7 +114,6 @@ export default function ArtworkDetailPage() {
   return (
     <div className="min-h-screen bg-soft-white">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Back Button */}
         <Button
           variant="ghost"
           onClick={() => setLocation("/artworks")}
@@ -114,17 +125,14 @@ export default function ArtworkDetailPage() {
         </Button>
 
         <div className="grid lg:grid-cols-2 gap-12">
-          {/* Image Gallery */}
           <div className="space-y-4">
-            {/* Main Image */}
             <div className="relative">
               {artwork.images && artwork.images.length > 0 ? (
                 <img 
                   src={artwork.images[currentImageIndex]} 
-                  alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title}`}
-                  title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
+                  alt={generateArtworkAlt(artwork.title, artwork.medium)}
                   className="w-full rounded-lg shadow-xl object-cover aspect-[3/4]"
-                  data-testid={`img-artwork-main-${artworkId}`}
+                  data-testid={`img-artwork-main-${artwork.id}`}
                   loading="lazy"
                 />
               ) : (
@@ -157,7 +165,6 @@ export default function ArtworkDetailPage() {
               )}
             </div>
 
-            {/* Image Thumbnails */}
             {artwork.images && artwork.images.length > 1 && (
               <div className="flex gap-2 overflow-x-auto pb-2">
                 {artwork.images.map((image, index) => (
@@ -173,8 +180,7 @@ export default function ArtworkDetailPage() {
                   >
                     <img
                       src={image}
-                      alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title} (view ${index + 1})`}
-                      title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
+                      alt={`${artwork.title} by Ani Muradyan – ${artwork.medium} (view ${index + 1})`}
                       className="w-full h-full object-cover"
                       loading="lazy"
                     />
@@ -184,10 +190,9 @@ export default function ArtworkDetailPage() {
             )}
           </div>
 
-          {/* Artwork Details */}
           <div className="space-y-6">
             <div>
-              <h1 className="text-4xl font-playfair text-deep-blue mb-4" data-testid={`text-title-${artworkId}`}>
+              <h1 className="text-4xl font-playfair text-deep-blue mb-4" data-testid={`text-title-${artwork.id}`}>
                 {artwork?.title || "Untitled"}
               </h1>
               
@@ -195,12 +200,12 @@ export default function ArtworkDetailPage() {
                 <Badge 
                   variant={artwork.availability === "available" ? "default" : "secondary"}
                   className="text-sm"
-                  data-testid={`badge-availability-${artworkId}`}
+                  data-testid={`badge-availability-${artwork.id}`}
                 >
                   {artwork.availability === "available" ? "Available" : 
                    artwork.availability === "sold" ? "Sold" : "Reserved"}
                 </Badge>
-                <span className="text-2xl font-semibold text-charcoal" data-testid={`text-price-${artworkId}`}>
+                <span className="text-2xl font-semibold text-charcoal" data-testid={`text-price-${artwork.id}`}>
                   ${artwork.price?.toLocaleString()}
                 </span>
               </div>
@@ -209,7 +214,7 @@ export default function ArtworkDetailPage() {
             <div className="space-y-4">
               <div>
                 <h3 className="text-lg font-semibold text-charcoal mb-2">Description</h3>
-                <p className="text-gray-700 leading-relaxed" data-testid={`text-description-${artworkId}`}>
+                <p className="text-gray-700 leading-relaxed" data-testid={`text-description-${artwork.id}`}>
                   {artwork.description}
                 </p>
               </div>
@@ -234,7 +239,6 @@ export default function ArtworkDetailPage() {
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="space-y-4 pt-6">
               {artwork.availability === "available" && (
                 <div className="space-y-3">
