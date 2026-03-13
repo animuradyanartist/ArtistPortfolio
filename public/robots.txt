@@ -12,6 +12,6 @@ Allow: /contact
 Disallow: /admin
 Disallow: /api
 
-Sitemap: https://animuradyanart.replit.app/sitemap.xml
+Sitemap: https://anymoore.am/sitemap.xml
 
 Crawl-delay: 1
