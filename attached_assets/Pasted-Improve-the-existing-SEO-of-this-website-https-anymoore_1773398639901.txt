@@ -1,0 +1,145 @@
+Improve the existing SEO of this website (https://anymoore.am) without redesigning it.
+
+This is the portfolio website of Armenian contemporary artist Ani Muradyan.
+The design, layout, and visual style must remain unchanged.
+Only improve the technical SEO and search discoverability.
+
+GOAL:
+Make the website easier to find in Google Search and Google Images.
+
+Target keywords:
+- Armenian contemporary artist
+- abstract realism artist
+- abstract portrait painting
+- oil portrait painting
+- original oil paintings for sale
+
+TASKS:
+
+1. HOMEPAGE SEO
+Ensure the homepage includes:
+- Proper <title> tag
+- Meta description
+- H1 heading
+- H2 section headings
+
+Example structure:
+
+H1: Contemporary Armenian Artist – Ani Muradyan
+H2: Abstract Realism Paintings
+H2: Exhibitions
+H2: Available Artworks
+
+The homepage should contain 400–600 words describing:
+- the artist
+- artistic style
+- abstract realism approach
+- oil painting technique
+- exhibitions and collectors
+
+
+2. STRUCTURED DATA FOR ARTIST
+Add JSON-LD structured data in the <head> describing the artist.
+
+Use schema.org Person + VisualArtist.
+
+Fields should include:
+name: Ani Muradyan
+jobTitle: Contemporary Artist
+nationality: Armenian
+artform: Oil Painting
+style: Abstract Realism
+url: https://anymoore.am
+sameAs: Instagram and other profiles
+
+
+3. STRUCTURED DATA FOR ARTWORKS
+Add schema.org VisualArtwork structured data for paintings shown in the gallery.
+
+Each artwork should include:
+@type: VisualArtwork
+name
+creator: Ani Muradyan
+artMedium: Oil on canvas
+artform: Painting
+genre: Abstract realism portrait
+image
+url
+
+
+4. IMAGE SEO
+Optimize all images:
+
+Rename files to descriptive names:
+example:
+abstract-portrait-painting-ani-muradyan.jpg
+
+Add attributes:
+alt="Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan"
+title="Abstract realism portrait painting – Ani Muradyan"
+
+Enable lazy loading for images:
+loading="lazy"
+
+Convert images to WebP format for faster loading.
+
+
+5. IMAGE SITEMAP
+Create image-sitemap.xml including all artwork images.
+
+Each entry should contain:
+<image:image>
+<image:loc>
+<image:title>
+<image:caption>
+
+
+6. MAIN SITEMAP
+Ensure sitemap.xml includes:
+
+homepage
+about
+gallery
+contact
+artwork pages
+
+Link the image sitemap inside the main sitemap.
+
+
+7. ROBOTS.TXT
+Create or update robots.txt to allow search engines to crawl the website and reference the sitemap.
+
+
+8. CANONICAL TAGS
+Add canonical tags on every page to prevent duplicate content.
+
+Example:
+<link rel="canonical" href="https://anymoore.am/page-url">
+
+
+9. INTERNAL LINKING
+Add internal links between pages:
+
+home
+about
+gallery
+contact
+artwork pages
+
+Example:
+"Explore the gallery of abstract realism paintings."
+
+
+10. BREADCRUMB NAVIGATION
+Add breadcrumb navigation:
+
+Home > Gallery > Artwork
+
+Use schema.org BreadcrumbList structured data.
+
+
+IMPORTANT:
+Do NOT change the design, layout, typography, or visual aesthetic of the website.
+Keep the website minimal, elegant, and gallery-like.
+
+Focus only on improving SEO, indexing, and Google discoverability.
