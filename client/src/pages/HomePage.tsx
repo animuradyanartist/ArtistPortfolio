@@ -129,7 +129,7 @@ export default function HomePage() {
             <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-8 text-center">
               Abstract Realism Paintings
             </h2>
-            <p>
+            <p className="text-[14px]">
               Ani Muradyan is a contemporary Armenian artist whose practice bridges the worlds of abstraction and figurative art. Born and raised in Yerevan, Armenia, she developed a deep affinity for painting at an early age, drawn to the way color and form can convey what words often cannot. Her work sits at the crossroads of abstract realism — a style that retains the emotional truth of the subject while dissolving the boundaries of literal representation.
             </p>
             <p>
