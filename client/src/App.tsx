@@ -19,6 +19,7 @@ import EditArtworkPage from "@/pages/EditArtworkPage";
 import CreatePrintPage from "@/pages/CreatePrintPage";
 import EditPrintPage from "@/pages/EditPrintPage";
 import NotFound from "@/pages/not-found";
+import SeoArtworkPage from "@/pages/SeoArtworkPage";
 
 function Router() {
   return (
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/admin/edit-artwork/:id" component={EditArtworkPage} />
       <Route path="/admin/create-print" component={CreatePrintPage} />
       <Route path="/admin/edit-print/:id" component={EditPrintPage} />
+      <Route path="/:seoSlug" component={SeoArtworkPage} />
       <Route component={NotFound} />
     </Switch>
   );

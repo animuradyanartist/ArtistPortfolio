@@ -88,9 +88,7 @@ export default function HomePage() {
                 <span className="text-base">Contemporary Abstract Realism Artist • Oil Paintings & Fine Art Prints</span>
               </div>
               
-              <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">
-                Contemporary Armenian Artist – Ani Muradyan
-              </h1>
+              <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">Contemporary  Artist – Ani Muradyan</h1>
               
               <blockquote className="text-2xl md:text-4xl lg:text-5xl italic mb-16 text-slate-200 font-light leading-relaxed max-w-5xl text-center animate-slideUp animation-delay-200">
                 "{homepageSettings?.heroQuote || 'Art must bring hope into people\'s lives.'}"
@@ -124,7 +122,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-
       {/* Artist Introduction Section */}
       <div className="py-24 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -147,7 +144,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-
       {/* Featured Works Section */}
       <div className="py-24 bg-gradient-to-br from-slate-50 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -210,7 +206,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-
       {/* Exhibitions Section */}
       <div className="py-24 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -227,7 +222,6 @@ export default function HomePage() {
           </Link>
         </div>
       </div>
-
       {/* Gallery Section */}
       {featuredGalleryPhotos.length > 0 && (
         <div className="py-24 bg-gradient-to-br from-slate-50 to-white">
@@ -288,7 +282,6 @@ export default function HomePage() {
           </div>
         </div>
       )}
-
       {/* Lightbox Dialog */}
       {featuredGalleryPhotos.length > 0 && (
         <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
@@ -358,7 +351,6 @@ export default function HomePage() {
           </DialogContent>
         </Dialog>
       )}
-
       {/* Footer */}
       <footer className="bg-black text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -11,6 +11,7 @@ export interface IStorage {
   // Artworks
   getAllArtworks(): Promise<Artwork[]>;
   getArtwork(id: number): Promise<Artwork | undefined>;
+  getArtworkBySeoSlug(seoSlug: string): Promise<Artwork | undefined>;
   createArtwork(artwork: InsertArtwork): Promise<Artwork>;
   updateArtwork(id: number, artwork: Partial<InsertArtwork>): Promise<Artwork | undefined>;
   deleteArtwork(id: number): Promise<boolean>;
@@ -262,6 +263,10 @@ export class MemStorage implements IStorage {
 
   async getArtwork(id: number): Promise<Artwork | undefined> {
     return this.artworks.get(id);
+  }
+
+  async getArtworkBySeoSlug(seoSlug: string): Promise<Artwork | undefined> {
+    return Array.from(this.artworks.values()).find(a => a.seoSlug === seoSlug);
   }
 
   async createArtwork(insertArtwork: InsertArtwork): Promise<Artwork> {
@@ -635,6 +640,11 @@ export class DatabaseStorage implements IStorage {
 
   async getArtwork(id: number): Promise<Artwork | undefined> {
     const [artwork] = await db.select().from(artworks).where(eq(artworks.id, id));
+    return artwork || undefined;
+  }
+
+  async getArtworkBySeoSlug(seoSlug: string): Promise<Artwork | undefined> {
+    const [artwork] = await db.select().from(artworks).where(eq(artworks.seoSlug, seoSlug));
     return artwork || undefined;
   }
 

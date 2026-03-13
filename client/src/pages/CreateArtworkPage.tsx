@@ -67,6 +67,7 @@ export default function CreateArtworkPage() {
       availability: "available",
       saatchiUrl: "",
       buyLink: "",
+      seoSlug: "",
       featured: false,
       availableForPrint: false,
       preferredPrintMaterial: "paper",
@@ -442,6 +443,24 @@ export default function CreateArtworkPage() {
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={artworkForm.control}
+                  name="seoSlug"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>SEO Page URL (optional)</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="abstract-portrait-oil-painting" />
+                      </FormControl>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Creates a dedicated SEO page at <span className="font-mono">anymoore.am/{field.value || 'your-slug-here'}</span>. 
+                        Use keyword-rich, hyphenated lowercase words (e.g. <span className="font-mono">abstract-female-portrait</span>).
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 
                 {/* Print Options Section */}
                 <div className="space-y-4">

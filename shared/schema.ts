@@ -12,6 +12,7 @@ export const artworks = pgTable("artworks", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   slug: text("slug"),
+  seoSlug: text("seo_slug"),
   description: text("description").notNull(),
   medium: text("medium").notNull(),
   dimensions: text("dimensions").notNull(),

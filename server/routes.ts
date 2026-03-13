@@ -118,6 +118,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/artworks/seo/:seoSlug", async (req, res) => {
+    try {
+      const artwork = await storage.getArtworkBySeoSlug(req.params.seoSlug);
+      if (!artwork) {
+        return res.status(404).json({ message: "Artwork not found" });
+      }
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+      res.json(artwork);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch artwork" });
+    }
+  });
+
   app.get("/api/artworks/:id", async (req, res) => {
     try {
       const param = req.params.id;
@@ -891,6 +904,14 @@ Crawl-delay: 1
         xml += '    <changefreq>monthly</changefreq>\n';
         xml += '    <priority>0.8</priority>\n';
         xml += '  </url>\n';
+        if (artwork.seoSlug) {
+          xml += '  <url>\n';
+          xml += `    <loc>${SEO_BASE_URL}/${artwork.seoSlug}</loc>\n`;
+          xml += `    <lastmod>${today}</lastmod>\n`;
+          xml += '    <changefreq>monthly</changefreq>\n';
+          xml += '    <priority>0.9</priority>\n';
+          xml += '  </url>\n';
+        }
       });
       
       const activePrints = prints.filter(print => print.status === 'active');
