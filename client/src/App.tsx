@@ -1,9 +1,11 @@
-import { Switch, Route } from "wouter";
+import { useEffect } from "react";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Navigation from "@/components/Navigation";
+import { updateCanonicalUrl } from "@/lib/seo";
 import HomePage from "@/pages/HomePage";
 import ArtworksPage from "@/pages/ArtworksPage";
 import ArtworkDetailPage from "@/pages/ArtworkDetailPage";
@@ -20,6 +22,14 @@ import CreatePrintPage from "@/pages/CreatePrintPage";
 import EditPrintPage from "@/pages/EditPrintPage";
 import NotFound from "@/pages/not-found";
 import SeoArtworkPage from "@/pages/SeoArtworkPage";
+
+function CanonicalManager() {
+  const [location] = useLocation();
+  useEffect(() => {
+    updateCanonicalUrl(location);
+  }, [location]);
+  return null;
+}
 
 function Router() {
   return (
@@ -49,6 +59,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <div className="min-h-screen bg-soft-white">
+          <CanonicalManager />
           <Navigation />
           <main>
             <Router />

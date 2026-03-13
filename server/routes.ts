@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
@@ -984,6 +984,37 @@ Crawl-delay: 1
       res.status(500).send('Error generating image sitemap');
     }
   });
+
+  // Production: serve static assets + inject correct canonical URL per page
+  if (process.env.NODE_ENV === 'production') {
+    const distPath = path.resolve(process.cwd(), 'dist/public');
+
+    // Serve static assets (JS, CSS, images) without auto-serving index.html
+    app.use(express.static(distPath, { index: false }));
+
+    // Catch-all: serve index.html with per-request canonical URL injected
+    app.get('*', (req, res, next) => {
+      // Skip paths with file extensions (assets already handled above)
+      if (/\.[a-zA-Z0-9]+$/.test(req.path)) return next();
+      try {
+        let html = fs.readFileSync(path.resolve(distPath, 'index.html'), 'utf8');
+        const canonicalPath = req.path === '/' ? '' : req.path;
+        const canonicalUrl = `https://anymoore.am${canonicalPath}`;
+        if (html.includes('<link rel="canonical"')) {
+          html = html.replace(
+            /<link rel="canonical"[^>]*>/,
+            `<link rel="canonical" href="${canonicalUrl}">`
+          );
+        } else {
+          html = html.replace('</head>', `  <link rel="canonical" href="${canonicalUrl}">\n  </head>`);
+        }
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+      } catch {
+        next();
+      }
+    });
+  }
 
   const httpServer = createServer(app);
   return httpServer;

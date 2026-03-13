@@ -2,76 +2,58 @@
 
 ## Overview
 
-This is a full-stack web application for an artist portfolio built with React, Express, TypeScript, and PostgreSQL. The application serves as a content management system for an artist to showcase their artworks, exhibitions, and bio information. It features both a public-facing portfolio website and an admin panel for content management.
+This project is a full-stack web application designed as an artist's portfolio and content management system. It enables artists to showcase artworks, exhibitions, and biographical information through a public-facing website. An integrated admin panel provides tools for managing all content. The application aims to provide a robust and scalable platform for artists to present their work online, with a focus on SEO, performance, and a rich user experience.
+
+## User Preferences
+
+Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
 ### Frontend Architecture
 - **Framework**: React 18 with TypeScript
-- **Routing**: Wouter for client-side routing
-- **State Management**: TanStack Query (React Query) for server state management
-- **Styling**: Tailwind CSS with shadcn/ui component library
+- **Routing**: Wouter
+- **State Management**: TanStack Query (React Query)
+- **Styling**: Tailwind CSS with shadcn/ui
 - **Forms**: React Hook Form with Zod validation
-- **Build Tool**: Vite for development and production builds
+- **Build Tool**: Vite
 
 ### Backend Architecture
 - **Runtime**: Node.js with TypeScript
-- **Framework**: Express.js for API server
+- **Framework**: Express.js
 - **Database ORM**: Drizzle ORM
-- **Validation**: Zod schemas for data validation
-- **Development**: TSX for TypeScript execution in development
+- **Validation**: Zod schemas
 
 ### Database Architecture
 - **Database**: PostgreSQL (configured for Neon serverless)
-- **Connection**: Connection pooling with @neondatabase/serverless
-- **Migrations**: Drizzle Kit for schema management
+- **Connection**: @neondatabase/serverless for connection pooling
+- **Migrations**: Drizzle Kit
 
-## Key Components
+### Key Features
+- **Data Models**: Manages Users, Artworks, Exhibitions, Gallery Photos, Homepage Settings, and Artist Bio.
+- **RESTful API**: Structured endpoints for CRUD operations on all resources.
+- **Authentication**: Simple password-based admin authentication using localStorage.
+- **Image Management**: Base64 encoding, client-side compression/resizing, multiple images per artwork, automatic optimization.
+- **Data Flow**: React components use TanStack Query to call Express APIs; Express validates with Zod, Drizzle ORM interacts with PostgreSQL, and JSON data is returned.
+- **Storage Strategy**: PostgreSQL for production, in-memory storage for development.
+- **Performance Optimization**: Gzip compression, lazy loading for images, and Cache-Control headers for API endpoints.
+- **SEO**: Comprehensive SEO with optimized meta tags, JSON-LD structured data (Person, VisualArtwork), dynamic sitemap.xml and robots.txt, image sitemaps, and canonical URL management for React SPA. Individual SEO landing pages for artworks.
+- **Gallery Feature**: Dedicated gallery management with image uploads, reordering, featured status, and a public gallery display.
+- **AR Preview**: Realistic scaling and size selection for artwork previews using augmented reality.
+- **Feedback Widget**: Custom HTML/JavaScript widget for collecting star ratings and messages to PostgreSQL.
+- **Analytics**: Microsoft Clarity integration.
 
-### Data Models
-The application manages five main entities:
-- **Users**: Admin authentication system
-- **Artworks**: Core content with images, metadata, and pricing
-- **Exhibitions**: Solo and group exhibition records
-- **Gallery Photos**: Exhibition photos and behind-the-scenes moments
-- **Homepage Settings**: Configurable hero content
-- **Artist Bio**: Biographical information and statements
-
-### API Structure
-RESTful API endpoints organized by resource:
-- `/api/artworks` - CRUD operations for artwork management
-- `/api/exhibitions` - Exhibition data management
-- `/api/gallery-photos` - Gallery photo management with featured toggle and reordering
-- `/api/homepage-settings` - Homepage configuration
-- `/api/artist-bio` - Artist biography management
-- `/api/health` - System health and data validation
-
-### Authentication
-Simple password-based admin authentication using localStorage for session management. The system uses a hardcoded password ('artist123') stored in the frontend for simplicity.
-
-### Image Management
-- Base64 image encoding for database storage
-- Client-side image compression and resizing
-- Support for multiple images per artwork
-- Automatic image optimization for web display
-
-## Data Flow
-
-1. **Client Request**: React components make API calls using TanStack Query
-2. **API Processing**: Express routes handle requests, validate data with Zod
-3. **Database Operations**: Drizzle ORM executes SQL queries against PostgreSQL
-4. **Response**: JSON data returned to client and cached by React Query
-5. **UI Updates**: React components automatically re-render with fresh data
-
-### Storage Strategy
-The application implements a dual storage approach:
-- **Production**: PostgreSQL database with Drizzle ORM
-- **Development**: In-memory storage class for rapid development and testing
+### Deployment Strategy
+- Configured for Replit deployment.
+- `npm run dev` starts both frontend and backend.
+- `npm run build` compiles for production.
+- Environment variables: `NODE_ENV`, `DATABASE_URL`, `PORT`.
+- Replit Configuration: nodejs-20, web, postgresql-16 modules, auto-scaling, port mapping 5000:80.
 
 ## External Dependencies
 
 ### Core Dependencies
-- **@neondatabase/serverless**: PostgreSQL connection for serverless environments
+- **@neondatabase/serverless**: PostgreSQL connection
 - **drizzle-orm**: Type-safe database operations
 - **@tanstack/react-query**: Server state management
 - **@radix-ui/react-***: Accessible UI primitives
@@ -79,50 +61,7 @@ The application implements a dual storage approach:
 - **zod**: Runtime type validation
 
 ### Development Tools
-- **vite**: Build tool and development server
-- **tailwindcss**: Utility-first CSS framework
-- **tsx**: TypeScript execution for development
+- **vite**: Build tool and dev server
+- **tailwindcss**: CSS framework
+- **tsx**: TypeScript execution
 - **drizzle-kit**: Database schema management
-
-## Deployment Strategy
-
-The application is configured for deployment on Replit with the following setup:
-
-### Development
-- Run command: `npm run dev`
-- Starts both frontend (Vite) and backend (Express) servers
-- Hot module replacement for rapid development
-
-### Production Build
-- Build command: `npm run build`
-- Compiles React app and bundles Express server
-- Outputs static assets and server bundle to `dist/` directory
-
-### Environment Configuration
-- **NODE_ENV**: Controls development vs production mode
-- **DATABASE_URL**: PostgreSQL connection string (required)
-- **PORT**: Server port (defaults to 5000)
-
-### Replit Configuration
-- Modules: nodejs-20, web, postgresql-16
-- Auto-scaling deployment target
-- Port mapping: 5000 (internal) → 80 (external)
-
-## Changelog
-
-- March 13, 2026 (Individual SEO Artwork Pages): Added dedicated SEO landing pages for each artwork at keyword-rich root-level URLs (e.g., /abstract-portrait-oil-painting). Each page features: unique SEO title and canonical URL, H1 heading with artwork title, artwork image with descriptive alt text, 100-150 word description under "About This Painting" section, artwork details table (artist, medium, style, year, dimensions, price), breadcrumb navigation, VisualArtwork + BreadcrumbList JSON-LD schema. New seoSlug field added to artworks table; admin can set it via "SEO Page URL" field in Create/Edit artwork forms. GET /api/artworks/seo/:seoSlug endpoint added. Sitemap.xml updated to include seoSlug pages at priority 0.9. Route /:seoSlug added to App.tsx as catch-all before 404.
-- March 13, 2026 (SEO Overhaul): Comprehensive SEO improvements targeting Google search and Google Images discoverability. (1) Fixed canonical URL base domain from animuradyanart.replit.app to anymoore.am across index.html, seo.ts, sitemap.xml, robots.txt, and image-sitemap.xml. (2) Upgraded JSON-LD structured data in index.html from basic Person to ["Person", "VisualArtist"] with artform "Oil painting", artisticStyle "Abstract realism portrait painting", and artMedium "Oil on canvas". (3) Added per-artwork VisualArtwork JSON-LD dynamically injected on artwork detail pages including name, artMedium, artform, creator, image, and offers. (4) Added title attributes to all artwork and gallery images across ArtworkCard, ArtworkDetailPage, ArtworkModal, GalleryPage, HomePage, and AboutPage. (5) Created /image-sitemap.xml endpoint listing all artwork images with Google Images namespace (image:loc, image:title, image:caption). (6) Updated /sitemap.xml to include /gallery page and correct base URL. (7) Updated /robots.txt to reference both sitemaps at anymoore.am. (8) Added contextual internal links on ArtworksPage (→ About, Gallery), AboutPage (→ Gallery, Contact), GalleryPage (→ Artworks, About), and ContactPage (→ Artworks, Gallery). (9) Added injectJsonLd/removeJsonLd/BASE_URL utilities to seo.ts for dynamic structured data management.
-- January 19, 2026 (Performance Optimization): Implemented comprehensive performance optimizations to speed up website loading. Added gzip compression middleware to Express server to reduce data transfer size. Implemented lazy loading (loading="lazy") on all image components including ArtworkCard, HomePage, ArtworkDetailPage, AboutPage, ArtworkModal, and GalleryPage to defer loading of off-screen images. Added Cache-Control headers (max-age=60, stale-while-revalidate=300) to key API endpoints (/api/artworks, /api/gallery-photos, /api/homepage-settings, /api/artist-bio, /api/prints) for improved browser caching. These optimizations reduce initial page load time and improve perceived performance.
-- November 25, 2025 (Production Session Fix): Fixed admin authentication failing in production by switching from in-memory session storage to PostgreSQL-backed sessions using connect-pg-simple. Replit Edge uses stateless workers that lose in-memory data between requests, causing admin operations (gallery add/delete) to fail with 401 Unauthorized. Sessions are now persisted in a dedicated 'session' table in PostgreSQL, ensuring admin authentication works reliably in production. Added cookie settings for secure production operation (sameSite: 'none', proxy: true).
-- November 24, 2025 (Production Gallery Upload Fix): Fixed gallery photo uploads failing in production environment due to Replit Edge's ~5MB request body limit. Implemented robust client-side image compression that: (1) Resizes images to max 1920px on the longest side (handles both landscape and portrait orientations), (2) Iteratively compresses to JPEG starting at 80% quality, reducing in 10% steps down to 30% if needed, (3) Ensures final base64 payload stays under 2.5MB (leaving ~1.5MB headroom for JSON overhead under the 5MB production limit), (4) Provides clear error message if image cannot be compressed sufficiently. Artworks remain unaffected as they use file uploads to disk rather than base64 encoding. Gallery photos now work reliably in both development and production environments with automatic quality optimization.
-- November 24, 2025 (Gallery Feature): Added comprehensive exhibition gallery feature with complete backend and frontend implementation. Created new `galleryPhotos` database table with fields for title, image, exhibition name, location, year, featured status, and position ordering. Implemented full CRUD API routes with featured toggle and reorder functionality. Added dedicated Gallery management tab (7th tab) in admin panel with image upload, featured toggle, position reordering (up/down arrows), and delete capabilities. Created public Gallery page (/gallery) displaying all photos in responsive grid with metadata overlay. Added "Behind the Scenes" section to homepage showcasing up to 4 featured gallery photos with "View Full Gallery" button. Updated navigation menu with Gallery link between About and Contact. All features tested end-to-end with successful admin management, public display, and data persistence verification.
-- October 28, 2025 (Global SEO Update): Expanded SEO optimization to target international audiences beyond Armenian-specific searches. Updated meta tags to focus on global keywords: "artist", "contemporary artist", "modern painter", "abstract realism artist", "oil paintings". Changed page title to "Ani Muradyan – Contemporary Abstract Realism Artist | Anymoore Art". Updated meta description to emphasize "serene and emotional abstract realism oil paintings" with global appeal. Enhanced JSON-LD structured data description to "Contemporary abstract realism artist creating serene oil paintings and fine art prints". Updated all image alt attributes from "Armenian abstract realism" to "contemporary abstract realism oil painting" and "fine art print" for prints. Optimized homepage hero badge text to showcase "Contemporary Abstract Realism Artist • Oil Paintings & Fine Art Prints" for better international keyword targeting. These changes enable the portfolio to rank for broader art-related searches worldwide including "contemporary artists", "abstract realism", and "oil paintings".
-- October 28, 2025: Comprehensive SEO optimization implemented for improved Google search rankings. Updated index.html with optimized meta tags targeting "Armenian artist Ani Muradyan" and "Armenian artists" searches. Enhanced title, description, and keywords with Armenian-specific terms. Added Open Graph and Twitter Card meta tags for better social media sharing. Implemented JSON-LD structured data (schema.org/Person) including artist details, nationality (Armenia), WorksFor (Anymoore Art), and social media profiles. Added descriptive alt attributes to all artwork images following format: "{title} by Ani Muradyan – Armenian abstract realism painting/print". Created SEO utility function to dynamically update canonical URLs on all public pages. Implemented dynamic sitemap.xml (/sitemap.xml) and robots.txt (/robots.txt) generation via Express routes, automatically including all artworks and active prints. Fixed heading structure to ensure single h1 per page with proper hierarchical h2/h3 organization for optimal SEO and accessibility.
-- July 23, 2025: Implemented custom HTML/JavaScript feedback widget (blue "Give Feedback" button, bottom-right) replacing the previous React-based version. Widget collects star ratings (1-5) and detailed messages, storing data to PostgreSQL database via `/api/feedback` endpoint. Simplified feedback collection with single, efficient solution for visitor engagement and experience analysis.
-- July 10, 2025: Enhanced AR Preview feature with realistic scaling and size selection. Users can now preview artwork on their own walls using device camera with accurate real-world dimensions. Added compact horizontal size selector with instant live updates, photo capture and download functionality, calibration with reference objects (credit card/A4 paper), realistic rendering effects including shadows, frames, and glare for different materials. Implemented mobile-friendly pill-shaped size buttons with smooth scrolling and visual feedback. Complete AR experience with real-time size changes and professional photo capture capabilities.
-- June 27, 2025: Added comprehensive image upload functionality for admin panel, artwork reordering controls, and fixed About page to display uploaded artist bio photos. Fixed year field validation error in artwork forms and replaced buy buttons with styled contact information boxes. Added Microsoft Clarity analytics tracking to all pages. Removed exhibitions page from navigation menu. Created new Prints page with 2-column layout featuring artwork grid and live price calculator.
-- June 26, 2025: Initial setup
-
-## User Preferences
-
-Preferred communication style: Simple, everyday language.
