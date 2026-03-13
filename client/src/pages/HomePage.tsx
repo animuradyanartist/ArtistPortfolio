@@ -135,10 +135,10 @@ export default function HomePage() {
             <p className="text-[14px]">
               Working primarily in oil on canvas, Ani builds her paintings through layered brushwork and a rich, intuitive palette. Each piece begins with observation — a face, a gesture, a fleeting light — and gradually transforms into something more internal. The resulting works feel simultaneously familiar and mysterious, grounded in reality yet reaching toward something beyond it. Her abstract portrait paintings have been described as windows into inner landscapes, where the viewer is invited to project their own emotion and memory onto the canvas.
             </p>
-            <p>
+            <p className="text-[14px]">
               Ani's artistic philosophy is rooted in a belief that art should carry hope. She paints not to escape the world, but to look at it more carefully — to find beauty in quiet moments, resilience in human expression, and meaning in the everyday. This intentional warmth runs through every brushstroke, making her original oil paintings feel both contemplative and alive. Whether depicting a solitary figure or an abstract field of color, the emotional register of her work is always deeply personal, yet universally resonant.
             </p>
-            <p>
+            <p className="text-[14px]">
               Over the past several years, Ani has exhibited her work in solo and group shows across Armenia, Europe, and online platforms such as Saatchi Art and Singulart. Her paintings have found homes in private collections around the world, and her growing reputation as an Armenian contemporary artist reflects both the quality of her craft and the sincerity of her vision. She continues to paint from her studio in Yerevan, where the light and landscape of the Caucasus inform her work in subtle but unmistakable ways.
             </p>
           </div>
