@@ -56,6 +56,7 @@ export default function ArtworkCard({ artwork, onViewDetails }: ArtworkCardProps
             <img 
               src={artwork.images[0]} 
               alt={generateArtworkAlt(artwork.title, artwork.medium)}
+              title={`${artwork.title} – ${artwork.medium} by Ani Muradyan`}
               className={`w-full h-full object-cover transition-all duration-500 ${
                 imageLoaded ? 'opacity-100' : 'opacity-0'
               } group-hover:brightness-110 group-hover:contrast-105`}

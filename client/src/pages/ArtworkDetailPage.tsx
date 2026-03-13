@@ -131,6 +131,7 @@ export default function ArtworkDetailPage() {
                 <img 
                   src={artwork.images[currentImageIndex]} 
                   alt={generateArtworkAlt(artwork.title, artwork.medium)}
+                  title={`${artwork.title} – ${artwork.medium} by Ani Muradyan`}
                   className="w-full rounded-lg shadow-xl object-cover aspect-[3/4]"
                   data-testid={`img-artwork-main-${artwork.id}`}
                   loading="lazy"
@@ -181,6 +182,7 @@ export default function ArtworkDetailPage() {
                     <img
                       src={image}
                       alt={`${artwork.title} by Ani Muradyan – ${artwork.medium} (view ${index + 1})`}
+                      title={`${artwork.title} – ${artwork.medium} by Ani Muradyan`}
                       className="w-full h-full object-cover"
                       loading="lazy"
                     />

@@ -8,12 +8,13 @@ import { Link } from "wouter";
 import { ExternalLink, ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { Artwork, HomepageSettings, GalleryPhoto } from "@shared/schema";
 import backgroundImage from "@assets/1bg_1750936488071.png";
-import { updateCanonicalUrl, toSlug, generateArtworkAlt } from "@/lib/seo";
+import { updateCanonicalUrl, updateMetaDescription, toSlug, generateArtworkAlt } from "@/lib/seo";
 
 export default function HomePage() {
   useEffect(() => {
-    document.title = "Ani Muradyan – Contemporary Armenian Artist | Abstract Realism Paintings";
+    document.title = "Ani Muradyan – Contemporary Portrait Artist";
     updateCanonicalUrl('/');
+    updateMetaDescription("Ani Muradyan is a contemporary portrait artist creating expressive oil paintings and modern female portrait artworks.");
   }, []);
   
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -88,7 +89,7 @@ export default function HomePage() {
                 <span className="text-base">Contemporary Abstract Realism Artist • Oil Paintings & Fine Art Prints</span>
               </div>
               
-              <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">Contemporary  Artist – Ani Muradyan</h1>
+              <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">Ani Muradyan – Contemporary Artist</h1>
               
               <blockquote className="text-2xl md:text-4xl lg:text-5xl italic mb-16 text-slate-200 font-light leading-relaxed max-w-5xl text-center animate-slideUp animation-delay-200">
                 "{homepageSettings?.heroQuote || 'Art must bring hope into people\'s lives.'}"

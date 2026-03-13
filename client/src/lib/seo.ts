@@ -53,8 +53,9 @@ export function toSlug(title: string): string {
 }
 
 export function generateArtworkAlt(title: string, medium?: string): string {
+  const safeTitle = title?.trim() || 'Original artwork';
   const base = medium
-    ? `${title} – ${medium} by Armenian artist Ani Muradyan`
-    : `${title} – original painting by Armenian artist Ani Muradyan`;
+    ? `${safeTitle} – ${medium} by Armenian artist Ani Muradyan`
+    : `${safeTitle} – original painting by Armenian artist Ani Muradyan`;
   return base;
 }
