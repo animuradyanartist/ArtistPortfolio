@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Mail, MapPin, Instagram, Palette } from "lucide-react";
 import { updateCanonicalUrl } from "@/lib/seo";
+import { Link } from "wouter";
 
 const contactSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name is too long"),
@@ -288,6 +289,20 @@ export default function ContactPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Internal contextual links for SEO */}
+        <div className="mt-12 text-center">
+          <p className="text-slate-600 text-lg">
+            Browse{" "}
+            <Link href="/artworks" className="text-blue-600 hover:underline font-medium">
+              original artworks by Ani Muradyan
+            </Link>{" "}
+            or visit the{" "}
+            <Link href="/gallery" className="text-blue-600 hover:underline font-medium">
+              exhibition gallery
+            </Link>.
+          </p>
         </div>
       </div>
     </div>

@@ -778,11 +778,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SEO Routes
+  const SEO_BASE_URL = 'https://anymoore.am';
+
   app.get("/robots.txt", async (req, res) => {
     res.setHeader('Content-Type', 'text/plain');
     res.send(`User-agent: *
 Allow: /
-Sitemap: https://animuradyanart.replit.app/sitemap.xml
+Sitemap: ${SEO_BASE_URL}/sitemap.xml
+Sitemap: ${SEO_BASE_URL}/image-sitemap.xml
 
 # Disallow admin pages from indexing
 User-agent: *
@@ -792,46 +795,41 @@ Disallow: /admin
 
   app.get("/sitemap.xml", async (req, res) => {
     try {
-      const baseUrl = 'https://animuradyanart.replit.app';
       const artworks = await storage.getAllArtworks();
       const prints = await storage.getAllPrints();
       
-      // Static pages
       const staticPages = [
         { url: '/', priority: '1.0', changefreq: 'weekly' },
         { url: '/about', priority: '0.8', changefreq: 'monthly' },
         { url: '/artworks', priority: '0.9', changefreq: 'weekly' },
+        { url: '/gallery', priority: '0.8', changefreq: 'weekly' },
         { url: '/prints', priority: '0.9', changefreq: 'weekly' },
         { url: '/contact', priority: '0.7', changefreq: 'monthly' }
       ];
       
-      // Build XML sitemap
       let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
       xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
       
-      // Add static pages
       staticPages.forEach(page => {
         xml += '  <url>\n';
-        xml += `    <loc>${baseUrl}${page.url}</loc>\n`;
+        xml += `    <loc>${SEO_BASE_URL}${page.url}</loc>\n`;
         xml += `    <changefreq>${page.changefreq}</changefreq>\n`;
         xml += `    <priority>${page.priority}</priority>\n`;
         xml += '  </url>\n';
       });
       
-      // Add artwork pages
       artworks.forEach(artwork => {
         xml += '  <url>\n';
-        xml += `    <loc>${baseUrl}/artworks/${artwork.id}</loc>\n`;
+        xml += `    <loc>${SEO_BASE_URL}/artworks/${artwork.id}</loc>\n`;
         xml += '    <changefreq>monthly</changefreq>\n';
         xml += '    <priority>0.8</priority>\n';
         xml += '  </url>\n';
       });
       
-      // Add print pages (only active prints)
       const activePrints = prints.filter(print => print.status === 'active');
       activePrints.forEach(print => {
         xml += '  <url>\n';
-        xml += `    <loc>${baseUrl}/prints/${print.id}</loc>\n`;
+        xml += `    <loc>${SEO_BASE_URL}/prints/${print.id}</loc>\n`;
         xml += '    <changefreq>monthly</changefreq>\n';
         xml += '    <priority>0.8</priority>\n';
         xml += '  </url>\n';
@@ -844,6 +842,56 @@ Disallow: /admin
     } catch (error) {
       console.error("Error generating sitemap:", error);
       res.status(500).send('Error generating sitemap');
+    }
+  });
+
+  app.get("/image-sitemap.xml", async (req, res) => {
+    try {
+      const artworks = await storage.getAllArtworks();
+      const galleryPhotos = await storage.getAllGalleryPhotos();
+
+      let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
+      xml += '        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n';
+
+      artworks.forEach(artwork => {
+        if (!artwork.images || artwork.images.length === 0) return;
+        xml += '  <url>\n';
+        xml += `    <loc>${SEO_BASE_URL}/artworks/${artwork.id}</loc>\n`;
+        artwork.images.forEach((imgSrc: string) => {
+          if (imgSrc.startsWith('data:')) return;
+          const imgUrl = imgSrc.startsWith('http') ? imgSrc : `${SEO_BASE_URL}${imgSrc}`;
+          xml += '    <image:image>\n';
+          xml += `      <image:loc>${imgUrl}</image:loc>\n`;
+          xml += `      <image:title>Abstract realism portrait painting – ${artwork.title} – Ani Muradyan</image:title>\n`;
+          xml += `      <image:caption>Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title}. ${artwork.medium || 'Oil on canvas'}, ${artwork.year || ''}.</image:caption>\n`;
+          xml += '    </image:image>\n';
+        });
+        xml += '  </url>\n';
+      });
+
+      if (galleryPhotos.length > 0) {
+        xml += '  <url>\n';
+        xml += `    <loc>${SEO_BASE_URL}/gallery</loc>\n`;
+        galleryPhotos.forEach(photo => {
+          if (!photo.image || photo.image.startsWith('data:')) return;
+          const imgUrl = photo.image.startsWith('http') ? photo.image : `${SEO_BASE_URL}${photo.image}`;
+          xml += '    <image:image>\n';
+          xml += `      <image:loc>${imgUrl}</image:loc>\n`;
+          xml += `      <image:title>Abstract realism portrait painting – ${photo.title || 'Exhibition photo'} – Ani Muradyan</image:title>\n`;
+          xml += `      <image:caption>Exhibition photo by Ani Muradyan – ${photo.exhibitionName || ''}${photo.location ? ', ' + photo.location : ''}${photo.year ? ' (' + photo.year + ')' : ''}.</image:caption>\n`;
+          xml += '    </image:image>\n';
+        });
+        xml += '  </url>\n';
+      }
+
+      xml += '</urlset>';
+
+      res.setHeader('Content-Type', 'application/xml');
+      res.send(xml);
+    } catch (error) {
+      console.error("Error generating image sitemap:", error);
+      res.status(500).send('Error generating image sitemap');
     }
   });
 

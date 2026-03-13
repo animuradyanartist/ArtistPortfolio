@@ -5,6 +5,7 @@ import { updateCanonicalUrl } from "@/lib/seo";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Link } from "wouter";
 
 export default function GalleryPage() {
   useEffect(() => {
@@ -83,7 +84,8 @@ export default function GalleryPage() {
                   <div className="aspect-[4/3] overflow-hidden">
                     <img
                       src={photo.image}
-                      alt={`${photo.title || 'Exhibition photo'} by Ani Muradyan – contemporary abstract realism exhibition photo`}
+                      alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${photo.title || 'Exhibition photo'}`}
+                      title={`Abstract realism portrait painting – ${photo.title || 'Exhibition gallery'} – Ani Muradyan`}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                       loading="lazy"
                       data-testid={`img-gallery-${photo.id}`}
@@ -132,6 +134,22 @@ export default function GalleryPage() {
         )}
       </div>
 
+      {/* Internal contextual links for SEO */}
+      {sortedPhotos.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16 text-center">
+          <p className="text-slate-600 text-lg">
+            Explore the{" "}
+            <Link href="/artworks" className="text-blue-600 hover:underline font-medium">
+              collection of abstract realism paintings
+            </Link>{" "}
+            by Ani Muradyan, or{" "}
+            <Link href="/about" className="text-blue-600 hover:underline font-medium">
+              learn more about the artist
+            </Link>.
+          </p>
+        </div>
+      )}
+
       {/* Lightbox Dialog */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
         <DialogContent className="w-[800px] h-[500px] p-0 bg-black/95 border-none">
@@ -166,7 +184,8 @@ export default function GalleryPage() {
               <div className="w-full h-full flex items-center justify-center p-4">
                 <img
                   src={currentPhoto.image}
-                  alt={currentPhoto.title || 'Exhibition photo'}
+                  alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${currentPhoto.title || 'Exhibition photo'}`}
+                  title={`Abstract realism portrait painting – ${currentPhoto.title || 'Exhibition gallery'} – Ani Muradyan`}
                   className="max-w-full max-h-full object-contain"
                 />
               </div>

@@ -65,7 +65,8 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                 <div className="relative">
                   <img 
                     src={artwork.images[currentImageIndex]} 
-                    alt={`${artwork.title} - Image ${currentImageIndex + 1}`}
+                    alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title}`}
+                    title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
                     className="w-full rounded-lg shadow-lg object-cover aspect-[3/4]"
                     loading="lazy"
                   />
@@ -113,7 +114,8 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                       >
                         <img 
                           src={image} 
-                          alt={`${artwork.title} thumbnail ${index + 1}`}
+                          alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title} thumbnail ${index + 1}`}
+                          title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
                           className="w-full h-16 object-cover"
                           loading="lazy"
                         />

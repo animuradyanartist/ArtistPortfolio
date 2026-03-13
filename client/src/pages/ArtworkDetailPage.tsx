@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import type { Artwork } from "@shared/schema";
-import { updateCanonicalUrl } from "@/lib/seo";
+import { updateCanonicalUrl, injectJsonLd, removeJsonLd, BASE_URL } from "@/lib/seo";
 
 export default function ArtworkDetailPage() {
   const params = useParams();
@@ -19,14 +19,40 @@ export default function ArtworkDetailPage() {
     enabled: !!artworkId && !isNaN(artworkId)
   });
 
-  // Set page title and canonical URL for SEO
+  // Set page title, canonical URL, and per-artwork JSON-LD for SEO
   useEffect(() => {
     if (artwork) {
-      console.log('Artwork data:', artwork);
-      console.log('Artwork title:', artwork.title);
       document.title = `${artwork.title} | Original Artwork by Ani Muradyan`;
       updateCanonicalUrl(`/artworks/${artworkId}`);
+      injectJsonLd('artwork-jsonld', {
+        "@context": "https://schema.org",
+        "@type": "VisualArtwork",
+        "name": artwork.title,
+        "description": artwork.description,
+        "artMedium": artwork.medium || "Oil on canvas",
+        "artform": "Painting",
+        "artworkSurface": "Canvas",
+        "dateCreated": artwork.year?.toString(),
+        "height": artwork.dimensions,
+        "image": artwork.images?.[0]
+          ? (artwork.images[0].startsWith('http') ? artwork.images[0] : `${BASE_URL}${artwork.images[0]}`)
+          : undefined,
+        "url": `${BASE_URL}/artworks/${artworkId}`,
+        "creator": {
+          "@type": ["Person", "VisualArtist"],
+          "name": "Ani Muradyan",
+          "url": BASE_URL,
+          "nationality": { "@type": "Country", "name": "Armenia" }
+        },
+        "offers": artwork.availability === 'available' ? {
+          "@type": "Offer",
+          "price": artwork.price,
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock"
+        } : undefined
+      });
     }
+    return () => removeJsonLd('artwork-jsonld');
   }, [artwork, artworkId]);
 
   const nextImage = () => {
@@ -95,7 +121,8 @@ export default function ArtworkDetailPage() {
               {artwork.images && artwork.images.length > 0 ? (
                 <img 
                   src={artwork.images[currentImageIndex]} 
-                  alt={`${artwork.title} by Ani Muradyan – contemporary abstract realism oil painting`}
+                  alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title}`}
+                  title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
                   className="w-full rounded-lg shadow-xl object-cover aspect-[3/4]"
                   data-testid={`img-artwork-main-${artworkId}`}
                   loading="lazy"
@@ -146,7 +173,8 @@ export default function ArtworkDetailPage() {
                   >
                     <img
                       src={image}
-                      alt={`${artwork.title} by Ani Muradyan – contemporary abstract realism oil painting (view ${index + 1})`}
+                      alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title} (view ${index + 1})`}
+                      title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
                       className="w-full h-full object-cover"
                       loading="lazy"
                     />

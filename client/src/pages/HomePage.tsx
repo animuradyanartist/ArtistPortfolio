@@ -151,7 +151,8 @@ export default function HomePage() {
                 <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200">
                   <img 
                     src={artwork.images[0]} 
-                    alt={`${artwork.title} by Ani Muradyan – contemporary abstract realism oil painting`}
+                    alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title}`}
+                    title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
                     className="w-full h-full object-cover"
                     loading="lazy"
                   />
@@ -220,7 +221,8 @@ export default function HomePage() {
                     <div className="aspect-square overflow-hidden">
                       <img
                         src={photo.image}
-                        alt={`${photo.title || 'Exhibition photo'} by Ani Muradyan – contemporary abstract realism exhibition photo`}
+                        alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${photo.title || 'Exhibition photo'}`}
+                        title={`Abstract realism portrait painting – ${photo.title || 'Exhibition gallery'} – Ani Muradyan`}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                         loading="lazy"
                         data-testid={`img-homepage-gallery-${photo.id}`}
@@ -286,7 +288,8 @@ export default function HomePage() {
                 <div className="w-full h-full flex items-center justify-center p-4">
                   <img
                     src={currentPhoto.image}
-                    alt={currentPhoto.title || 'Exhibition photo'}
+                    alt={`Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${currentPhoto.title || 'Exhibition photo'}`}
+                    title={`Abstract realism portrait painting – ${currentPhoto.title || 'Exhibition gallery'} – Ani Muradyan`}
                     className="max-w-full max-h-full object-contain"
                   />
                 </div>

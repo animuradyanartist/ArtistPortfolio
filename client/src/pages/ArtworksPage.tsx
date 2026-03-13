@@ -6,6 +6,7 @@ import ArtworkCard from "@/components/ArtworkCard";
 import ArtworkModal from "@/components/ArtworkModal";
 import type { Artwork } from "@shared/schema";
 import { updateCanonicalUrl } from "@/lib/seo";
+import { Link } from "wouter";
 
 export default function ArtworksPage() {
   // Set page title and canonical URL for SEO
@@ -169,6 +170,19 @@ export default function ArtworksPage() {
             </div>
           </div>
         )}
+
+        {/* Internal contextual links for SEO */}
+        <div className="mt-16 text-center">
+          <p className="text-slate-600 text-lg">
+            <Link href="/about" className="text-blue-600 hover:underline font-medium">
+              Learn about Ani Muradyan
+            </Link>{" "}
+            and her artistic journey, or browse the{" "}
+            <Link href="/gallery" className="text-blue-600 hover:underline font-medium">
+              exhibition gallery
+            </Link>.
+          </p>
+        </div>
 
         {/* Artwork Modal */}
         <ArtworkModal
