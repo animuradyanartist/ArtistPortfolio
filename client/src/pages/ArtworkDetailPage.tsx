@@ -262,7 +262,7 @@ export default function ArtworkDetailPage() {
                       data-testid="button-buy-link"
                     >
                       <ExternalLink className="w-4 h-4 mr-2" />
-                      Purchase Options
+                      Buy Now
                     </Button>
                   )}
                 </div>

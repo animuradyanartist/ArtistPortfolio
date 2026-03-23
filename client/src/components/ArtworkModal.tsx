@@ -167,6 +167,20 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                     </Badge>
                   </div>
                   
+                  {artwork.buyLink && artwork.availability === 'available' && (
+                    <a
+                      href={artwork.buyLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <Button className="w-full bg-deep-blue hover:bg-deep-blue/90">
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Buy Now
+                      </Button>
+                    </a>
+                  )}
+
                   {/* Contact Information Box */}
                   <div className="bg-soft-white/50 border border-muted-pink/30 rounded-lg p-4">
                     <h4 className="font-semibold text-deep-blue mb-3">
