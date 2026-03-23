@@ -167,9 +167,9 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                     </Badge>
                   </div>
                   
-                  {artwork.buyLink && artwork.availability === 'available' && (
+                  {artwork.availability === 'available' && (artwork.buyLink || artwork.saatchiUrl) && (
                     <a
-                      href={artwork.buyLink}
+                      href={artwork.buyLink || artwork.saatchiUrl || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="block"
