@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -9,8 +9,8 @@ import { updateCanonicalUrl } from "@/lib/seo";
 import HomePage from "@/pages/HomePage";
 import ArtworksPage from "@/pages/ArtworksPage";
 import ArtworkDetailPage from "@/pages/ArtworkDetailPage";
-import PrintsPage from "@/pages/PrintsPage";
-import PrintArtworkPage from "@/pages/PrintArtworkPage";
+// import PrintsPage from "@/pages/PrintsPage";
+// import PrintArtworkPage from "@/pages/PrintArtworkPage";
 import AboutPage from "@/pages/AboutPage";
 import ExhibitionsPage from "@/pages/ExhibitionsPage";
 import GalleryPage from "@/pages/GalleryPage";
@@ -37,8 +37,8 @@ function Router() {
       <Route path="/" component={HomePage} />
       <Route path="/artworks" component={ArtworksPage} />
       <Route path="/artworks/:id" component={ArtworkDetailPage} />{/* :id accepts both numeric IDs and slug strings */}
-      <Route path="/prints" component={PrintsPage} />
-      <Route path="/prints/:id" component={PrintArtworkPage} />{/* :id accepts both numeric IDs and slug strings */}
+      <Route path="/prints">{() => <Redirect to="/" />}</Route>
+      <Route path="/prints/:id">{() => <Redirect to="/" />}</Route>
       <Route path="/about" component={AboutPage} />
       <Route path="/exhibitions" component={ExhibitionsPage} />
       <Route path="/gallery" component={GalleryPage} />
