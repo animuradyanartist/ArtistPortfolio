@@ -167,6 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const artworkData = {
         ...validatedData,
         slug: validatedData.slug || toSlug(validatedData.title),
+        seoSlug: validatedData.seoSlug?.trim() || null,
       };
       
       const artwork = await storage.createArtwork(artworkData);
@@ -194,6 +195,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return res.status(400).json({ message: "Invalid image format detected" });
           }
         }
+      }
+
+      if ('seoSlug' in validatedData) {
+        validatedData.seoSlug = validatedData.seoSlug?.trim() || null;
       }
       
       const artwork = await storage.updateArtwork(id, validatedData);
