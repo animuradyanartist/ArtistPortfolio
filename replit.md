@@ -50,6 +50,13 @@ Preferred communication style: Simple, everyday language.
 - Environment variables: `NODE_ENV`, `DATABASE_URL`, `PORT`.
 - Replit Configuration: nodejs-20, web, postgresql-16 modules, auto-scaling, port mapping 5000:80.
 
+### Test/Production Environment Separation
+- **Development** (`npm run dev`, NODE_ENV=development): uses `neondb_dev` database (auto-derived from DATABASE_URL by appending `_dev` to the database name). Content changes here do NOT affect the live site.
+- **Production** (deployed at anymoore.am, NODE_ENV=production): uses `neondb` database (DATABASE_URL). This is where real content lives.
+- `server/db.ts` selects the correct database based on NODE_ENV. A custom `DEV_DATABASE_URL` env var can override the auto-derived dev URL.
+- The admin panel shows a visible **amber "TEST ENVIRONMENT"** banner in development and a subtle green "PRODUCTION" indicator when deployed.
+- Schema is synced to the dev database via: `DATABASE_URL=$(node -e "const u=new URL(process.env.DATABASE_URL);u.pathname='/neondb_dev';console.log(u.toString())") npm run db:push`
+
 ## External Dependencies
 
 ### Core Dependencies

@@ -596,8 +596,19 @@ export default function AdminPage() {
     );
   }
 
+  const isDevEnv = import.meta.env.DEV;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      {isDevEnv ? (
+        <div className="w-full bg-amber-400 text-amber-900 text-center py-2 px-4 font-semibold text-sm tracking-wide shadow-sm">
+          ⚠ TEST ENVIRONMENT — Changes here do NOT affect the live anymoore.am website
+        </div>
+      ) : (
+        <div className="w-full bg-emerald-600 text-white text-center py-1.5 px-4 text-xs font-medium tracking-wide">
+          ● PRODUCTION — anymoore.am
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-12">
           <div>
