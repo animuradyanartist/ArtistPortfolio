@@ -32,6 +32,14 @@ export default function AdminPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const handleAuthError = (error: Error, fallbackMessage: string) => {
+    if (error.message.startsWith("401")) {
+      logout();
+      toast({ title: "Session expired. Please log in again.", variant: "destructive" });
+    } else {
+      toast({ title: fallbackMessage, variant: "destructive" });
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -337,35 +345,38 @@ export default function AdminPage() {
 
   const deleteArtworkMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/artworks/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData(["/api/artworks"], (old: any[]) =>
+        Array.isArray(old) ? old.filter((a) => a.id !== id) : old
+      );
       toast({ title: "Artwork deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
     },
-    onError: () => {
-      toast({ title: "Failed to delete artwork", variant: "destructive" });
-    },
+    onError: (error: Error) => handleAuthError(error, "Failed to delete artwork"),
   });
 
   const deletePrintMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/prints/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/prints"] });
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData(["/api/prints"], (old: any[]) =>
+        Array.isArray(old) ? old.filter((p) => p.id !== id) : old
+      );
       toast({ title: "Print deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/prints"] });
     },
-    onError: () => {
-      toast({ title: "Failed to delete print", variant: "destructive" });
-    },
+    onError: (error: Error) => handleAuthError(error, "Failed to delete print"),
   });
 
   const deleteExhibitionMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/exhibitions/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/exhibitions"] });
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData(["/api/exhibitions"], (old: any[]) =>
+        Array.isArray(old) ? old.filter((e) => e.id !== id) : old
+      );
       toast({ title: "Exhibition deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/exhibitions"] });
     },
-    onError: () => {
-      toast({ title: "Failed to delete exhibition", variant: "destructive" });
-    },
+    onError: (error: Error) => handleAuthError(error, "Failed to delete exhibition"),
   });
 
   const createExhibitionMutation = useMutation({
@@ -395,13 +406,14 @@ export default function AdminPage() {
 
   const deleteGalleryPhotoMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/gallery-photos/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/gallery-photos"] });
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData(["/api/gallery-photos"], (old: any[]) =>
+        Array.isArray(old) ? old.filter((p) => p.id !== id) : old
+      );
       toast({ title: "Gallery photo deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/gallery-photos"] });
     },
-    onError: () => {
-      toast({ title: "Failed to delete gallery photo", variant: "destructive" });
-    },
+    onError: (error: Error) => handleAuthError(error, "Failed to delete gallery photo"),
   });
 
   const toggleGalleryPhotoFeaturedMutation = useMutation({
@@ -1548,6 +1560,16 @@ function PrintsManagement() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logout } = useAdmin();
+
+  const handleAuthError = (error: Error, fallbackMessage: string) => {
+    if (error.message.startsWith("401")) {
+      logout();
+      toast({ title: "Session expired. Please log in again.", variant: "destructive" });
+    } else {
+      toast({ title: fallbackMessage, variant: "destructive" });
+    }
+  };
   
   const { data: prints = [], isLoading: printsLoading } = useQuery<Print[]>({
     queryKey: ["/api/prints"],
@@ -1555,13 +1577,14 @@ function PrintsManagement() {
 
   const deletePrintMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/prints/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/prints"] });
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData(["/api/prints"], (old: any[]) =>
+        Array.isArray(old) ? old.filter((p) => p.id !== id) : old
+      );
       toast({ title: "Print deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/prints"] });
     },
-    onError: () => {
-      toast({ title: "Failed to delete print", variant: "destructive" });
-    },
+    onError: (error: Error) => handleAuthError(error, "Failed to delete print"),
   });
 
   return (

@@ -227,7 +227,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Failed to delete artwork" });
+      console.error('Delete artwork error:', error);
+      res.status(500).json({ message: "Failed to delete artwork", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
