@@ -15,9 +15,12 @@ neonConfig.webSocketConstructor = ws;
 const PROD_URL = process.env.DATABASE_URL;
 if (!PROD_URL) throw new Error('DATABASE_URL not set');
 
-const devUrl = new URL(PROD_URL);
-devUrl.pathname = `/${devUrl.pathname.slice(1)}_dev`;
-const DEV_URL = devUrl.toString();
+let DEV_URL = process.env.DEV_DATABASE_URL;
+if (!DEV_URL) {
+  const devUrl = new URL(PROD_URL);
+  devUrl.pathname = `/${devUrl.pathname.slice(1)}_dev`;
+  DEV_URL = devUrl.toString();
+}
 
 const prodPool = new Pool({ connectionString: PROD_URL });
 const devPool  = new Pool({ connectionString: DEV_URL });
@@ -26,13 +29,16 @@ async function copyTable(tableName, columns) {
   process.stdout.write(`  ${tableName} ... `);
 
   const { rows } = await prodPool.query(`SELECT * FROM ${tableName} ORDER BY id`);
+
+  // Always clear dev first — ensures a rerun fully mirrors prod even if prod table is now empty
+  await devPool.query(`TRUNCATE TABLE ${tableName} RESTART IDENTITY CASCADE`);
+
   if (rows.length === 0) {
-    console.log('empty (skipped)');
+    console.log('empty (cleared dev)');
     return;
   }
 
-  await devPool.query(`TRUNCATE TABLE ${tableName} RESTART IDENTITY CASCADE`);
-
+  // Use DEV_DATABASE_URL if set, otherwise derive from DATABASE_URL
   for (const row of rows) {
     const vals = columns.map(c => row[c]);
     const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
