@@ -11,10 +11,24 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+/**
+ * Returns the correct database connection string based on the environment.
+ *
+ * - production  (NODE_ENV === 'production'): DATABASE_URL — the live Neon database
+ *   that powers anymoore.am. Untouched by dev work.
+ *
+ * - development (NODE_ENV === 'development'): prefers DEV_DATABASE_URL when
+ *   explicitly set in secrets/env. Falls back to deriving a sibling database
+ *   from DATABASE_URL by appending "_dev" to the database name
+ *   (e.g. neondb → neondb_dev). The sibling DB must exist and have the schema
+ *   pushed to it (`DATABASE_URL=<dev_url> npm run db:push`).
+ *
+ * To explicitly pin the dev database without relying on URL derivation, add
+ *   DEV_DATABASE_URL=<your-connection-string>
+ * to Replit Secrets (development scope).
+ */
 function getConnectionString(): string {
-  const isDev = process.env.NODE_ENV !== 'production';
-
-  if (!isDev) {
+  if (process.env.NODE_ENV === 'production') {
     return process.env.DATABASE_URL!;
   }
 
@@ -29,13 +43,13 @@ function getConnectionString(): string {
 }
 
 const connectionString = getConnectionString();
-const isDevelopment = process.env.NODE_ENV !== 'production';
 
-if (isDevelopment) {
+if (process.env.NODE_ENV === 'development') {
   const url = new URL(connectionString);
-  console.log(`[DB] Using development database: ${url.pathname.slice(1)} @ ${url.hostname}`);
+  const source = process.env.DEV_DATABASE_URL ? 'DEV_DATABASE_URL' : 'auto-derived';
+  console.log(`[DB] development → ${url.pathname.slice(1)} @ ${url.hostname} (${source})`);
 } else {
-  console.log(`[DB] Using production database.`);
+  console.log(`[DB] production → DATABASE_URL`);
 }
 
 export const pool = new Pool({ 
