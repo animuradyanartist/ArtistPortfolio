@@ -29,6 +29,9 @@ export default function AdminPage() {
   const [draggedArtwork, setDraggedArtwork] = useState<number | null>(null);
   const [dragOverArtwork, setDragOverArtwork] = useState<number | null>(null);
 
+  // Exhibition editing state
+  const [editingExhibitionId, setEditingExhibitionId] = useState<number | null>(null);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -162,6 +165,21 @@ export default function AdminPage() {
     },
   });
 
+  const editExhibitionForm = useForm({
+    resolver: zodResolver(insertExhibitionSchema),
+    defaultValues: {
+      title: "",
+      type: "solo",
+      venue: "",
+      location: "",
+      year: new Date().getFullYear(),
+      startDate: "",
+      endDate: "",
+      description: "",
+      image: "",
+    },
+  });
+
   const contactForm = useForm({
     resolver: zodResolver(insertContactSettingsSchema),
     defaultValues: contactSettings || {
@@ -205,6 +223,25 @@ export default function AdminPage() {
       contactForm.reset(contactSettings);
     }
   }, [contactSettings, contactForm]);
+
+  useEffect(() => {
+    if (editingExhibitionId !== null) {
+      const ex = exhibitions.find((e) => e.id === editingExhibitionId);
+      if (ex) {
+        editExhibitionForm.reset({
+          title: ex.title,
+          type: ex.type,
+          venue: ex.venue,
+          location: ex.location,
+          year: ex.year,
+          startDate: ex.startDate || "",
+          endDate: ex.endDate || "",
+          description: ex.description || "",
+          image: ex.image || "",
+        });
+      }
+    }
+  }, [editingExhibitionId, exhibitions]);
 
   // Optimized mutations
   const updateHomepageMutation = useMutation({
@@ -389,6 +426,22 @@ export default function AdminPage() {
     onError: () => {
       toast({ title: "Failed to create exhibition", variant: "destructive" });
     },
+  });
+
+  const updateExhibitionMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) =>
+      apiRequest("PUT", `/api/exhibitions/${id}`, data),
+    onSuccess: (_data, { id }) => {
+      queryClient.setQueryData(["/api/exhibitions"], (old: any[]) =>
+        Array.isArray(old)
+          ? old.map((e) => (e.id === id ? { ...e, ..._data } : e))
+          : old
+      );
+      queryClient.invalidateQueries({ queryKey: ["/api/exhibitions"] });
+      setEditingExhibitionId(null);
+      toast({ title: "Exhibition updated successfully" });
+    },
+    onError: (error: Error) => handleAuthError(error, "Failed to update exhibition"),
   });
 
   const createGalleryPhotoMutation = useMutation({
@@ -1030,42 +1083,173 @@ export default function AdminPage() {
                 {exhibitions.map((exhibition) => (
                   <Card key={exhibition.id}>
                     <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold">{exhibition.title}</h3>
-                          <p className="text-sm text-soft-gray">
-                            {exhibition.venue}, {exhibition.location} • {exhibition.year}
-                          </p>
-                        </div>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              disabled={deleteExhibitionMutation.isPending}
-                            >
-                              <Trash className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Exhibition</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete "{exhibition.title}"? This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteExhibitionMutation.mutate(exhibition.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      {editingExhibitionId === exhibition.id ? (
+                        <Form {...editExhibitionForm}>
+                          <form
+                            onSubmit={editExhibitionForm.handleSubmit((data) =>
+                              updateExhibitionMutation.mutate({ id: exhibition.id, data })
+                            )}
+                            className="space-y-4"
+                          >
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={editExhibitionForm.control}
+                                name="title"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Title</FormLabel>
+                                    <FormControl><Input {...field} /></FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={editExhibitionForm.control}
+                                name="year"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Year</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        type="number"
+                                        onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={editExhibitionForm.control}
+                                name="venue"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Venue</FormLabel>
+                                    <FormControl><Input {...field} /></FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={editExhibitionForm.control}
+                                name="location"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Location</FormLabel>
+                                    <FormControl><Input {...field} /></FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={editExhibitionForm.control}
+                                name="startDate"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Start Date (Optional)</FormLabel>
+                                    <FormControl><Input {...field} value={field.value || ''} placeholder="e.g. March 2024" /></FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={editExhibitionForm.control}
+                                name="endDate"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>End Date (Optional)</FormLabel>
+                                    <FormControl><Input {...field} value={field.value || ''} placeholder="e.g. April 2024" /></FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <FormField
+                              control={editExhibitionForm.control}
+                              name="description"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Description</FormLabel>
+                                  <FormControl>
+                                    <Textarea {...field} value={field.value || ''} rows={3} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                type="submit"
+                                disabled={updateExhibitionMutation.isPending}
+                                className="bg-deep-blue hover:bg-deep-blue/90"
                               >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
+                                {updateExhibitionMutation.isPending ? "Saving..." : "Save Changes"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setEditingExhibitionId(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </form>
+                        </Form>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold">{exhibition.title}</h3>
+                            <p className="text-sm text-soft-gray">
+                              {exhibition.venue}, {exhibition.location} • {exhibition.year}
+                            </p>
+                            {exhibition.description && (
+                              <p className="text-xs text-slate-500 mt-1 line-clamp-2">{exhibition.description}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingExhibitionId(exhibition.id)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  disabled={deleteExhibitionMutation.isPending}
+                                >
+                                  <Trash className="w-4 h-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Exhibition</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete "{exhibition.title}"? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteExhibitionMutation.mutate(exhibition.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
