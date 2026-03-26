@@ -260,6 +260,20 @@ export default function ContactPage() {
                     <p className="text-slate-600 text-sm">Shop original artworks</p>
                   </div>
                 </a>
+                <a 
+                  href="https://www.singulart.com/en/artist/ani-muradyan-62448" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl hover:from-amber-100 hover:to-orange-100 transition-all duration-300 transform hover:scale-105"
+                >
+                  <div className="w-10 h-10 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
+                    <Palette className="text-white w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-slate-700 font-medium">Singulart</p>
+                    <p className="text-slate-600 text-sm">Discover artworks on Singulart</p>
+                  </div>
+                </a>
               </div>
             </div>
 
