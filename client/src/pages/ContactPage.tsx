@@ -260,22 +260,22 @@ export default function ContactPage() {
                     <p className="text-slate-600 text-sm">Shop original artworks</p>
                   </div>
                 </a>
-                <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl transition-all duration-300">
+                <a
+                  href="https://www.singulart.com/en/artist/ani-muradyan-62448"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl hover:from-amber-100 hover:to-orange-100 transition-all duration-300 transform hover:scale-105"
+                >
                   <div className="w-10 h-10 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Palette className="text-white w-5 h-5" />
                   </div>
                   <div className="flex flex-col gap-2">
                     <p className="text-slate-700 font-medium">Singulart</p>
-                    <a
-                      href="https://www.singulart.com/en/artist/ani-muradyan-62448"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#0b08c8", padding: "8px 14px", borderRadius: "20px", textDecoration: "none" }}
-                    >
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#0b08c8", padding: "6px 12px", borderRadius: "20px" }}>
                       <span style={{ fontSize: "13px", fontWeight: 500, color: "#c8c6ff" }}>Verified artist on Singulart</span>
-                    </a>
+                    </span>
                   </div>
-                </div>
+                </a>
               </div>
             </div>
 
