@@ -27,8 +27,10 @@ export const artworks = pgTable("artworks", {
   featured: boolean("featured").default(false),
   position: integer("position").default(0),
   availableForPrint: boolean("available_for_print").default(false),
-  printSizes: text("print_sizes"), 
+  printSizes: text("print_sizes"),
   preferredPrintMaterial: text("preferred_print_material"),
+  singulartId: text("singulart_id").unique(),
+  source: text("source").notNull().default("manual"),
 });
 
 export const prints = pgTable("prints", {

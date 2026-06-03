@@ -147,7 +147,9 @@ export class MemStorage implements IStorage {
         position: 0,
         availableForPrint: false,
         printSizes: null,
-        preferredPrintMaterial: null
+        preferredPrintMaterial: null,
+        singulartId: null,
+        source: "manual",
       },
       {
         id: 2,
@@ -167,7 +169,9 @@ export class MemStorage implements IStorage {
         position: 1,
         availableForPrint: false,
         printSizes: null,
-        preferredPrintMaterial: null
+        preferredPrintMaterial: null,
+        singulartId: null,
+        source: "manual",
       },
       {
         id: 3,
@@ -187,7 +191,9 @@ export class MemStorage implements IStorage {
         position: 2,
         availableForPrint: false,
         printSizes: null,
-        preferredPrintMaterial: null
+        preferredPrintMaterial: null,
+        singulartId: null,
+        source: "manual",
       },
       {
         id: 4,
@@ -207,7 +213,9 @@ export class MemStorage implements IStorage {
         position: 3,
         availableForPrint: false,
         printSizes: null,
-        preferredPrintMaterial: null
+        preferredPrintMaterial: null,
+        singulartId: null,
+        source: "manual",
       }
     ];
 
@@ -271,8 +279,8 @@ export class MemStorage implements IStorage {
 
   async createArtwork(insertArtwork: InsertArtwork): Promise<Artwork> {
     const id = this.currentArtworkId++;
-    const artwork: Artwork = { 
-      ...insertArtwork, 
+    const artwork: Artwork = {
+      ...insertArtwork,
       id,
       saatchiUrl: insertArtwork.saatchiUrl || null,
       buyLink: insertArtwork.buyLink || null,
@@ -280,7 +288,9 @@ export class MemStorage implements IStorage {
       position: insertArtwork.position ?? 0,
       availableForPrint: insertArtwork.availableForPrint ?? false,
       printSizes: insertArtwork.printSizes ?? null,
-      preferredPrintMaterial: insertArtwork.preferredPrintMaterial ?? "paper"
+      preferredPrintMaterial: insertArtwork.preferredPrintMaterial ?? "paper",
+      singulartId: insertArtwork.singulartId ?? null,
+      source: insertArtwork.source ?? "manual",
     };
     this.artworks.set(id, artwork);
     return artwork;
