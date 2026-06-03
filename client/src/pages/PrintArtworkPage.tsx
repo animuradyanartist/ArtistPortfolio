@@ -598,12 +598,12 @@ export default function PrintArtworkPage() {
                     </div>
                     <div>
                       <a 
-                        href="https://www.instagram.com/animuradyan.art/" 
+                        href="https://www.instagram.com/animoria.art/" 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="text-deep-blue hover:underline"
                       >
-                        @animuradyan.art
+                        @animoria.art
                       </a>
                     </div>
                   </div>

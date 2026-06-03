@@ -205,12 +205,12 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-charcoal">Instagram:</span>
                         <a 
-                          href="https://www.instagram.com/animuradyan.art/" 
+                          href="https://www.instagram.com/animoria.art/" 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-deep-blue hover:underline flex items-center gap-1"
                         >
-                          @animuradyan.art
+                          @animoria.art
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>

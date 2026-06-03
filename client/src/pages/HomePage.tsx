@@ -381,7 +381,7 @@ export default function HomePage() {
               <h4 className="font-semibold mb-4">Connect</h4>
               <div className="flex space-x-4">
                 <a 
-                  href="https://www.instagram.com/animuradyan.art/" 
+                  href="https://www.instagram.com/animoria.art/" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-gray-300 hover:text-white transition-colors duration-300"

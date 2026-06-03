@@ -233,7 +233,7 @@ export default function ContactPage() {
               </div>
               <div className="space-y-4">
                 <a 
-                  href="https://www.instagram.com/animuradyan.art/" 
+                  href="https://www.instagram.com/animoria.art/" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="flex items-center gap-4 p-4 bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl hover:from-pink-100 hover:to-purple-100 transition-all duration-300 transform hover:scale-105"
@@ -243,7 +243,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <p className="text-slate-700 font-medium">Instagram</p>
-                    <p className="text-slate-600 text-sm">@animuradyan.art</p>
+                    <p className="text-slate-600 text-sm">@animoria.art</p>
                   </div>
                 </a>
                 <a 
