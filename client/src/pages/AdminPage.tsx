@@ -13,7 +13,7 @@ import { useAdmin } from "@/hooks/useAdmin";
 import { apiRequest } from "@/lib/queryClient";
 import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema, insertContactSettingsSchema, insertGalleryPhotoSchema } from "@shared/schema";
 import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings, GalleryPhoto } from "@shared/schema";
-import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function AdminPage() {
@@ -390,6 +390,35 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
     },
     onError: (error: Error) => handleAuthError(error, "Failed to delete artwork"),
+  });
+
+  // Singulart sync — POSTs to /api/admin/sync-singulart and refetches /api/artworks.
+  const syncSingulartMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/sync-singulart");
+      return res.json() as Promise<{
+        scrapedCount: number;
+        inserted: number;
+        updated: number;
+        error: string | null;
+      }>;
+    },
+    onSuccess: (result) => {
+      if (result.error) {
+        toast({
+          title: "Singulart sync failed",
+          description: result.error,
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Singulart sync complete",
+        description: `${result.scrapedCount} scraped • ${result.inserted} added • ${result.updated} updated`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
+    },
+    onError: (error: Error) => handleAuthError(error, "Singulart sync failed"),
   });
 
   const deletePrintMutation = useMutation({
@@ -827,13 +856,26 @@ export default function AdminPage() {
                     <p className="text-sm text-slate-600">Manage your artwork collection</p>
                   </div>
                 </div>
-                <Button
-                  onClick={() => setLocation("/admin/create-artwork")}
-                  className="h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl transition-all duration-200"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add New Artwork
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => syncSingulartMutation.mutate()}
+                    disabled={syncSingulartMutation.isPending}
+                    variant="outline"
+                    className="h-10 border-slate-300 text-slate-700 hover:bg-slate-50 font-medium rounded-xl transition-all duration-200"
+                  >
+                    <RefreshCw
+                      className={`w-4 h-4 mr-2 ${syncSingulartMutation.isPending ? "animate-spin" : ""}`}
+                    />
+                    {syncSingulartMutation.isPending ? "Syncing…" : "Sync Singulart"}
+                  </Button>
+                  <Button
+                    onClick={() => setLocation("/admin/create-artwork")}
+                    className="h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl transition-all duration-200"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add New Artwork
+                  </Button>
+                </div>
               </div>
             </div>
             

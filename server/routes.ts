@@ -241,6 +241,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Singulart sync — pulls artworks from singulart.com/en/artist/ani-muradyan-62448
+  // and upserts them into the local artworks table. Intended to be called daily
+  // (via Replit scheduled job) or on-demand from the admin UI.
+  app.post("/api/admin/sync-singulart", requireAdminAuth, async (req, res) => {
+    try {
+      const { runSingulartSync } = await import("./singulart-sync");
+      const result = await runSingulartSync();
+      const status = result.error ? 500 : 200;
+      res.status(status).json(result);
+    } catch (error) {
+      console.error('Singulart sync error:', error);
+      res.status(500).json({
+        scrapedCount: 0,
+        inserted: 0,
+        updated: 0,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
   // Prints routes
   // Helper function to compress base64 image
   const compressImage = (base64Image: string): string => {
