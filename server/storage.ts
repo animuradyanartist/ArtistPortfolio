@@ -115,11 +115,11 @@ export class MemStorage implements IStorage {
     // Initialize with default contact settings
     this.contactSettings = {
       id: 1,
-      instagramUrl: "https://www.instagram.com/animuradyan.art/",
+      instagramUrl: "https://www.instagram.com/animoria.art/",
       saatchiUrl: "https://www.saatchiart.com/account/profile/1980379",
       email: "animuradyan.artist@gmail.com",
       location: "Yerevan, Armenia",
-      instagramHandle: "@animuradyan.art"
+      instagramHandle: "@animoria.art"
     };
 
     // Initialize with sample data
