@@ -13,7 +13,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 79,
     "heightCm": 71,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2520049_2d7c745405e97efc567ac615ce1c7d3e.png",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2520049_2d7c745405e97efc567ac615ce1c7d3e.png",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-blue-drift-2520049"
   },
   {
@@ -24,7 +24,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 99,
     "heightCm": 79,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2520872_fdc87782a9fd6414f1cea30a97e7bc8f.png",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2520872_fdc87782a9fd6414f1cea30a97e7bc8f.png",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-a-road-to-tomorrow-2520872"
   },
   {
@@ -35,7 +35,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 89,
     "heightCm": 79,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2631637_6dde95acd24a9b18b8a79c977a991f9d.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2631637_6dde95acd24a9b18b8a79c977a991f9d.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-blue-detachment-2631637"
   },
   {
@@ -46,7 +46,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 79,
     "heightCm": 61,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2130937_91818b75f4e905cf413b3382d9f20728.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2130937_91818b75f4e905cf413b3382d9f20728.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-echoes-of-the-mind-2130937"
   },
   {
@@ -57,7 +57,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 71,
     "heightCm": 61,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2627626_d892ad5016a41b4b9eb0c73664481bb2.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2627626_d892ad5016a41b4b9eb0c73664481bb2.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-one-shared-feeling-2627626"
   },
   {
@@ -68,7 +68,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 89,
     "heightCm": 79,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2176588_106262001103cf05150410ef2acfc293.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2176588_106262001103cf05150410ef2acfc293.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-endless-horizon-2176588"
   },
   {
@@ -79,7 +79,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 61,
     "heightCm": 71,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2130915_b31f8d9e0e08507e2c3c7019218b9c6c.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2130915_b31f8d9e0e08507e2c3c7019218b9c6c.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-reflective-gaze-2130915"
   },
   {
@@ -90,7 +90,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 61,
     "heightCm": 51,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2602903_dbe33741eed2c50c230777dc56155e99.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2602903_dbe33741eed2c50c230777dc56155e99.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-rebirth-2602903"
   },
   {
@@ -101,7 +101,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 61,
     "heightCm": 61,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2130951_0d9f1316d4e623ff5cf3261702069a6b.png",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2130951_0d9f1316d4e623ff5cf3261702069a6b.png",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-vibrant-valleys-2130951"
   },
   {
@@ -112,7 +112,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 99,
     "heightCm": 79,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2130923_67c1bfc84d79750c9f1997ef05b49ddb.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2130923_67c1bfc84d79750c9f1997ef05b49ddb.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-generations-in-silence-2130923"
   },
   {
@@ -123,7 +123,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 61,
     "heightCm": 46,
     "medium": "Oil on Wood",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2130949_be51b489b276db35a8ac0f9da20125f9.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2130949_be51b489b276db35a8ac0f9da20125f9.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-threshold-of-memories-2130949"
   },
   {
@@ -134,7 +134,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 79,
     "heightCm": 99,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2621071_ed36ad5a63d5aa40c834f7da1381cd59.png",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2621071_ed36ad5a63d5aa40c834f7da1381cd59.png",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-inner-direction-2621071"
   },
   {
@@ -145,7 +145,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 119,
     "heightCm": 89,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2130940_0d84c635e3e8ceb7a58ba09a34acb604.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2130940_0d84c635e3e8ceb7a58ba09a34acb604.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-soulful-resonance-2130940"
   },
   {
@@ -156,7 +156,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 36,
     "heightCm": 28,
     "medium": "Oil on Paper",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2098242_725efc6380a20969d9c9177dd7409573.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2098242_725efc6380a20969d9c9177dd7409573.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-red-barn-2098242"
   },
   {
@@ -167,7 +167,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 51,
     "heightCm": 41,
     "medium": "Oil on Wood",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2130944_798bf80b7de03e4d9c0d3027b2983aa4.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2130944_798bf80b7de03e4d9c0d3027b2983aa4.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-dawn-s-embrace-2130944"
   },
   {
@@ -178,7 +178,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 43,
     "heightCm": 30,
     "medium": "Oil on Paper",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2610387_45e17c959be582f4fcdbfe086c4d97cc.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2610387_45e17c959be582f4fcdbfe086c4d97cc.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-beyond-every-limit-2610387"
   },
   {
@@ -189,7 +189,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 43,
     "heightCm": 30,
     "medium": "Oil, Pen on Paper",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2539922_8b0e2fa05d3614d68bc7b7df4cc14f0b.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2539922_8b0e2fa05d3614d68bc7b7df4cc14f0b.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-a-safe-distance-2539922"
   },
   {
@@ -200,7 +200,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 30,
     "heightCm": 20,
     "medium": "Oil, Oil Pastel on Paper",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2532244_f3906a248bce57d1cb286dd452f02915.png",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2532244_f3906a248bce57d1cb286dd452f02915.png",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-still-standing-2532244"
   },
   {
@@ -211,7 +211,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 30,
     "heightCm": 20,
     "medium": "Oil on Paper",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2554547_22ac8460f42af084a5cb3b9ab5650bbf.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2554547_22ac8460f42af084a5cb3b9ab5650bbf.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-found-in-silence-2554547"
   },
   {
@@ -222,7 +222,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 30,
     "heightCm": 43,
     "medium": "Oil on Paper",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2588239_4581cde1cd195e7cdc8d2682ae5280cc.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2588239_4581cde1cd195e7cdc8d2682ae5280cc.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-road-through-gold-2588239"
   },
   {
@@ -233,7 +233,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 36,
     "heightCm": 28,
     "medium": "Oil on Paper",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2128391_e4dbf4bbd0e1713d2231cf9a292b9683.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2128391_e4dbf4bbd0e1713d2231cf9a292b9683.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-quiet-pathway-2128391"
   },
   {
@@ -244,7 +244,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 119,
     "heightCm": 109,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2096775_a0d422e341cef41b658b8808f7bed39a.png",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2096775_a0d422e341cef41b658b8808f7bed39a.png",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-intertwined-realities-2096775"
   },
   {
@@ -255,7 +255,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 79,
     "heightCm": 99,
     "medium": "Acrylic, Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2176590_1d44c3b59385d4b421a338044ea82128.png",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2176590_1d44c3b59385d4b421a338044ea82128.png",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-silent-bliss-2176590"
   },
   {
@@ -266,7 +266,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 99,
     "heightCm": 79,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2130929_f466d68ebd225d731a14887c2b69f066.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2130929_f466d68ebd225d731a14887c2b69f066.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-strength-in-shadows-2130929"
   },
   {
@@ -277,7 +277,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 71,
     "heightCm": 61,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2130943_04408ab77ad9771f06b644f37d65b49b.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2130943_04408ab77ad9771f06b644f37d65b49b.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-silent-poise-2130943"
   },
   {
@@ -288,7 +288,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 43,
     "heightCm": 30,
     "medium": "Oil on Paper",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2573886_6d78d6e67aefa7206c5d327adcf51de3.png",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2573886_6d78d6e67aefa7206c5d327adcf51de3.png",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-reconstruction-2573886"
   },
   {
@@ -299,7 +299,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 61,
     "heightCm": 51,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2534421_e7a356a79a588e530a08c4e0554e355f.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2534421_e7a356a79a588e530a08c4e0554e355f.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-homeward-2534421"
   },
   {
@@ -310,7 +310,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 99,
     "heightCm": 79,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2525788_51be308f1434f1e5f0f4651b580703e6.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2525788_51be308f1434f1e5f0f4651b580703e6.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-afternoon-silence-2525788"
   },
   {
@@ -321,7 +321,7 @@ const DATA: ScrapedArtwork[] = [
     "widthCm": 89,
     "heightCm": 79,
     "medium": "Oil on Canvas",
-    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/base/2095342_10cd29b792343253b85b5c17f248646c.jpeg",
+    "imageUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2095342_10cd29b792343253b85b5c17f248646c.jpeg",
     "singulartUrl": "https://www.singulart.com/en/artworks/ani-muradyan-fragmented-beauty-2095342"
   }
 ];

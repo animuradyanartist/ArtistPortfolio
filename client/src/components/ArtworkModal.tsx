@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, X, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Artwork } from "@shared/schema";
+import { SHOW_PRICES } from "@/lib/featureFlags";
 
 interface ArtworkModalProps {
   artwork: Artwork | null;
@@ -153,9 +154,11 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                 
                 <div className="space-y-4 pt-4 border-t">
                   <div className="flex items-center gap-4">
-                    <span className="text-3xl font-bold text-deep-blue">
-                      ${artwork.price.toLocaleString()}
-                    </span>
+                    {SHOW_PRICES && (
+                      <span className="text-3xl font-bold text-deep-blue">
+                        ${artwork.price.toLocaleString()}
+                      </span>
+                    )}
                     <Badge 
                       variant={artwork.availability === 'available' ? 'default' : 'destructive'}
                       className={artwork.availability === 'available' 

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ExternalLink, Mail } from "lucide-react";
 import type { Artwork } from "@shared/schema";
 import { updateCanonicalUrl, updateMetaDescription, injectJsonLd, removeJsonLd, BASE_URL, toSlug, generateArtworkAlt } from "@/lib/seo";
+import { SHOW_PRICES } from "@/lib/featureFlags";
 
 export default function SeoArtworkPage() {
   const params = useParams();
@@ -60,7 +61,7 @@ export default function SeoArtworkPage() {
           "nationality": { "@type": "Country", "name": "Armenia" },
           "url": BASE_URL
         },
-        "offers": artwork.availability === 'available' ? {
+        "offers": SHOW_PRICES && artwork.availability === 'available' ? {
           "@type": "Offer",
           "price": artwork.price,
           "priceCurrency": "USD",
@@ -201,7 +202,7 @@ export default function SeoArtworkPage() {
                   <dt className="text-gray-500">Dimensions</dt>
                   <dd className="text-charcoal font-medium">{artwork.dimensions}</dd>
 
-                  {artwork.availability === 'available' && artwork.price > 0 && (
+                  {SHOW_PRICES && artwork.availability === 'available' && artwork.price > 0 && (
                     <>
                       <dt className="text-gray-500">Price</dt>
                       <dd className="text-charcoal font-medium">${artwork.price.toLocaleString()}</dd>

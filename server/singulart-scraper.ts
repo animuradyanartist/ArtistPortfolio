@@ -52,6 +52,14 @@ function inchesToCm(inches: number): number {
   return Math.round(inches * IN_TO_CM);
 }
 
+// Listing thumbnails are served from the ".../main/base/" path (~453px wide).
+// The ".../main/zoom/" variant is the full-resolution image (~1500px wide) and
+// shares the exact same filename — so we just swap the size segment. Other
+// segment names (large/max/original) return 403; "zoom" is the largest public one.
+export function toHighResImage(url: string): string {
+  return url.replace(/\/main\/(?:base|carousel|small|medium|thumbnail)\//, "/main/zoom/");
+}
+
 export function parseSingulartPage(html: string): ScrapedArtwork[] {
   const $ = cheerio.load(html);
   const results: ScrapedArtwork[] = [];
@@ -89,7 +97,9 @@ export function parseSingulartPage(html: string): ScrapedArtwork[] {
 
     // image — required
     const img = $card.find(IMG_SELECTOR).first();
-    const imageUrl = (img.attr("src") || img.attr("data-src") || "").trim();
+    const imageUrl = toHighResImage(
+      (img.attr("src") || img.attr("data-src") || "").trim()
+    );
     if (!imageUrl) {
       console.warn(`Singulart scraper: skipping card — missing imageUrl (id ${id}, slug ${slug})`);
       return;

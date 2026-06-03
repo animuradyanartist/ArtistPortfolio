@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Images } from "lucide-react";
 import type { Artwork } from "@shared/schema";
 import { generateArtworkAlt } from "@/lib/seo";
+import { SHOW_PRICES } from "@/lib/featureFlags";
 
 interface ArtworkCardProps {
   artwork: Artwork;
@@ -104,9 +105,11 @@ export default function ArtworkCard({ artwork, onViewDetails }: ArtworkCardProps
               {artwork.medium} • {artwork.dimensions}
             </p>
             <div className="flex justify-between items-center">
-              <span className="text-2xl font-bold text-slate-900 transition-all duration-300 group-hover:scale-105 group-hover:text-blue-600">
-                ${artwork.price.toLocaleString()}
-              </span>
+              {SHOW_PRICES && (
+                <span className="text-2xl font-bold text-slate-900 transition-all duration-300 group-hover:scale-105 group-hover:text-blue-600">
+                  ${artwork.price.toLocaleString()}
+                </span>
+              )}
               <Badge 
                 variant={artwork.availability === 'available' ? 'default' : 'destructive'}
                 className={`transition-all duration-300 group-hover:scale-105 rounded-full px-3 py-1 text-xs font-medium ${artwork.availability === 'available' 
