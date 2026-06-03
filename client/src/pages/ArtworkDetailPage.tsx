@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import type { Artwork } from "@shared/schema";
 import { updateCanonicalUrl, updateMetaDescription, injectJsonLd, removeJsonLd, BASE_URL, toSlug, generateArtworkAlt } from "@/lib/seo";
+import { SHOW_PRICES } from "@/lib/featureFlags";
 
 export default function ArtworkDetailPage() {
   const params = useParams();
@@ -52,7 +53,7 @@ export default function ArtworkDetailPage() {
           "url": BASE_URL,
           "nationality": { "@type": "Country", "name": "Armenia" }
         },
-        "offers": artwork.availability === 'available' ? {
+        "offers": SHOW_PRICES && artwork.availability === 'available' ? {
           "@type": "Offer",
           "price": artwork.price,
           "priceCurrency": "USD",
@@ -207,9 +208,11 @@ export default function ArtworkDetailPage() {
                   {artwork.availability === "available" ? "Available" : 
                    artwork.availability === "sold" ? "Sold" : "Reserved"}
                 </Badge>
-                <span className="text-2xl font-semibold text-charcoal" data-testid={`text-price-${artwork.id}`}>
-                  ${artwork.price?.toLocaleString()}
-                </span>
+                {SHOW_PRICES && (
+                  <span className="text-2xl font-semibold text-charcoal" data-testid={`text-price-${artwork.id}`}>
+                    ${artwork.price?.toLocaleString()}
+                  </span>
+                )}
               </div>
             </div>
 

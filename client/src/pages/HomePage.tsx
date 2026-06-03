@@ -9,6 +9,7 @@ import { ExternalLink, ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { Artwork, HomepageSettings, GalleryPhoto } from "@shared/schema";
 import backgroundImage from "@assets/1bg_1750936488071.png";
 import { updateCanonicalUrl, updateMetaDescription, toSlug, generateArtworkAlt } from "@/lib/seo";
+import { SHOW_PRICES } from "@/lib/featureFlags";
 
 export default function HomePage() {
   useEffect(() => {
@@ -181,9 +182,11 @@ export default function HomePage() {
                       {artwork.medium}, {artwork.dimensions}
                     </p>
                     <div className="flex justify-between items-center">
-                      <span className="text-2xl font-bold text-slate-900">
-                        ${artwork.price.toLocaleString()}
-                      </span>
+                      {SHOW_PRICES && (
+                        <span className="text-2xl font-bold text-slate-900">
+                          ${artwork.price.toLocaleString()}
+                        </span>
+                      )}
                       <Badge 
                         variant={artwork.availability === 'available' ? 'default' : 'destructive'}
                         className={artwork.availability === 'available' 
