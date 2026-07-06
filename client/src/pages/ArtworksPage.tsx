@@ -8,12 +8,19 @@ import type { Artwork } from "@shared/schema";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 import { Link } from "wouter";
 
+// Server-injected preloaded artworks (eliminates loading state for crawlers + first paint)
+const preloadedArtworks: Artwork[] | undefined =
+  typeof window !== 'undefined' ? (window as any).__PRELOADED_ARTWORKS__ : undefined;
+
 export default function ArtworksPage() {
   // Set page title and canonical URL for SEO
   useEffect(() => {
     document.title = "Original Artworks by Ani Muradyan | Abstract Realism Oil Paintings for Sale";
     updateCanonicalUrl('/artworks');
     updateMetaDescription('Browse original oil paintings for sale by Armenian contemporary artist Ani Muradyan. Abstract realism portraits, landscapes, and figurative works.');
+    // Hide the server-prerendered static section once React has mounted
+    const ssrSection = document.getElementById('artworks-ssr');
+    if (ssrSection) ssrSection.style.display = 'none';
   }, []);
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -22,7 +29,10 @@ export default function ArtworksPage() {
   const [availabilityFilter, setAvailabilityFilter] = useState<string>("");
 
   const { data: artworks = [], isLoading } = useQuery<Artwork[]>({
-    queryKey: ["/api/artworks"]
+    queryKey: ["/api/artworks"],
+    // Use server-preloaded data so the page renders instantly without a loading skeleton.
+    // React Query still refetches in background to keep data fresh.
+    ...(preloadedArtworks ? { initialData: preloadedArtworks } : {})
   });
 
   const filteredArtworks = useMemo(() => {

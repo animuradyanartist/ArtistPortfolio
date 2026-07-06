@@ -1040,7 +1040,7 @@ Crawl-delay: 1
     app.use(express.static(distPath, { index: false }));
 
     // Catch-all: serve index.html with per-request canonical URL injected
-    app.get('*', (req, res, next) => {
+    app.get('*', async (req, res, next) => {
       // Skip paths with file extensions (assets already handled above)
       if (/\.[a-zA-Z0-9]+$/.test(req.path)) return next();
       try {
@@ -1055,6 +1055,43 @@ Crawl-delay: 1
         } else {
           html = html.replace('</head>', `  <link rel="canonical" href="${canonicalUrl}">\n  </head>`);
         }
+
+        // /artworks: preload data so React renders immediately (no loading state),
+        // AND inject static HTML so Google's first-wave crawl sees real content.
+        if (req.path === '/artworks') {
+          try {
+            const artworks = await storage.getAllArtworks();
+            const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+            // 1. Inline JSON for React Query initialData — eliminates API wait on mount.
+            // Strip base64 images to keep the payload lightweight; React Query refetches
+            // in the background and will populate images shortly after mount.
+            const artworksWithoutImages = artworks.map(a => ({ ...a, images: [] as string[] }));
+            const safeJson = JSON.stringify(artworksWithoutImages).replace(/<\/script>/gi, '<\\/script>');
+            html = html.replace('</head>', `  <script>window.__PRELOADED_ARTWORKS__=${safeJson};</script>\n</head>`);
+
+            // 2. Static visible HTML injected before #root — real content for first-wave crawlers
+            const listItems = artworks
+              .filter(a => a.title && a.title.toLowerCase().trim() !== 'untitled')
+              .map(a => {
+                const href = a.seoSlug ? `/${a.seoSlug.trim()}` : `/artworks/${a.slug || toSlug(a.title)}`;
+                const meta = [a.medium, a.year ? String(a.year) : null].filter(Boolean).join(', ');
+                return `<li style="margin-bottom:0.5rem"><a href="${esc(href)}" style="color:#1d4ed8;text-decoration:underline">${esc(a.title)}</a>${meta ? ' – ' + esc(meta) : ''}</li>`;
+              }).join('');
+
+            const ssrSection =
+              `<section id="artworks-ssr" style="padding:3rem 1.5rem;max-width:1200px;margin:0 auto;font-family:system-ui,sans-serif">` +
+              `<h1 style="font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem">Original Artworks by Ani Muradyan</h1>` +
+              `<p style="font-size:1.1rem;color:#475569;margin-bottom:1.5rem">Browse ${artworks.length} original oil paintings and abstract realism works by Armenian contemporary artist Ani Muradyan.</p>` +
+              `<ul style="list-style:disc;padding-left:1.5rem;color:#334155">${listItems}</ul>` +
+              `</section>`;
+
+            html = html.replace('<div id="root">', ssrSection + '<div id="root">');
+          } catch (e) {
+            console.error('[SSR] /artworks prerender failed:', e);
+          }
+        }
+
         res.setHeader('Content-Type', 'text/html');
         res.send(html);
       } catch {
