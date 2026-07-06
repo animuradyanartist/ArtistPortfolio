@@ -514,7 +514,7 @@ export default function EditArtworkPage() {
                         <Input {...field} placeholder="abstract-portrait-oil-painting" />
                       </FormControl>
                       <p className="text-xs text-gray-500 mt-1">
-                        Creates a dedicated SEO page at <span className="font-mono">anymoore.am/{field.value || 'your-slug-here'}</span>. 
+                        Creates a dedicated SEO page at <span className="font-mono">animuradyan.com/{field.value || 'your-slug-here'}</span>. 
                         Use keyword-rich, hyphenated lowercase words (e.g. <span className="font-mono">abstract-female-portrait</span>).
                       </p>
                       <FormMessage />

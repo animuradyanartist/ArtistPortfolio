@@ -869,7 +869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // SEO Routes
-  const SEO_BASE_URL = 'https://anymoore.am';
+  const SEO_BASE_URL = 'https://animuradyan.com';
 
   app.get("/robots.txt", async (req, res) => {
     res.setHeader('Content-Type', 'text/plain');
@@ -1025,7 +1025,7 @@ Crawl-delay: 1
       try {
         let html = fs.readFileSync(path.resolve(distPath, 'index.html'), 'utf8');
         const canonicalPath = req.path === '/' ? '' : req.path;
-        const canonicalUrl = `https://anymoore.am${canonicalPath}`;
+        const canonicalUrl = `https://animuradyan.com${canonicalPath}`;
         if (html.includes('<link rel="canonical"')) {
           html = html.replace(
             /<link rel="canonical"[^>]*>/,

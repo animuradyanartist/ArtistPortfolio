@@ -1,4 +1,4 @@
-export const BASE_URL = 'https://anymoore.am';
+export const BASE_URL = 'https://animuradyan.com';
 
 export function updateCanonicalUrl(path: string) {
   const canonicalUrl = `${BASE_URL}${path}`;
