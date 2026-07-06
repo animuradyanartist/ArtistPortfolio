@@ -28,11 +28,13 @@ export default function ArtworksPage() {
   // Filters
   const [availabilityFilter, setAvailabilityFilter] = useState<string>("");
 
-  const { data: artworks = [], isLoading } = useQuery<Artwork[]>({
+  const { data: artworks = [], isLoading, isPlaceholderData } = useQuery<Artwork[]>({
     queryKey: ["/api/artworks"],
-    // Use server-preloaded data so the page renders instantly without a loading skeleton.
-    // React Query still refetches in background to keep data fresh.
-    ...(preloadedArtworks ? { initialData: preloadedArtworks } : {})
+    // Use placeholderData (not initialData) so React Query ALWAYS fetches full artwork
+    // data from the API on every mount. The placeholder (images-stripped) shows the grid
+    // immediately; real data (with images) arrives in the background fetch and replaces it.
+    // initialData would write partial data to the cache and may skip the real refetch.
+    ...(preloadedArtworks ? { placeholderData: preloadedArtworks } : {})
   });
 
   const filteredArtworks = useMemo(() => {
@@ -52,7 +54,8 @@ export default function ArtworksPage() {
     setSelectedArtwork(null);
   };
 
-  if (isLoading) {
+  // Skip the full-page skeleton when placeholder data is already showing the grid
+  if (isLoading && !isPlaceholderData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
