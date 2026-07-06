@@ -82,13 +82,13 @@ export default function AboutPage() {
               <div className="relative group">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
                 <img 
-                  src={artistBio?.image || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800"} 
+                  src={artistBio?.image || "/assets/ani-muradyan-portrait.jpg"} 
                   alt="Portrait of Ani Muradyan – Armenian contemporary abstract realism artist"
                   title="Ani Muradyan – Contemporary Abstract Realism Artist from Armenia"
                   className="relative w-full max-w-lg mx-auto rounded-3xl shadow-2xl aspect-[3/4] object-cover border border-slate-200/50 transform group-hover:scale-105 transition-transform duration-700"
                   loading="lazy"
                   onError={(e) => {
-                    e.currentTarget.src = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=800";
+                    e.currentTarget.src = "/assets/ani-muradyan-portrait.jpg";
                   }}
                 />
               </div>
