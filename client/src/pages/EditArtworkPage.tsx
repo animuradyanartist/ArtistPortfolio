@@ -57,9 +57,10 @@ export default function EditArtworkPage() {
     return (width * height * rate).toFixed(2);
   };
 
-  // Fetch existing artwork data
+  // Fetch existing artwork data (raw=1 returns the stored base64 originals
+  // instead of the lightweight /img URLs the public site uses)
   const { data: artwork, isLoading, error } = useQuery<Artwork>({
-    queryKey: [`/api/artworks/${artworkId}`],
+    queryKey: [`/api/artworks/${artworkId}?raw=1`],
     enabled: !!artworkId && !isNaN(artworkId)
   });
 
@@ -145,6 +146,7 @@ export default function EditArtworkPage() {
       });
       queryClient.invalidateQueries({ queryKey: ['/api/artworks'] });
       queryClient.invalidateQueries({ queryKey: [`/api/artworks/${artworkId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/artworks/${artworkId}?raw=1`] });
       setLocation("/admin");
     },
     onError: (error: any) => {

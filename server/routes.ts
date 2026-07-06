@@ -9,6 +9,19 @@ import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertH
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
+import {
+  registerImageRoutes,
+  refifyImages,
+  refifyImagesList,
+  refifyImageField,
+  refifyImageFieldList,
+  toImageRef,
+  resolveImageRef,
+  resolveImageRefs,
+  isAcceptableImage,
+  memoJson,
+  invalidateApiCache,
+} from "./images";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -36,6 +49,20 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Serves base64 DB images as resized, cacheable WebP (see server/images.ts)
+  registerImageRoutes(app);
+
+  // Any mutation invalidates the in-memory API response cache — both before
+  // the handler runs and after it finishes, so a concurrent GET can't
+  // repopulate the cache with pre-mutation data.
+  app.use("/api", (req, res, next) => {
+    if (req.method !== "GET") {
+      invalidateApiCache();
+      res.on("finish", invalidateApiCache);
+    }
+    next();
+  });
+
   // Authentication endpoints
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -87,8 +114,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const artworks = await storage.getAllArtworks();
       const totalImages = artworks.reduce((count, artwork) => count + artwork.images.length, 0);
-      const invalidImages = artworks.filter(artwork => 
-        artwork.images.some(img => !img || (!img.startsWith('data:image/') && !img.startsWith('http')))
+      const invalidImages = artworks.filter(artwork =>
+        artwork.images.some(img => !img || !isAcceptableImage(img))
       );
       
       res.json({
@@ -110,7 +137,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Artworks routes
   app.get("/api/artworks", async (req, res) => {
     try {
-      const artworks = await storage.getAllArtworks();
+      const artworks = await memoJson("artworks:list", 60_000, async () =>
+        refifyImagesList("artwork", await storage.getAllArtworks())
+      );
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       res.json(artworks);
     } catch (error) {
@@ -125,7 +154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Artwork not found" });
       }
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-      res.json(artwork);
+      res.json(refifyImages("artwork", artwork));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch artwork" });
     }
@@ -146,7 +175,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Artwork not found" });
       }
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-      res.json(artwork);
+      // ?raw=1 keeps base64 originals — used by the admin edit form
+      res.json(req.query.raw === "1" ? artwork : refifyImages("artwork", artwork));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch artwork" });
     }
@@ -155,10 +185,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/artworks", requireAdminAuth, async (req, res) => {
     try {
       const validatedData = insertArtworkSchema.parse(req.body);
-      
+
       if (validatedData.images && validatedData.images.length > 0) {
+        validatedData.images = await resolveImageRefs(validatedData.images);
         for (const image of validatedData.images) {
-          if (!image.startsWith('data:image/') && !image.startsWith('http')) {
+          if (!isAcceptableImage(image)) {
             return res.status(400).json({ message: "Invalid image format detected" });
           }
         }
@@ -187,11 +218,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertArtworkSchema.partial().parse(req.body);
-      
-      // Validate images array if present
+
+      // Validate images array if present (refs from non-raw GETs are resolved
+      // back to the stored originals first)
       if (validatedData.images && validatedData.images.length > 0) {
+        validatedData.images = await resolveImageRefs(validatedData.images);
         for (const image of validatedData.images) {
-          if (!image.startsWith('data:image/') && !image.startsWith('http')) {
+          if (!isAcceptableImage(image)) {
             return res.status(400).json({ message: "Invalid image format detected" });
           }
         }
@@ -234,7 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/artworks/featured", async (req, res) => {
     try {
-      const artworks = await storage.getFeaturedArtworks();
+      const artworks = refifyImagesList("artwork", await storage.getFeaturedArtworks());
       res.json(artworks);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch featured artworks" });
@@ -262,19 +295,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Prints routes
-  // Helper function to compress base64 image
-  const compressImage = (base64Image: string): string => {
-    // For very large images, we'll apply basic compression
-    if (base64Image.length > 500000) { // If larger than ~375KB
-      // Convert to JPEG format for smaller size
-      // This is a simple format conversion - in production use proper image processing
-      if (base64Image.includes('data:image/png')) {
-        return base64Image.replace('data:image/png;base64,', 'data:image/jpeg;base64,');
-      }
-    }
-    return base64Image;
-  };
-
   app.get("/api/prints", async (req, res) => {
     try {
       // Use lightweight query without images for fast initial load
@@ -323,7 +343,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Print not found" });
       }
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-      res.json(print);
+      // ?raw=1 keeps base64 originals — used by the admin edit form
+      res.json(req.query.raw === "1" ? print : refifyImages("print", print));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch print" });
     }
@@ -337,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!print) {
         return res.status(404).json({ message: "Print not found" });
       }
-      res.json({ images: print.images });
+      res.json({ images: refifyImages("print", print).images });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch print images" });
     }
@@ -359,12 +380,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'Expires': new Date(Date.now() + 86400000).toUTCString()
       });
       
-      // Return compressed thumbnail
-      const thumbnail = print.images.length > 0 ? print.images[0] : null;
-      
-      // Apply compression for large images
-      const processedThumbnail = compressImage(thumbnail || '');
-      res.json({ thumbnail: processedThumbnail || null });
+      // Return a URL to the resized WebP instead of inlining base64
+      const first = print.images.length > 0 ? print.images[0] : null;
+      const thumbnail = first && first.startsWith("data:")
+        ? `${toImageRef("print", id, 0, first)}&w=640`
+        : first;
+      res.json({ thumbnail: thumbnail || null });
     } catch (error) {
       console.error(`Error fetching thumbnail for print ${req.params.id}:`, error);
       res.status(500).json({ message: "Failed to fetch print thumbnail" });
@@ -400,8 +421,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const print = await storage.getPrint(parseInt(id));
           if (print && print.images.length > 0) {
             let thumbnail = print.images[0];
-            // Apply compression
-            thumbnail = compressImage(thumbnail);
+            if (thumbnail.startsWith("data:")) {
+              thumbnail = `${toImageRef("print", print.id, 0, thumbnail)}&w=640`;
+            }
             return { id, thumbnail };
           } else {
             return { id, thumbnail: null };
@@ -440,10 +462,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/prints", requireAdminAuth, async (req, res) => {
     try {
       const validatedData = insertPrintSchema.parse(req.body);
-      
+
       if (validatedData.images && validatedData.images.length > 0) {
+        validatedData.images = await resolveImageRefs(validatedData.images);
         for (const image of validatedData.images) {
-          if (!image.startsWith('data:image/') && !image.startsWith('http')) {
+          if (!isAcceptableImage(image)) {
             return res.status(400).json({ message: "Invalid image format detected" });
           }
         }
@@ -466,11 +489,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertPrintSchema.partial().parse(req.body);
-      
+
       // Validate images array if present
       if (validatedData.images && validatedData.images.length > 0) {
+        validatedData.images = await resolveImageRefs(validatedData.images);
         for (const image of validatedData.images) {
-          if (!image.startsWith('data:image/') && !image.startsWith('http')) {
+          if (!isAcceptableImage(image)) {
             return res.status(400).json({ message: "Invalid image format detected" });
           }
         }
@@ -503,7 +527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/prints/featured", async (req, res) => {
     try {
-      const prints = await storage.getFeaturedPrints();
+      const prints = refifyImagesList("print", await storage.getFeaturedPrints());
       res.json(prints);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch featured prints" });
@@ -514,12 +538,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/exhibitions", async (req, res) => {
     try {
       const type = req.query.type as string;
-      let exhibitions;
-      if (type && (type === 'solo' || type === 'group')) {
-        exhibitions = await storage.getExhibitionsByType(type);
-      } else {
-        exhibitions = await storage.getAllExhibitions();
-      }
+      const exhibitions = await memoJson(`exhibitions:${type || "all"}`, 60_000, async () => {
+        const list = type && (type === 'solo' || type === 'group')
+          ? await storage.getExhibitionsByType(type)
+          : await storage.getAllExhibitions();
+        return refifyImageFieldList("exhibition", list, "image");
+      });
       res.json(exhibitions);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch exhibitions" });
@@ -533,7 +557,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!exhibition) {
         return res.status(404).json({ message: "Exhibition not found" });
       }
-      res.json(exhibition);
+      res.json(req.query.raw === "1" ? exhibition : refifyImageField("exhibition", exhibition, "image"));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch exhibition" });
     }
@@ -542,6 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/exhibitions", requireAdminAuth, async (req, res) => {
     try {
       const validatedData = insertExhibitionSchema.parse(req.body);
+      if (validatedData.image) validatedData.image = await resolveImageRef(validatedData.image);
       const exhibition = await storage.createExhibition(validatedData);
       res.status(201).json(exhibition);
     } catch (error) {
@@ -553,6 +578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertExhibitionSchema.partial().parse(req.body);
+      if (validatedData.image) validatedData.image = await resolveImageRef(validatedData.image);
       const exhibition = await storage.updateExhibition(id, validatedData);
       if (!exhibition) {
         return res.status(404).json({ message: "Exhibition not found" });
@@ -581,7 +607,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const settings = await storage.getHomepageSettings();
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-      res.json(settings);
+      res.json(settings && req.query.raw !== "1" ? refifyImageField("hero", settings, "heroImage") : settings);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch homepage settings" });
     }
@@ -590,6 +616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/homepage-settings", requireAdminAuth, async (req, res) => {
     try {
       const validatedData = insertHomepageSettingsSchema.parse(req.body);
+      if (validatedData.heroImage) validatedData.heroImage = await resolveImageRef(validatedData.heroImage);
       const settings = await storage.updateHomepageSettings(validatedData);
       res.json(settings);
     } catch (error) {
@@ -602,7 +629,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const bio = await storage.getArtistBio();
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-      res.json(bio);
+      res.json(bio && req.query.raw !== "1" ? refifyImageField("bio", bio, "image") : bio);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch artist bio" });
     }
@@ -611,6 +638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/artist-bio", requireAdminAuth, async (req, res) => {
     try {
       const validatedData = insertArtistBioSchema.parse(req.body);
+      if (validatedData.image) validatedData.image = await resolveImageRef(validatedData.image);
       const bio = await storage.updateArtistBio(validatedData);
       res.json(bio);
     } catch (error) {
@@ -763,7 +791,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Gallery Photos routes
   app.get("/api/gallery-photos", async (req, res) => {
     try {
-      const photos = await storage.getAllGalleryPhotos();
+      const photos = await memoJson("gallery:list", 60_000, async () =>
+        refifyImageFieldList("gallery", await storage.getAllGalleryPhotos(), "image")
+      );
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       res.json(photos);
     } catch (error) {
@@ -774,7 +804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/gallery-photos/featured", async (req, res) => {
     try {
-      const photos = await storage.getFeaturedGalleryPhotos();
+      const photos = refifyImageFieldList("gallery", await storage.getFeaturedGalleryPhotos(), "image");
       res.json(photos);
     } catch (error) {
       console.error("Error fetching featured gallery photos:", error);
@@ -790,8 +820,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!photo) {
         return res.status(404).json({ message: "Gallery photo not found" });
       }
-      
-      res.json(photo);
+
+      res.json(req.query.raw === "1" ? photo : refifyImageField("gallery", photo, "image"));
     } catch (error) {
       console.error("Error fetching gallery photo:", error);
       res.status(500).json({ message: "Failed to fetch gallery photo" });
@@ -801,6 +831,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/gallery-photos", requireAdminAuth, async (req, res) => {
     try {
       const validated = insertGalleryPhotoSchema.parse(req.body);
+      if (validated.image) validated.image = await resolveImageRef(validated.image);
       const created = await storage.createGalleryPhoto(validated);
       res.json(created);
     } catch (error) {
@@ -812,7 +843,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/gallery-photos/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const updated = await storage.updateGalleryPhoto(id, req.body);
+      const patch = { ...req.body };
+      if (typeof patch.image === "string") patch.image = await resolveImageRef(patch.image);
+      const updated = await storage.updateGalleryPhoto(id, patch);
       
       if (!updated) {
         return res.status(404).json({ message: "Gallery photo not found" });

@@ -36,33 +36,21 @@ app.use(session({
   proxy: true,
 }));
 
-// Serve uploaded files
-app.use('/uploads', express.static('public/uploads'));
+// Serve uploaded files. Filenames are timestamped/content-hashed and never
+// rewritten in place, so the browser can cache them forever.
+app.use('/uploads', express.static('public/uploads', { maxAge: '365d', immutable: true }));
 
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
+      // NOTE: deliberately no response-body capture here — the old version
+      // JSON.stringify'd every response (megabytes when images were inlined)
+      // just to print an 80-char log line.
+      log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
     }
   });
 
