@@ -4,3 +4,5 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+# On-demand resized image cache (rebuilt automatically)
+public/uploads/_cache/
