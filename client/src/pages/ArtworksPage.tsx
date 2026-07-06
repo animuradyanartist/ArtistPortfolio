@@ -8,32 +8,33 @@ import type { Artwork } from "@shared/schema";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 import { Link } from "wouter";
 
-// Server-injected preloaded artworks (eliminates loading state for crawlers + first paint)
-const preloadedArtworks: Artwork[] | undefined =
+// Server-injected preloaded artworks (eliminates loading state for crawlers + first paint).
+// Only used if the server sent a non-empty array — an empty array is not useful as placeholder.
+const _raw: Artwork[] | undefined =
   typeof window !== 'undefined' ? (window as any).__PRELOADED_ARTWORKS__ : undefined;
+const preloadedArtworks: Artwork[] | undefined =
+  Array.isArray(_raw) && _raw.length > 0 ? _raw : undefined;
 
 export default function ArtworksPage() {
-  // Set page title and canonical URL for SEO
+  // SEO setup only — do NOT touch #artworks-ssr here, visibility is data-driven below
   useEffect(() => {
     document.title = "Original Artworks by Ani Muradyan | Abstract Realism Oil Paintings for Sale";
     updateCanonicalUrl('/artworks');
     updateMetaDescription('Browse original oil paintings for sale by Armenian contemporary artist Ani Muradyan. Abstract realism portraits, landscapes, and figurative works.');
-    // Hide the server-prerendered static section once React has mounted
-    const ssrSection = document.getElementById('artworks-ssr');
-    if (ssrSection) ssrSection.style.display = 'none';
   }, []);
+
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  
+
   // Filters
   const [availabilityFilter, setAvailabilityFilter] = useState<string>("");
 
-  const { data: artworks = [], isLoading, isPlaceholderData } = useQuery<Artwork[]>({
+  const { data: artworks = [], isLoading, isPlaceholderData, status } = useQuery<Artwork[]>({
     queryKey: ["/api/artworks"],
-    // Use placeholderData (not initialData) so React Query ALWAYS fetches full artwork
-    // data from the API on every mount. The placeholder (images-stripped) shows the grid
-    // immediately; real data (with images) arrives in the background fetch and replaces it.
-    // initialData would write partial data to the cache and may skip the real refetch.
+    // placeholderData shows artworks immediately without a loading skeleton.
+    // Only set when preloadedArtworks is a non-empty array (guards against empty injection).
+    // Unlike initialData, placeholderData is never written to cache so React Query
+    // ALWAYS issues the real /api/artworks fetch on every mount.
     ...(preloadedArtworks ? { placeholderData: preloadedArtworks } : {})
   });
 
@@ -43,6 +44,22 @@ export default function ArtworksPage() {
       return true;
     });
   }, [artworks, availabilityFilter]);
+
+  // "Confirmed" = real API data arrived (not a placeholder, not still loading)
+  const hasConfirmedData = status === 'success' && !isPlaceholderData && !isLoading;
+
+  // Only show "No artworks found" when the real API returned and is genuinely empty.
+  // Never show it while: loading, placeholder active, query errored, or data not yet confirmed.
+  const showEmptyState = hasConfirmedData && filteredArtworks.length === 0;
+
+  // Hide #artworks-ssr ONLY once real confirmed artworks are rendered in the React grid.
+  // This keeps it visible for Googlebot and users on slow connections until data is ready.
+  useEffect(() => {
+    const ssrSection = document.getElementById('artworks-ssr');
+    if (!ssrSection) return;
+    const hasRealGrid = hasConfirmedData && artworks.length > 0;
+    ssrSection.style.display = hasRealGrid ? 'none' : '';
+  }, [hasConfirmedData, artworks.length]);
 
   const handleViewDetails = (artwork: Artwork) => {
     setSelectedArtwork(artwork);
@@ -54,7 +71,7 @@ export default function ArtworksPage() {
     setSelectedArtwork(null);
   };
 
-  // Skip the full-page skeleton when placeholder data is already showing the grid
+  // Full-page loading skeleton — only when truly loading with no data at all
   if (isLoading && !isPlaceholderData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
@@ -135,7 +152,7 @@ export default function ArtworksPage() {
         </div>
 
         {/* Gallery Grid */}
-        {filteredArtworks.length === 0 ? (
+        {showEmptyState ? (
           <div className="text-center py-20">
             <div className="max-w-md mx-auto">
               <div className="w-16 h-16 bg-gradient-to-r from-slate-200 to-slate-300 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -147,7 +164,7 @@ export default function ArtworksPage() {
               <p className="text-slate-600">No artworks match your current filters. Try adjusting your selection.</p>
             </div>
           </div>
-        ) : (
+        ) : filteredArtworks.length > 0 ? (
           <div className="animate-slideUp animation-delay-600">
             <div className="mb-8">
               <div className="flex items-center justify-between">
@@ -183,7 +200,7 @@ export default function ArtworksPage() {
               ))}
             </div>
           </div>
-        )}
+        ) : null /* still loading — #artworks-ssr remains visible as fallback */}
 
         {/* Internal contextual links for SEO */}
         <div className="mt-16 text-center">
