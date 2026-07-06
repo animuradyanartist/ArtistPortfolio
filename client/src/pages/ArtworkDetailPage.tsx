@@ -10,7 +10,7 @@ import { SHOW_PRICES } from "@/lib/featureFlags";
 
 export default function ArtworkDetailPage() {
   const params = useParams();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const idParam = params.id as string;
   const isNumeric = /^\d+$/.test(idParam);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -63,12 +63,14 @@ export default function ArtworkDetailPage() {
         } : undefined
       });
 
-      if (isNumeric) {
-        window.history.replaceState(null, '', `/artworks/${slug}`);
+      // Silently correct the URL if the current path doesn't match the canonical one
+      // (covers numeric IDs, old long slugs, and any other mismatches)
+      if (location !== canonicalPath) {
+        window.history.replaceState(null, '', canonicalPath);
       }
     }
     return () => removeJsonLd('artwork-jsonld');
-  }, [artwork, isNumeric]);
+  }, [artwork, location]);
 
   const nextImage = () => {
     if (!artwork || !artwork.images || artwork.images.length === 0) return;
