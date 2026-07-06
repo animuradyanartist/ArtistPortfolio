@@ -36,7 +36,7 @@ Preferred communication style: Simple, everyday language.
 - **Image Management**: Base64 encoding, client-side compression/resizing, multiple images per artwork, automatic optimization.
 - **Data Flow**: React components use TanStack Query to call Express APIs; Express validates with Zod, Drizzle ORM interacts with PostgreSQL, and JSON data is returned.
 - **Storage Strategy**: PostgreSQL for production, in-memory storage for development.
-- **Performance Optimization**: Gzip compression, lazy loading for images, and Cache-Control headers for API endpoints.
+- **Performance Optimization**: Gzip compression, lazy loading for images, and Cache-Control headers for API endpoints. Base64 images stored in the DB are never inlined in public JSON responses — `server/images.ts` swaps them for lightweight `/img/:kind/:id/:idx` URLs; that route resizes to WebP with sharp, caches to `public/uploads/_cache/` (rebuilt on demand, safe on redeploy), and serves with immutable browser caching. Admin edit forms fetch `?raw=1` to keep editing the stored originals; mutation endpoints resolve `/img/` refs back to originals before saving. Hot list endpoints are memoized in memory for 60s (invalidated on any /api mutation).
 - **SEO**: Comprehensive SEO with optimized meta tags, JSON-LD structured data (Person, VisualArtwork), dynamic sitemap.xml and robots.txt, image sitemaps, and canonical URL management for React SPA. Individual SEO landing pages for artworks.
 - **Gallery Feature**: Dedicated gallery management with image uploads, reordering, featured status, and a public gallery display.
 - **AR Preview**: Realistic scaling and size selection for artwork previews using augmented reality.
