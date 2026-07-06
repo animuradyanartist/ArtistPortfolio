@@ -29,8 +29,10 @@ export default function ArtworkDetailPage() {
   useEffect(() => {
     if (artwork) {
       const slug = toSlug(artwork.title);
+      // Canonical: if artwork has a seoSlug use that path, otherwise /artworks/slug
+      const canonicalPath = artwork.seoSlug ? `/${artwork.seoSlug}` : `/artworks/${slug}`;
       document.title = `${artwork.title} | Original ${artwork.medium} by Ani Muradyan`;
-      updateCanonicalUrl(`/artworks/${slug}`);
+      updateCanonicalUrl(canonicalPath);
       updateMetaDescription(`${artwork.title} – original ${artwork.medium} painting by Armenian contemporary artist Ani Muradyan. ${artwork.dimensions}, ${artwork.year}. ${artwork.availability === 'available' ? 'Available for purchase.' : ''}`);
 
       injectJsonLd('artwork-jsonld', {
@@ -46,7 +48,7 @@ export default function ArtworkDetailPage() {
         "image": artwork.images?.[0]
           ? (artwork.images[0].startsWith('http') ? artwork.images[0] : `${BASE_URL}${artwork.images[0]}`)
           : undefined,
-        "url": `${BASE_URL}/artworks/${slug}`,
+        "url": `${BASE_URL}${canonicalPath}`,
         "creator": {
           "@type": ["Person", "VisualArtist"],
           "name": "Ani Muradyan",

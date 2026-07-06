@@ -897,22 +897,21 @@ Crawl-delay: 1
   app.get("/sitemap.xml", async (req, res) => {
     try {
       const artworks = await storage.getAllArtworks();
-      const prints = await storage.getAllPrints();
       const today = new Date().toISOString().split('T')[0];
-      
+
+      // Static public pages — /prints is excluded (client redirects it to /)
       const staticPages = [
         { url: '/', priority: '1.0', changefreq: 'weekly' },
         { url: '/about', priority: '0.8', changefreq: 'monthly' },
         { url: '/artworks', priority: '0.9', changefreq: 'weekly' },
-        { url: '/prints', priority: '0.9', changefreq: 'weekly' },
         { url: '/exhibitions', priority: '0.8', changefreq: 'monthly' },
         { url: '/gallery', priority: '0.8', changefreq: 'monthly' },
         { url: '/contact', priority: '0.7', changefreq: 'monthly' }
       ];
-      
+
       let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
       xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
-      
+
       staticPages.forEach(page => {
         xml += '  <url>\n';
         xml += `    <loc>${SEO_BASE_URL}${page.url}</loc>\n`;
@@ -921,38 +920,37 @@ Crawl-delay: 1
         xml += `    <priority>${page.priority}</priority>\n`;
         xml += '  </url>\n';
       });
-      
+
+      // One canonical URL per artwork — no duplicates
+      const seenUrls = new Set<string>();
       artworks.forEach(artwork => {
-        const slug = artwork.slug || toSlug(artwork.title);
-        xml += '  <url>\n';
-        xml += `    <loc>${SEO_BASE_URL}/artworks/${slug}</loc>\n`;
-        xml += `    <lastmod>${today}</lastmod>\n`;
-        xml += '    <changefreq>monthly</changefreq>\n';
-        xml += '    <priority>0.8</priority>\n';
-        xml += '  </url>\n';
-        if (artwork.seoSlug) {
-          xml += '  <url>\n';
-          xml += `    <loc>${SEO_BASE_URL}/${artwork.seoSlug}</loc>\n`;
-          xml += `    <lastmod>${today}</lastmod>\n`;
-          xml += '    <changefreq>monthly</changefreq>\n';
-          xml += '    <priority>0.9</priority>\n';
-          xml += '  </url>\n';
+        // Exclude untitled artworks
+        const titleTrimmed = artwork.title?.trim() ?? '';
+        if (!titleTrimmed || titleTrimmed.toLowerCase() === 'untitled') return;
+
+        // Canonical: prefer seoSlug path; fall back to /artworks/slug
+        let canonicalPath: string;
+        if (artwork.seoSlug?.trim()) {
+          canonicalPath = `/${artwork.seoSlug.trim()}`;
+        } else {
+          const slug = artwork.slug || toSlug(artwork.title);
+          canonicalPath = `/artworks/${slug}`;
         }
-      });
-      
-      const activePrints = prints.filter(print => print.status === 'active');
-      activePrints.forEach(print => {
-        const slug = print.slug || toSlug(print.title);
+
+        const canonicalUrl = `${SEO_BASE_URL}${canonicalPath}`;
+        if (seenUrls.has(canonicalUrl)) return; // guard against accidental duplication
+        seenUrls.add(canonicalUrl);
+
         xml += '  <url>\n';
-        xml += `    <loc>${SEO_BASE_URL}/prints/${slug}</loc>\n`;
+        xml += `    <loc>${canonicalUrl}</loc>\n`;
         xml += `    <lastmod>${today}</lastmod>\n`;
         xml += '    <changefreq>monthly</changefreq>\n';
         xml += '    <priority>0.8</priority>\n';
         xml += '  </url>\n';
       });
-      
+
       xml += '</urlset>';
-      
+
       res.setHeader('Content-Type', 'application/xml');
       res.send(xml);
     } catch (error) {
@@ -1008,6 +1006,29 @@ Crawl-delay: 1
     } catch (error) {
       console.error("Error generating image sitemap:", error);
       res.status(500).send('Error generating image sitemap');
+    }
+  });
+
+  // 301 redirect: /artworks/:slug → canonical URL when artwork has a seoSlug
+  // This eliminates duplicate artwork URLs for search engines
+  app.get("/artworks/:slug", async (req, res, next) => {
+    const { slug } = req.params;
+    if (/^\d+$/.test(slug)) return next(); // numeric IDs — no redirect needed
+    try {
+      const allArtworks = await storage.getAllArtworks();
+      const artwork = allArtworks.find(
+        a => (a.slug || toSlug(a.title)) === slug || toSlug(a.title) === slug
+      );
+      if (!artwork?.seoSlug) return next();
+
+      const canonicalPath = `/${artwork.seoSlug.trim()}`;
+      const currentPath = `/artworks/${slug}`;
+      if (currentPath !== canonicalPath) {
+        return res.redirect(301, canonicalPath);
+      }
+      next();
+    } catch {
+      next();
     }
   });
 
