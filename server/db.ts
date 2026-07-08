@@ -5,10 +5,12 @@ import * as schema from "@shared/schema";
 
 neonConfig.webSocketConstructor = ws;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
+// Without DATABASE_URL the app falls back to in-memory sample data
+// (MemStorage) — a local preview mode. Production on Replit always has
+// the secret set, so this only changes behavior on machines without it.
+const hasDb = !!process.env.DATABASE_URL;
+if (!hasDb) {
+  console.log("[DB] no DATABASE_URL — local preview mode with in-memory sample data");
 }
 
 /**
@@ -42,21 +44,29 @@ function getConnectionString(): string {
   return url.toString();
 }
 
-const connectionString = getConnectionString();
+const connectionString = hasDb ? getConnectionString() : null;
 
-if (process.env.NODE_ENV === 'development') {
-  const url = new URL(connectionString);
-  const source = process.env.DEV_DATABASE_URL ? 'DEV_DATABASE_URL' : 'auto-derived';
-  console.log(`[DB] development → ${url.pathname.slice(1)} @ ${url.hostname} (${source})`);
-} else {
-  console.log(`[DB] production → DATABASE_URL`);
+if (hasDb) {
+  if (process.env.NODE_ENV === 'development') {
+    const url = new URL(connectionString!);
+    const source = process.env.DEV_DATABASE_URL ? 'DEV_DATABASE_URL' : 'auto-derived';
+    console.log(`[DB] development → ${url.pathname.slice(1)} @ ${url.hostname} (${source})`);
+  } else {
+    console.log(`[DB] production → DATABASE_URL`);
+  }
 }
 
-export const pool = new Pool({ 
-  connectionString,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+// Both are null in local preview mode — consumers must check hasDatabase
+// (storage.ts picks MemStorage, index.ts skips the PG session store).
+export const pool = hasDb
+  ? new Pool({
+      connectionString: connectionString!,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    })
+  : (null as unknown as Pool);
 
-export const db = drizzle({ client: pool, schema });
+export const db = hasDb ? drizzle({ client: pool, schema }) : (null as unknown as ReturnType<typeof drizzle>);
+
+export const hasDatabase = hasDb;

@@ -6,7 +6,7 @@ import fs from "fs";
 import sharp from "sharp";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, prints } from "@shared/schema";
-import { db } from "./db";
+import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
 import {
@@ -297,6 +297,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Prints routes
   app.get("/api/prints", async (req, res) => {
     try {
+      // Local preview mode has no SQL connection — build the same
+      // lightweight shape from MemStorage
+      if (!hasDatabase) {
+        const all = (await storage.getAllPrints()).filter(p => p.status === 'active');
+        res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+        return res.json(all.map(p => ({
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          status: p.status,
+          availableSizes: p.availableSizes,
+          preferredMaterial: p.preferredMaterial,
+          position: p.position,
+          images: p.images.length > 0 ? ['thumbnail'] : [],
+          hasImages: p.images.length > 0,
+        })));
+      }
       // Use lightweight query without images for fast initial load
       const lightweightPrints = await db.select({
         id: prints.id,

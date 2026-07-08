@@ -1004,4 +1004,7 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+import { hasDatabase } from "./db";
+
+// Local preview mode: no DATABASE_URL → in-memory sample data
+export const storage: IStorage = hasDatabase ? new DatabaseStorage() : new MemStorage();

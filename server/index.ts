@@ -4,7 +4,7 @@ import pgSession from "connect-pg-simple";
 import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { pool } from "./db";
+import { pool, hasDatabase } from "./db";
 
 const app = express();
 
@@ -17,13 +17,15 @@ app.use(express.urlencoded({ extended: false, limit: '100mb' }));
 // PostgreSQL session store for production compatibility
 const PgStore = pgSession(session);
 
-// Session configuration for admin authentication
+// Session configuration for admin authentication.
+// Without a database (local preview mode) fall back to the default
+// in-memory session store.
 app.use(session({
-  store: new PgStore({
+  store: hasDatabase ? new PgStore({
     pool: pool,
     tableName: 'session',
     createTableIfMissing: true,
-  }),
+  }) : undefined,
   secret: process.env.SESSION_SECRET || 'fallback-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
@@ -80,11 +82,12 @@ app.use((req, res, next) => {
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = 5000;
+  const port = parseInt(process.env.PORT || "5000", 10);
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
+    // SO_REUSEPORT is unsupported on macOS — keep it for Replit (Linux) only
+    reusePort: process.platform === "linux",
   }, () => {
     log(`serving on port ${port}`);
   });
