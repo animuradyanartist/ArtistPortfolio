@@ -6,3 +6,7 @@ vite.config.ts.*
 *.tar.gz
 # On-demand resized image cache (rebuilt automatically)
 public/uploads/_cache/
+
+# Local preview snapshot of live-site content (regenerate with scripts/snapshot-preview-data.mjs)
+server/preview-data.json
+public/uploads/preview/

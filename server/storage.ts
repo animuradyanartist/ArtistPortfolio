@@ -1,6 +1,8 @@
 import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, contactSettings, galleryPhotos, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback, type ContactSettings, type InsertContactSettings, type GalleryPhoto, type InsertGalleryPhoto } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
+import fs from "fs";
+import path from "path";
 
 export interface IStorage {
   // Users
@@ -124,6 +126,46 @@ export class MemStorage implements IStorage {
 
     // Initialize with sample data
     this.initializeSampleData();
+
+    // If a snapshot of the live site exists (scripts/snapshot-preview-data.mjs),
+    // replace the stock samples with the real portfolio content.
+    this.loadPreviewSnapshot();
+  }
+
+  private loadPreviewSnapshot() {
+    try {
+      const file = path.join(process.cwd(), "server/preview-data.json");
+      if (!fs.existsSync(file)) return;
+      const snap = JSON.parse(fs.readFileSync(file, "utf-8"));
+
+      if (Array.isArray(snap.artworks) && snap.artworks.length > 0) {
+        this.artworks = new Map(snap.artworks.map((a: Artwork) => [a.id, a]));
+        this.currentArtworkId = Math.max(...snap.artworks.map((a: Artwork) => a.id)) + 1;
+      }
+      if (Array.isArray(snap.galleryPhotos) && snap.galleryPhotos.length > 0) {
+        this.galleryPhotos = new Map(snap.galleryPhotos.map((g: GalleryPhoto) => [g.id, g]));
+        this.currentGalleryPhotoId = Math.max(...snap.galleryPhotos.map((g: GalleryPhoto) => g.id)) + 1;
+      }
+      if (Array.isArray(snap.exhibitions) && snap.exhibitions.length > 0) {
+        this.exhibitions = new Map(snap.exhibitions.map((e: Exhibition) => [e.id, e]));
+        this.currentExhibitionId = Math.max(...snap.exhibitions.map((e: Exhibition) => e.id)) + 1;
+      }
+      if (Array.isArray(snap.prints) && snap.prints.length > 0) {
+        this.prints = new Map(snap.prints.map((p: Print) => [p.id, p]));
+        this.currentPrintId = Math.max(...snap.prints.map((p: Print) => p.id)) + 1;
+      }
+      if (snap.homepageSettings) this.homepageSettings = snap.homepageSettings;
+      if (snap.artistBio) this.artistBio = snap.artistBio;
+      if (snap.contactSettings) this.contactSettings = snap.contactSettings;
+
+      console.log(
+        `[preview] Loaded live-site snapshot (${snap.snapshotFrom || "unknown"}): ` +
+          `${this.artworks.size} artworks, ${this.galleryPhotos.size} gallery photos, ` +
+          `${this.exhibitions.size} exhibitions, ${this.prints.size} prints`
+      );
+    } catch (err) {
+      console.warn("[preview] Failed to load preview snapshot, using stock samples:", err);
+    }
   }
 
   private initializeSampleData() {
