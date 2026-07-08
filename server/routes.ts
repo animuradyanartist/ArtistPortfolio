@@ -218,8 +218,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertArtworkSchema.partial().parse(req.body);
-      
-      // Validate images array if present
+
+      // Validate images array if present (refs from non-raw GETs are resolved
+      // back to the stored originals first)
       if (validatedData.images && validatedData.images.length > 0) {
         validatedData.images = await resolveImageRefs(validatedData.images);
         for (const image of validatedData.images) {
@@ -266,7 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/artworks/featured", async (req, res) => {
     try {
-      const artworks = await storage.getFeaturedArtworks();
+      const artworks = refifyImagesList("artwork", await storage.getFeaturedArtworks());
       res.json(artworks);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch featured artworks" });
@@ -294,19 +295,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Prints routes
-  // Helper function to compress base64 image
-  const compressImage = (base64Image: string): string => {
-    // For very large images, we'll apply basic compression
-    if (base64Image.length > 500000) { // If larger than ~375KB
-      // Convert to JPEG format for smaller size
-      // This is a simple format conversion - in production use proper image processing
-      if (base64Image.includes('data:image/png')) {
-        return base64Image.replace('data:image/png;base64,', 'data:image/jpeg;base64,');
-      }
-    }
-    return base64Image;
-  };
-
   app.get("/api/prints", async (req, res) => {
     try {
       // Use lightweight query without images for fast initial load
@@ -355,7 +343,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Print not found" });
       }
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-      res.json(print);
+      // ?raw=1 keeps base64 originals — used by the admin edit form
+      res.json(req.query.raw === "1" ? print : refifyImages("print", print));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch print" });
     }
@@ -369,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!print) {
         return res.status(404).json({ message: "Print not found" });
       }
-      res.json({ images: print.images });
+      res.json({ images: refifyImages("print", print).images });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch print images" });
     }
@@ -500,7 +489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertPrintSchema.partial().parse(req.body);
-      
+
       // Validate images array if present
       if (validatedData.images && validatedData.images.length > 0) {
         validatedData.images = await resolveImageRefs(validatedData.images);
@@ -640,7 +629,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const bio = await storage.getArtistBio();
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-      res.json(bio);
+      res.json(bio && req.query.raw !== "1" ? refifyImageField("bio", bio, "image") : bio);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch artist bio" });
     }
