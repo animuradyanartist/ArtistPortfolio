@@ -176,7 +176,7 @@ export default function HomePage() {
             (card) =>
               card.artwork && (
                 <Link key={card.title} href="/artworks">
-                  <div className="group relative aspect-[4/3] md:aspect-[5/4] overflow-hidden cursor-pointer">
+                  <div className="group relative aspect-[4/5] md:aspect-[4/5] overflow-hidden cursor-pointer">
                     <img
                       src={card.artwork.images[0]}
                       alt={card.title}
