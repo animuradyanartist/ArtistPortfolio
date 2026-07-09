@@ -2,6 +2,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import pgSession from "connect-pg-simple";
 import compression from "compression";
+import path from "path";
+import fs from "fs";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { pool, hasDatabase } from "./db";
@@ -37,6 +39,19 @@ app.use(session({
   },
   proxy: true,
 }));
+
+// The migrate-images-to-webp script converted some originals to .webp while
+// the database may still reference the old extension — redirect to the .webp
+// twin when the original file is gone.
+app.use('/uploads', (req, res, next) => {
+  const m = req.path.match(/^(.+)\.(png|jpe?g|tiff|bmp)$/i);
+  if (!m) return next();
+  const original = path.join(process.cwd(), 'public/uploads', req.path);
+  if (fs.existsSync(original)) return next();
+  const webp = path.join(process.cwd(), 'public/uploads', `${m[1]}.webp`);
+  if (fs.existsSync(webp)) return res.redirect(302, `/uploads${m[1]}.webp`);
+  next();
+});
 
 // Serve uploaded files. Filenames are timestamped/content-hashed and never
 // rewritten in place, so the browser can cache them forever.

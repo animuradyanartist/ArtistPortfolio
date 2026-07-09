@@ -1,419 +1,502 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Link } from "wouter";
-import { ExternalLink, ChevronLeft, ChevronRight, X } from "lucide-react";
-import type { Artwork, HomepageSettings, GalleryPhoto } from "@shared/schema";
+import type { Artwork, HomepageSettings, ArtistBio, Exhibition } from "@shared/schema";
 import backgroundImage from "@assets/1bg_1750936488071.png";
 import { updateCanonicalUrl, updateMetaDescription, toSlug, generateArtworkAlt } from "@/lib/seo";
 import { SHOW_PRICES } from "@/lib/featureFlags";
+import { useToast } from "@/hooks/use-toast";
+
+const NAVY = "#0d1434";
+const ORANGE = "#f59007";
+
+/** Small uppercase tracked eyebrow label used across sections */
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] tracking-[0.3em] uppercase text-stone-500 mb-4">{children}</p>
+  );
+}
+
+/** Outlined, letter-spaced action link/button in the design's style */
+function OutlineButton({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-block border border-stone-800 px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-900 hover:bg-stone-900 hover:text-stone-50 transition-colors duration-300">
+      {children}
+    </span>
+  );
+}
+
+function ViewLink({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-[10px] tracking-[0.2em] uppercase text-stone-700 border-b border-stone-400 pb-0.5 hover:text-stone-900 hover:border-stone-800 transition-colors">
+      {children}
+    </span>
+  );
+}
 
 export default function HomePage() {
   useEffect(() => {
-    document.title = "Ani Muradyan – Contemporary Portrait Artist";
-    updateCanonicalUrl('/');
-    updateMetaDescription("Ani Muradyan is a contemporary portrait artist creating expressive oil paintings and modern female portrait artworks.");
+    document.title = "Ani Muradyan – Contemporary Artist";
+    updateCanonicalUrl("/");
+    updateMetaDescription(
+      "Ani Muradyan is an Armenian contemporary oil painter whose figurative works and landscapes create quiet moments of emotional clarity, distance, hope, and reflection."
+    );
   }, []);
-  
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+
+  const { toast } = useToast();
+  const [email, setEmail] = useState("");
+  const [joining, setJoining] = useState(false);
+
   const { data: homepageSettings } = useQuery<HomepageSettings>({
-    queryKey: ["/api/homepage-settings"]
+    queryKey: ["/api/homepage-settings"],
+  });
+  const { data: artworks = [] } = useQuery<Artwork[]>({
+    queryKey: ["/api/artworks"],
+  });
+  const { data: artistBio } = useQuery<ArtistBio>({
+    queryKey: ["/api/artist-bio"],
+  });
+  const { data: exhibitions = [] } = useQuery<Exhibition[]>({
+    queryKey: ["/api/exhibitions"],
   });
 
-  const { data: artworks = [], isLoading: artworksLoading } = useQuery<Artwork[]>({
-    queryKey: ["/api/artworks"]
-  });
+  // The design features a vivid figure painting as the hero panel — prefer
+  // "Rebirth"; fall back to the admin-configured hero image.
+  const heroArtwork = artworks.find((a) => a.title === "Rebirth");
+  const heroImage =
+    heroArtwork?.images[0] || homepageSettings?.heroImage || backgroundImage;
 
-  const { data: galleryPhotos = [] } = useQuery<GalleryPhoto[]>({
-    queryKey: ["/api/gallery-photos"]
-  });
+  // Curated picks for the two category cards — prefer known pieces, fall back by index
+  const figurativeCard =
+    artworks.find((a) => a.title === "Reconstruction") || artworks[1] || artworks[0];
+  const landscapeCard =
+    artworks.find((a) => a.title === "Endless Horizon") || artworks[0];
 
-  const latestArtwork = artworks.length > 0 ? artworks[artworks.length - 1] : null;
-  
-  const featuredArtworks = artworks.filter(artwork => artwork.featured).slice(0, 3);
-  const featuredGalleryPhotos = galleryPhotos
-    .filter(photo => photo.featured)
-    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-    .slice(0, 4);
+  const collectArtworks = artworks.slice(0, 6);
+  const roomArtworks = [
+    artworks.find((a) => a.title === "Silent Bliss") || artworks[2],
+    landscapeCard,
+  ].filter(Boolean) as Artwork[];
 
-  const handleBuyNow = (saatchiUrl?: string) => {
-    if (saatchiUrl) {
-      window.open(saatchiUrl, '_blank');
+  const recentExhibitions = [...exhibitions]
+    .sort((a, b) => (b.year || 0) - (a.year || 0))
+    .slice(0, 7);
+
+  const priceLabel = (artwork: Artwork) => {
+    if (artwork.availability !== "available") {
+      return artwork.availability === "reserved" ? "Reserved" : "Sold";
+    }
+    if (SHOW_PRICES && artwork.price) return `€${artwork.price.toLocaleString()}`;
+    return "Inquire";
+  };
+
+  const joinCollectorList = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setJoining(true);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Collector List Signup",
+          email: email.trim(),
+          subject: "Join the Collector List",
+          message: `Please add ${email.trim()} to the collector list.`,
+        }),
+      });
+      if (!res.ok) throw new Error("Request failed");
+      toast({
+        title: "Welcome to the collector list",
+        description: "You'll receive new paintings and studio updates before public release.",
+      });
+      setEmail("");
+    } catch {
+      toast({
+        title: "Something went wrong",
+        description: "Please try again, or email animuradyan.artist@gmail.com directly.",
+        variant: "destructive",
+      });
+    } finally {
+      setJoining(false);
     }
   };
 
-  const openLightbox = (index: number) => {
-    setCurrentPhotoIndex(index);
-    setLightboxOpen(true);
-  };
-
-  const nextPhoto = () => {
-    setCurrentPhotoIndex((prev) => (prev + 1) % featuredGalleryPhotos.length);
-  };
-
-  const previousPhoto = () => {
-    setCurrentPhotoIndex((prev) => (prev - 1 + featuredGalleryPhotos.length) % featuredGalleryPhotos.length);
-  };
-
-  const currentPhoto = featuredGalleryPhotos[currentPhotoIndex];
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* Hero Section */}
-      <div className="relative h-screen overflow-hidden">
-        <div 
-          className="absolute inset-0 bg-cover bg-center transform scale-105 animate-float"
-          style={{
-            backgroundImage: `url('${homepageSettings?.heroImage || backgroundImage}')`
-          }}
-        />
-        
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-900/50 to-slate-900/70" />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent" />
-        
-        <div className="absolute inset-0">
-          <div className="absolute top-20 left-20 w-2 h-2 bg-white/20 rounded-full animate-pulse"></div>
-          <div className="absolute top-40 right-32 w-1 h-1 bg-blue-400/30 rounded-full animate-pulse animation-delay-200"></div>
-          <div className="absolute bottom-32 left-40 w-1.5 h-1.5 bg-indigo-400/20 rounded-full animate-pulse animation-delay-400"></div>
-          <div className="absolute bottom-20 right-20 w-2 h-2 bg-white/10 rounded-full animate-pulse animation-delay-600"></div>
-        </div>
-        
-        <div className="relative h-screen flex items-center justify-center text-center text-white">
-          <div className="w-full max-w-6xl px-4">
-            <div className="flex flex-col items-center justify-center h-full">
-              <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md px-8 py-4 rounded-full text-sm font-medium text-white mb-10 animate-fadeIn border border-white/20">
-                <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full animate-pulse"></div>
-                <span className="text-base">Contemporary Abstract Realism Artist • Oil Paintings & Fine Art Prints</span>
+    <div className="min-h-screen bg-[#f5f1ea]">
+      {/* ── Hero ─────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
+        <div className="relative mx-auto max-w-[1920px]">
+          {/* Center painting column */}
+          <div className="relative mx-auto w-full sm:w-[70%] md:w-[43%] min-h-[70vh] md:min-h-[85vh]">
+            <img
+              src={heroImage}
+              alt="Painting by Ani Muradyan"
+              className="absolute inset-0 h-full w-full object-cover opacity-80"
+            />
+            <div
+              className="absolute inset-0"
+              style={{ background: `linear-gradient(to bottom, ${NAVY}55, ${NAVY}22 40%, ${NAVY}cc)` }}
+            />
+            {/* Column hairlines */}
+            <div className="absolute inset-y-0 -left-px w-px bg-white/10 hidden md:block" />
+            <div className="absolute inset-y-0 -right-px w-px bg-white/10 hidden md:block" />
+          </div>
+
+          {/* Name overlay */}
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full px-6 md:px-0">
+              <div className="mx-auto max-w-[1500px] md:pl-[13%]">
+                <p
+                  className="text-white font-semibold text-xl md:text-3xl mb-2 animate-fadeIn"
+                  style={{ fontFamily: "'Poppins', sans-serif" }}
+                >
+                  Hello, I am
+                </p>
+                <h1
+                  className="font-extrabold leading-[0.95] tracking-tight text-[17vw] sm:text-[13vw] md:text-[8.5vw] animate-slideUp"
+                  style={{ fontFamily: "'Poppins', sans-serif" }}
+                >
+                  <span style={{ color: ORANGE }}>Ani</span>{" "}
+                  <span className="text-white">Murad</span>
+                  <span style={{ color: ORANGE }}>yan</span>
+                </h1>
+                <p
+                  className="mt-1 text-2xl md:text-4xl font-light animate-slideUp animation-delay-200"
+                  style={{ fontFamily: "'Poppins', sans-serif" }}
+                >
+                  <span style={{ color: ORANGE }}>Contempor</span>
+                  <span className="text-white">ary Artist</span>
+                </p>
               </div>
-              
-              <h1 className="text-6xl md:text-8xl lg:text-9xl font-bold mb-8 bg-gradient-to-r from-white via-slate-100 to-white bg-clip-text text-transparent animate-slideUp text-center">Ani Muradyan – Contemporary Artist</h1>
-              
-              <blockquote className="text-2xl md:text-4xl lg:text-5xl italic mb-16 text-slate-200 font-light leading-relaxed max-w-5xl text-center animate-slideUp animation-delay-200">
-                "{homepageSettings?.heroQuote || 'Art must bring hope into people\'s lives.'}"
-              </blockquote>
-              
-              <div className="flex flex-col sm:flex-row gap-6 items-center justify-center animate-slideUp animation-delay-400">
-                <Link href="/artworks">
-                  <Button className="group h-16 px-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-500 transform hover:scale-105 shadow-2xl hover:shadow-blue-500/25">
-                    <span className="text-lg group-hover:text-white transition-colors">View Artworks</span>
-                    <div className="ml-2 transform group-hover:translate-x-1 transition-transform">
-                      <ExternalLink className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Intro statement ──────────────────────────────────── */}
+      <section className="py-20 md:py-28 px-6">
+        <p className="font-playfair mx-auto max-w-3xl text-center text-2xl md:text-[28px] leading-relaxed text-stone-800">
+          Ani Muradyan is an Armenian contemporary oil painter whose figurative works and
+          landscapes create quiet moments of emotional clarity, distance, hope, and reflection.
+        </p>
+      </section>
+
+      {/* ── Explore the Work ─────────────────────────────────── */}
+      <section className="pb-20 md:pb-28 px-6">
+        <h2 className="font-playfair text-center text-4xl md:text-[40px] text-stone-900 mb-12">
+          Explore the Work
+        </h2>
+        <div className="mx-auto grid max-w-6xl grid-cols-1 md:grid-cols-2 gap-8">
+          {[
+            {
+              artwork: figurativeCard,
+              title: "Figurative Works",
+              copy: "Human presence, emotional connection, inner silence, and quiet strength.",
+              cta: "View Figurative Works",
+            },
+            {
+              artwork: landscapeCard,
+              title: "Landscapes",
+              copy: "Open space, light, distance, memory, and the emotional atmosphere of the world outside.",
+              cta: "View Landscapes",
+            },
+          ].map(
+            (card) =>
+              card.artwork && (
+                <Link key={card.title} href="/artworks">
+                  <div className="group relative aspect-[4/3] md:aspect-[5/4] overflow-hidden cursor-pointer">
+                    <img
+                      src={card.artwork.images[0]}
+                      alt={card.title}
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/5" />
+                    <div className="absolute bottom-0 left-0 p-7 text-white">
+                      <h3 className="font-playfair text-2xl md:text-3xl mb-2">{card.title}</h3>
+                      <p className="max-w-xs text-sm text-white/85 mb-4">{card.copy}</p>
+                      <span className="text-[10px] tracking-[0.2em] uppercase border-b border-white/60 pb-0.5 group-hover:border-white transition-colors">
+                        {card.cta}
+                      </span>
                     </div>
-                  </Button>
+                  </div>
                 </Link>
-                <Link href="/about">
-                  <Button className="group h-16 px-10 bg-white/10 backdrop-blur-md text-white border border-white/30 hover:bg-white/20 hover:border-white/50 font-medium rounded-2xl transition-all duration-500 transform hover:scale-105 shadow-xl">
-                    <span className="text-lg group-hover:text-white transition-colors">About the Artist</span>
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-          
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-fadeIn animation-delay-600">
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center">
-                <div className="w-1 h-3 bg-white/50 rounded-full animate-pulse mt-2"></div>
-              </div>
-              <span className="text-white/60 text-sm">Scroll to explore</span>
-            </div>
-          </div>
+              )
+          )}
         </div>
-      </div>
-      {/* Artist Introduction Section */}
-      <div className="py-24 bg-white text-[14px]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="prose prose-lg max-w-none text-slate-700 leading-relaxed space-y-6">
-            <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-8 text-center">
-              Abstract Realism Paintings
-            </h2>
-            <p className="text-[14px]">
-              Ani Muradyan is a contemporary Armenian artist whose practice bridges the worlds of abstraction and figurative art. Born and raised in Yerevan, Armenia, she developed a deep affinity for painting at an early age, drawn to the way color and form can convey what words often cannot. Her work sits at the crossroads of abstract realism — a style that retains the emotional truth of the subject while dissolving the boundaries of literal representation.
-            </p>
-            <p className="text-[14px]">
-              Working primarily in oil on canvas, Ani builds her paintings through layered brushwork and a rich, intuitive palette. Each piece begins with observation — a face, a gesture, a fleeting light — and gradually transforms into something more internal. The resulting works feel simultaneously familiar and mysterious, grounded in reality yet reaching toward something beyond it. Her abstract portrait paintings have been described as windows into inner landscapes, where the viewer is invited to project their own emotion and memory onto the canvas.
-            </p>
-            <p className="text-[14px]">
-              Ani's artistic philosophy is rooted in a belief that art should carry hope. She paints not to escape the world, but to look at it more carefully — to find beauty in quiet moments, resilience in human expression, and meaning in the everyday. This intentional warmth runs through every brushstroke, making her original oil paintings feel both contemplative and alive. Whether depicting a solitary figure or an abstract field of color, the emotional register of her work is always deeply personal, yet universally resonant.
-            </p>
-            <p className="text-[14px]">
-              Over the past several years, Ani has exhibited her work in solo and group shows across Armenia, Europe, and online platforms such as Saatchi Art and Singulart. Her paintings have found homes in private collections around the world, and her growing reputation as an Armenian contemporary artist reflects both the quality of her craft and the sincerity of her vision. She continues to paint from her studio in Yerevan, where the light and landscape of the Caucasus inform her work in subtle but unmistakable ways.
-            </p>
-          </div>
-        </div>
-      </div>
-      {/* Featured Works Section */}
-      <div className="py-24 bg-gradient-to-br from-slate-50 to-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-6">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              Featured Works
+      </section>
+
+      {/* ── Available Original Paintings ─────────────────────── */}
+      <section className="bg-[#eee9df] py-20 md:py-28 px-6">
+        <div className="mx-auto max-w-6xl">
+          <div className="flex flex-wrap items-end justify-between gap-6 mb-12">
+            <div>
+              <Eyebrow>To Collect</Eyebrow>
+              <h2 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">
+                Available Original Paintings
+              </h2>
+              <p className="max-w-sm text-sm text-stone-600">
+                A curated selection of original oil paintings on canvas, available for collectors.
+              </p>
             </div>
-            <h2 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6">
-              Available Artworks
-            </h2>
-            <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
-              A curated selection of original oil paintings available for purchase, each piece telling its own story through color, texture, and emotion.
-            </p>
+            <Link href="/artworks">
+              <ViewLink>View All Originals</ViewLink>
+            </Link>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {featuredArtworks.map((artwork) => (
-              <Link key={artwork.id} href={`/artworks/${toSlug(artwork.title)}`}>
-                <div className="bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden hover:shadow-2xl transition-all duration-300 transform hover:scale-105 cursor-pointer">
-                  <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200">
-                    <img 
-                      src={artwork.images[0]} 
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
+            {collectArtworks.map((artwork) => (
+              <div key={artwork.id}>
+                <Link href={`/artworks/${artwork.slug || toSlug(artwork.title)}`}>
+                  <div className="group aspect-[4/5] overflow-hidden cursor-pointer bg-stone-200">
+                    <img
+                      src={artwork.images[0]}
                       alt={generateArtworkAlt(artwork.title, artwork.medium)}
-                      title={`Abstract realism portrait painting – ${artwork.title} – Ani Muradyan`}
-                      className="w-full h-full object-cover"
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                       loading="lazy"
                     />
                   </div>
-                  <div className="p-6">
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                      {artwork.title}
-                    </h3>
-                    <p className="text-slate-600 text-sm mb-4">
-                      {artwork.medium}, {artwork.dimensions}
-                    </p>
-                    <div className="flex justify-between items-center">
-                      {SHOW_PRICES && (
-                        <span className="text-2xl font-bold text-slate-900">
-                          ${artwork.price.toLocaleString()}
-                        </span>
-                      )}
-                      <Badge 
-                        variant={artwork.availability === 'available' ? 'default' : 'destructive'}
-                        className={artwork.availability === 'available' 
-                          ? 'bg-green-100 text-green-800 hover:bg-green-100' 
-                          : 'bg-red-100 text-red-800 hover:bg-red-100'}
-                      >
-                        {artwork.availability === 'available' ? 'Available' : 'Sold'}
-                      </Badge>
-                    </div>
-                  </div>
+                </Link>
+                <h3 className="font-playfair italic text-lg text-stone-900 mt-4">
+                  {artwork.title}
+                </h3>
+                <p className="text-xs text-stone-500 mt-1">
+                  {artwork.medium || "Oil on canvas"} · {artwork.dimensions}
+                </p>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-sm text-stone-800">{priceLabel(artwork)}</span>
+                  <Link href={`/artworks/${artwork.slug || toSlug(artwork.title)}`}>
+                    <ViewLink>View Work</ViewLink>
+                  </Link>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
-          <div className="text-center mt-16">
+
+          <div className="mt-16 text-center">
             <Link href="/artworks">
-              <Button className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg">
-                <span className="text-lg">Browse all original artworks for sale</span>
-              </Button>
+              <OutlineButton>View All Originals</OutlineButton>
             </Link>
           </div>
         </div>
-      </div>
-      {/* Exhibitions Section */}
-      <div className="py-24 bg-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6">
-            Exhibitions
-          </h2>
-          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed mb-10">
-            Ani Muradyan's abstract realism paintings have been exhibited in solo and group shows across Armenia and internationally. Her work continues to reach new audiences through galleries, art fairs, and curated online platforms.
-          </p>
-          <Link href="/exhibitions">
-            <Button className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg">
-              <span className="text-lg">View exhibition history</span>
-            </Button>
-          </Link>
-        </div>
-      </div>
-      {/* Gallery Section */}
-      {featuredGalleryPhotos.length > 0 && (
-        <div className="py-24 bg-gradient-to-br from-slate-50 to-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-20">
-              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-6">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                Exhibition Gallery
-              </div>
-              <h2 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6">
-                Behind the Scenes
-              </h2>
-              <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
-                Glimpses from exhibitions and special moments in the artistic journey.
-              </p>
-            </div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {featuredGalleryPhotos.map((photo, index) => (
-                <div 
-                  key={photo.id} 
-                  className="group relative animate-fadeIn cursor-pointer"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                  onClick={() => openLightbox(index)}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl blur opacity-0 group-hover:opacity-20 transition-opacity duration-500"></div>
-                  <div className="relative bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden hover:shadow-2xl transition-all duration-500 transform group-hover:scale-105">
-                    <div className="aspect-square overflow-hidden">
+      </section>
+
+      {/* ── Quote band ───────────────────────────────────────── */}
+      <section className="bg-[#ece7dc] py-24 md:py-32 px-6 text-center">
+        <blockquote className="font-playfair italic mx-auto max-w-3xl text-3xl md:text-4xl leading-snug text-stone-900">
+          “I paint the dialogue between inner life and the world outside.”
+        </blockquote>
+        <p className="mt-8 text-[11px] tracking-[0.3em] uppercase text-stone-500">Ani Muradyan</p>
+      </section>
+
+      {/* ── Where the work lives ─────────────────────────────── */}
+      {roomArtworks.length > 0 && (
+        <section className="py-20 md:py-28 px-6">
+          <div className="mx-auto max-w-6xl">
+            <Eyebrow>In Your Space</Eyebrow>
+            <h2 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">
+              Where the work lives
+            </h2>
+            <p className="max-w-md text-sm text-stone-600 mb-12">
+              Each painting is made to hold a room quietly — to change with the light through the
+              day and settle into the life around it.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {roomArtworks.map((artwork, i) => (
+                <figure key={artwork.id}>
+                  {/* CSS room mock-up: wall, framed painting, floor */}
+                  <div
+                    className="relative aspect-[16/10] overflow-hidden"
+                    style={{
+                      background:
+                        i % 2 === 0
+                          ? "linear-gradient(to bottom, #d8cfc4 78%, #a89a89 78%, #93857a 100%)"
+                          : "linear-gradient(to bottom, #d6d6d2 78%, #a4988c 78%, #8f8378 100%)",
+                    }}
+                  >
+                    <div className="absolute left-1/2 top-[12%] w-[34%] -translate-x-1/2 bg-white p-[3%] shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
                       <img
-                        src={photo.image}
-                        alt={`${photo.title || 'Exhibition photo'} – Ani Muradyan contemporary art exhibition${photo.location ? ' at ' + photo.location : ''}`}
-                        title={`Abstract realism portrait painting – ${photo.title || 'Exhibition gallery'} – Ani Muradyan`}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        src={artwork.images[0]}
+                        alt={`${artwork.title} shown in an interior`}
+                        className="block w-full"
                         loading="lazy"
-                        data-testid={`img-homepage-gallery-${photo.id}`}
                       />
                     </div>
-                    <div className="p-4">
-                      {photo.title && (
-                        <h3 className="text-sm font-semibold text-slate-900 line-clamp-2">
-                          {photo.title}
-                        </h3>
-                      )}
-                      {photo.year && (
-                        <p className="text-xs text-slate-600 mt-1">{photo.year}</p>
-                      )}
-                    </div>
                   </div>
+                  <figcaption className="font-playfair italic text-xs text-stone-500 mt-3">
+                    “{artwork.title}”{" "}
+                    {artwork.availability === "sold"
+                      ? "— in a private collection"
+                      : "— available as an original oil painting"}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── About Ani ────────────────────────────────────────── */}
+      <section className="bg-[#f8f4ed] py-20 md:py-28 px-6">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div className="mx-auto w-full max-w-md">
+            <img
+              src={artistBio?.image || heroImage}
+              alt="Ani Muradyan, contemporary oil painter"
+              className="w-full shadow-[0_24px_60px_rgba(0,0,0,0.18)]"
+              loading="lazy"
+            />
+          </div>
+          <div>
+            <Eyebrow>The Artist</Eyebrow>
+            <h2 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-6">About Ani</h2>
+            <p className="max-w-md text-sm leading-relaxed text-stone-700 mb-8">
+              Ani Muradyan is an Armenian contemporary oil painter working with simplified forms,
+              colour, space, and emotional atmosphere. Her paintings explore the quiet dialogue
+              between inner life and the outside world — through human presence, landscapes,
+              light, memory, and hope.
+            </p>
+            <Link href="/about">
+              <OutlineButton>Read About the Artist</OutlineButton>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Exhibitions ──────────────────────────────────────── */}
+      {recentExhibitions.length > 0 && (
+        <section className="bg-[#eee9df] py-20 md:py-28 px-6">
+          <div className="mx-auto max-w-4xl">
+            <Eyebrow>Recognition</Eyebrow>
+            <h2 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-3">Exhibitions</h2>
+            <p className="text-sm text-stone-600 mb-10">
+              Ani Muradyan's work has been exhibited internationally and in Armenia.
+            </p>
+            <div className="border-t border-stone-300">
+              {recentExhibitions.map((ex) => (
+                <div
+                  key={ex.id}
+                  className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-8 border-b border-stone-300 py-5"
+                >
+                  <span className="font-playfair w-16 shrink-0 text-stone-500">{ex.year}</span>
+                  <p className="text-sm text-stone-800">
+                    <span className="font-semibold">{ex.title}</span>
+                    <span className="text-stone-500">
+                      {" — "}
+                      {[ex.venue, ex.location].filter(Boolean).join(", ")}
+                    </span>
+                  </p>
                 </div>
               ))}
             </div>
-            <div className="text-center mt-16">
-              <Link href="/gallery">
-                <Button className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg">
-                  <span className="text-lg">View Full Gallery</span>
-                </Button>
+            <div className="mt-10">
+              <Link href="/exhibitions">
+                <OutlineButton>View Exhibitions</OutlineButton>
               </Link>
             </div>
           </div>
+        </section>
+      )}
+
+      {/* ── Collector list ───────────────────────────────────── */}
+      <section className="bg-[#ece7dc] py-20 md:py-28 px-6 text-center">
+        <Eyebrow>Private Previews</Eyebrow>
+        <h2 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">
+          Join the Collector List
+        </h2>
+        <p className="mx-auto max-w-md text-sm text-stone-600 mb-8">
+          Receive new paintings, available works, studio updates, and private previews before
+          public release.
+        </p>
+        <form
+          onSubmit={joinCollectorList}
+          className="mx-auto flex max-w-md flex-col sm:flex-row gap-3"
+        >
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Your email address"
+            className="flex-1 border border-stone-300 bg-white px-4 py-3 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-stone-500"
+          />
+          <button
+            type="submit"
+            disabled={joining}
+            className="px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-50 disabled:opacity-60 transition-colors"
+            style={{ backgroundColor: "#26221c" }}
+          >
+            {joining ? "Joining…" : "Join the List"}
+          </button>
+        </form>
+      </section>
+
+      {/* ── Closing CTA ──────────────────────────────────────── */}
+      <section className="py-24 md:py-32 px-6 text-center">
+        <h2 className="font-playfair mx-auto max-w-xl text-4xl md:text-[44px] leading-tight text-stone-900 mb-10">
+          Discover original oil paintings and fine art prints by Ani Muradyan.
+        </h2>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <Link href="/artworks">
+            <span
+              className="inline-block px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-50 hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: "#26221c" }}
+            >
+              View Available Originals
+            </span>
+          </Link>
+          <Link href="/contact">
+            <OutlineButton>Contact the Artist</OutlineButton>
+          </Link>
         </div>
-      )}
-      {/* Lightbox Dialog */}
-      {featuredGalleryPhotos.length > 0 && (
-        <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-          <DialogContent className="w-[800px] h-[500px] p-0 bg-black/95 border-none">
-            <div className="relative w-full h-full flex items-center justify-center">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-4 right-4 z-50 text-white hover:bg-white/20 rounded-full"
-                onClick={() => setLightboxOpen(false)}
-              >
-                <X className="w-6 h-6" />
-              </Button>
+      </section>
 
-              {featuredGalleryPhotos.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute left-4 z-50 text-white hover:bg-white/20 rounded-full w-12 h-12"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    previousPhoto();
-                  }}
-                >
-                  <ChevronLeft className="w-8 h-8" />
-                </Button>
-              )}
-
-              {currentPhoto && (
-                <div className="w-full h-full flex items-center justify-center p-4">
-                  <img
-                    src={currentPhoto.image}
-                    alt={`${currentPhoto.title || 'Exhibition photo'} – Ani Muradyan art exhibition`}
-                    title={`Abstract realism portrait painting – ${currentPhoto.title || 'Exhibition gallery'} – Ani Muradyan`}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                </div>
-              )}
-
-              {featuredGalleryPhotos.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-4 z-50 text-white hover:bg-white/20 rounded-full w-12 h-12"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    nextPhoto();
-                  }}
-                >
-                  <ChevronRight className="w-8 h-8" />
-                </Button>
-              )}
-
-              {currentPhoto && (currentPhoto.title || currentPhoto.exhibitionName || currentPhoto.location || currentPhoto.year) && (
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8">
-                  {currentPhoto.title && (
-                    <h3 className="text-2xl font-semibold text-white mb-2">{currentPhoto.title}</h3>
-                  )}
-                  <div className="flex flex-wrap gap-4 text-sm text-white/80">
-                    {currentPhoto.exhibitionName && <span>{currentPhoto.exhibitionName}</span>}
-                    {currentPhoto.location && <span>{currentPhoto.location}</span>}
-                    {currentPhoto.year && <span>{currentPhoto.year}</span>}
-                  </div>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-      {/* Footer */}
-      <footer className="bg-black text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-8">
+      {/* ── Footer ───────────────────────────────────────────── */}
+      <footer className="bg-[#efeae0] border-t border-stone-300 px-6 pt-16 pb-8">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             <div>
-              <h3 className="font-playfair text-xl font-semibold mb-4">Ani Muradyan</h3>
-              <p className="text-gray-300 text-sm">
-                Armenian contemporary artist creating original abstract realism oil paintings that bring hope and emotion into people's lives.
+              <h3 className="font-playfair text-xl text-stone-900 mb-2">Ani Muradyan</h3>
+              <p className="text-xs text-stone-500">
+                Contemporary oil painter · Yerevan, Armenia
               </p>
             </div>
-            <div>
-              <h4 className="font-semibold mb-4">Quick Links</h4>
-              <ul className="space-y-2 text-sm">
-                <li><Link href="/" className="text-gray-300 hover:text-white transition-colors duration-300">Home</Link></li>
-                <li><Link href="/artworks" className="text-gray-300 hover:text-white transition-colors duration-300">Original Artworks</Link></li>
-                <li><Link href="/prints" className="text-gray-300 hover:text-white transition-colors duration-300">Art Prints</Link></li>
-                <li><Link href="/about" className="text-gray-300 hover:text-white transition-colors duration-300">About the Artist</Link></li>
-                <li><Link href="/exhibitions" className="text-gray-300 hover:text-white transition-colors duration-300">Exhibitions</Link></li>
-                <li><Link href="/gallery" className="text-gray-300 hover:text-white transition-colors duration-300">Gallery</Link></li>
-                <li><Link href="/contact" className="text-gray-300 hover:text-white transition-colors duration-300">Contact</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Connect</h4>
-              <div className="flex space-x-4">
-                <a 
-                  href="https://www.instagram.com/animoria.art/" 
-                  target="_blank" 
+            <ul className="space-y-2 text-sm text-stone-700">
+              <li><Link href="/artworks" className="hover:text-stone-900 transition-colors">Originals</Link></li>
+              <li><Link href="/prints" className="hover:text-stone-900 transition-colors">Prints</Link></li>
+              <li><Link href="/about" className="hover:text-stone-900 transition-colors">About</Link></li>
+              <li><Link href="/exhibitions" className="hover:text-stone-900 transition-colors">Exhibitions</Link></li>
+              <li><Link href="/gallery" className="hover:text-stone-900 transition-colors">Gallery</Link></li>
+            </ul>
+            <ul className="space-y-2 text-sm text-stone-700">
+              <li>
+                <a
+                  href="https://www.instagram.com/animoria.art/"
+                  target="_blank"
                   rel="noopener noreferrer"
-                  className="text-gray-300 hover:text-white transition-colors duration-300"
+                  className="hover:text-stone-900 transition-colors"
                 >
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                  </svg>
+                  Instagram
                 </a>
-                <a 
-                  href="https://www.saatchiart.com/account/profile/1980379" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-gray-300 hover:text-white transition-colors duration-300"
-                >
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                  </svg>
-                </a>
-                <a 
+              </li>
+              <li>
+                <a
                   href="mailto:animuradyan.artist@gmail.com"
-                  className="text-gray-300 hover:text-white transition-colors duration-300"
+                  className="hover:text-stone-900 transition-colors"
                 >
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                  </svg>
+                  animuradyan.artist@gmail.com
                 </a>
-              </div>
-            </div>
+              </li>
+              <li><Link href="/contact" className="hover:text-stone-900 transition-colors">Contact</Link></li>
+            </ul>
           </div>
-          <div className="border-t border-gray-700 mt-8 pt-8 flex justify-between items-center">
-            <p className="text-gray-300 text-sm">&copy; 2024 Ani Muradyan. All rights reserved.</p>
-            <Link href="/admin" className="text-gray-500 hover:text-gray-300 text-xs">Admin</Link>
+          <div className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-stone-300 pt-6 text-xs text-stone-500">
+            <p>© {new Date().getFullYear()} Ani Muradyan. All rights reserved.</p>
+            <div className="flex items-center gap-4">
+              <p>Made with care in Yerevan</p>
+              <Link href="/admin" className="text-stone-400 hover:text-stone-600">Admin</Link>
+            </div>
           </div>
         </div>
       </footer>
