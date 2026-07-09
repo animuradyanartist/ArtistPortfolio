@@ -746,7 +746,7 @@ export default function AdminPage() {
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold text-slate-900">Homepage Settings</h3>
-                  <p className="text-sm text-slate-600">Configure your homepage appearance and content</p>
+                  <p className="text-sm text-slate-600">The homepage quote and the About-section portrait image</p>
                 </div>
               </div>
             </div>
@@ -761,26 +761,55 @@ export default function AdminPage() {
               ) : (
                 <Form {...homepageForm}>
                   <form onSubmit={homepageForm.handleSubmit(handleHomepageSubmit)} className="space-y-6">
+                    {/* Hero video note — the homepage hero is a looping video */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 w-8 h-8 shrink-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-900">Hero video</h4>
+                          <p className="text-sm text-slate-600 mt-1">
+                            The homepage hero is a looping video (<code className="text-xs bg-white px-1 py-0.5 rounded border">hero-loop.mp4</code>)
+                            with the artist's name over it. To replace it, drop a new
+                            <code className="text-xs bg-white px-1 py-0.5 rounded border">hero-loop.mp4</code> (and a
+                            <code className="text-xs bg-white px-1 py-0.5 rounded border">hero-poster.jpg</code> still frame)
+                            into <code className="text-xs bg-white px-1 py-0.5 rounded border">client/public/</code> and republish.
+                            An in-admin video uploader can be added if you'd like to swap it here.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
                     <FormField
                       control={homepageForm.control}
                       name="heroQuote"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Hero Quote</FormLabel>
+                          <FormLabel>Homepage Quote</FormLabel>
+                          <p className="text-sm text-slate-500 -mt-1 mb-2">
+                            Shown in the quote band in the middle of the homepage.
+                          </p>
                           <FormControl>
-                            <Textarea {...field} rows={2} />
+                            <Textarea {...field} rows={2} placeholder="I paint the dialogue between inner life and the world outside." />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={homepageForm.control}
                       name="heroImage"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Hero Background Image</FormLabel>
+                          <FormLabel>About / Portrait Image</FormLabel>
+                          <p className="text-sm text-slate-500 -mt-1 mb-2">
+                            Used as the portrait in the “About Ani” section (and as a fallback elsewhere).
+                            The hero itself uses the looping video above.
+                          </p>
                           <div className="space-y-2">
                             <FormControl>
                               <Input {...field} placeholder="https://example.com/image.jpg or /uploads/filename.jpg" />
@@ -813,9 +842,9 @@ export default function AdminPage() {
                             </div>
                             {field.value && (
                               <div className="mt-2">
-                                <img 
-                                  src={field.value} 
-                                  alt="Hero background preview" 
+                                <img
+                                  src={field.value}
+                                  alt="About / portrait preview"
                                   className="w-32 h-20 object-cover rounded border"
                                 />
                               </div>
@@ -825,8 +854,8 @@ export default function AdminPage() {
                         </FormItem>
                       )}
                     />
-                    
-                    <Button 
+
+                    <Button
                       type="submit" 
                       disabled={updateHomepageMutation.isPending}
                       className="h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl transition-all duration-200"

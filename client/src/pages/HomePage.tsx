@@ -256,7 +256,7 @@ export default function HomePage() {
       {/* ── Quote band ───────────────────────────────────────── */}
       <section className="bg-[#ece7dc] py-24 md:py-32 px-6 text-center">
         <blockquote className="font-playfair italic mx-auto max-w-3xl text-3xl md:text-4xl leading-snug text-stone-900">
-          “I paint the dialogue between inner life and the world outside.”
+          “{homepageSettings?.heroQuote?.trim() || "I paint the dialogue between inner life and the world outside."}”
         </blockquote>
         <p className="mt-8 text-[11px] tracking-[0.3em] uppercase text-stone-500">Ani Muradyan</p>
       </section>
