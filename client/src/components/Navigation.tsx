@@ -9,7 +9,7 @@ export default function Navigation() {
 
   const navigation = [
     { name: "Home", href: "/" },
-    { name: "Artworks", href: "/artworks" },
+    { name: "Originals", href: "/artworks" },
     // { name: "Prints", href: "/prints" },
     { name: "About", href: "/about" },
     { name: "Exhibitions", href: "/exhibitions" },

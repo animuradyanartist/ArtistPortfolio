@@ -1,227 +1,202 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
-import ArtworkCard from "@/components/ArtworkCard";
-import ArtworkModal from "@/components/ArtworkModal";
-import type { Artwork } from "@shared/schema";
-import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 import { Link } from "wouter";
+import type { Artwork } from "@shared/schema";
+import { updateCanonicalUrl, updateMetaDescription, toSlug, generateArtworkAlt } from "@/lib/seo";
+import { SHOW_PRICES } from "@/lib/featureFlags";
+import { Eyebrow } from "@/components/editorial";
+import { artworkCategory, type ArtworkCategory } from "@/lib/artworkCategory";
 
 // Server-injected preloaded artworks (eliminates loading state for crawlers + first paint).
-// Only used if the server sent a non-empty array — an empty array is not useful as placeholder.
 const _raw: Artwork[] | undefined =
-  typeof window !== 'undefined' ? (window as any).__PRELOADED_ARTWORKS__ : undefined;
+  typeof window !== "undefined" ? (window as any).__PRELOADED_ARTWORKS__ : undefined;
 const preloadedArtworks: Artwork[] | undefined =
   Array.isArray(_raw) && _raw.length > 0 ? _raw : undefined;
 
+type CategoryTab = "all" | ArtworkCategory;
+type AvailabilityFilter = "all" | "available" | "sold";
+
+const CATEGORY_TABS: { value: CategoryTab; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "landscape", label: "Landscape" },
+  { value: "figurative", label: "Figurative" },
+];
+
+const AVAILABILITY_FILTERS: { value: AvailabilityFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "available", label: "Available" },
+  { value: "sold", label: "Sold" },
+];
+
 export default function ArtworksPage() {
-  // SEO setup only — do NOT touch #artworks-ssr here, visibility is data-driven below
   useEffect(() => {
-    document.title = "Original Artworks by Ani Muradyan | Abstract Realism Oil Paintings for Sale";
-    updateCanonicalUrl('/artworks');
-    updateMetaDescription('Browse original oil paintings for sale by Armenian contemporary artist Ani Muradyan. Abstract realism portraits, landscapes, and figurative works.');
+    document.title = "Original Paintings by Ani Muradyan | Oil Paintings for Sale";
+    updateCanonicalUrl("/artworks");
+    updateMetaDescription(
+      "Browse original oil paintings by Armenian contemporary artist Ani Muradyan — figurative works and landscapes, available and collected."
+    );
   }, []);
 
-  const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-
-  // Filters
-  const [availabilityFilter, setAvailabilityFilter] = useState<string>("");
+  const [category, setCategory] = useState<CategoryTab>("all");
+  const [availability, setAvailability] = useState<AvailabilityFilter>("all");
 
   const { data: artworks = [], isLoading, isPlaceholderData, status } = useQuery<Artwork[]>({
     queryKey: ["/api/artworks"],
-    // placeholderData shows artworks immediately without a loading skeleton.
-    // Only set when preloadedArtworks is a non-empty array (guards against empty injection).
-    // Unlike initialData, placeholderData is never written to cache so React Query
-    // ALWAYS issues the real /api/artworks fetch on every mount.
-    ...(preloadedArtworks ? { placeholderData: preloadedArtworks } : {})
+    ...(preloadedArtworks ? { placeholderData: preloadedArtworks } : {}),
   });
 
   const filteredArtworks = useMemo(() => {
-    return artworks.filter(artwork => {
-      if (availabilityFilter && availabilityFilter !== "all" && artwork.availability !== availabilityFilter) return false;
+    return artworks.filter((artwork) => {
+      if (category !== "all" && artworkCategory(artwork) !== category) return false;
+      if (availability !== "all" && artwork.availability !== availability) return false;
       return true;
     });
-  }, [artworks, availabilityFilter]);
+  }, [artworks, category, availability]);
 
-  // "Confirmed" = real API data arrived (not a placeholder, not still loading)
-  const hasConfirmedData = status === 'success' && !isPlaceholderData && !isLoading;
-
-  // Only show "No artworks found" when the real API returned and is genuinely empty.
-  // Never show it while: loading, placeholder active, query errored, or data not yet confirmed.
+  const hasConfirmedData = status === "success" && !isPlaceholderData && !isLoading;
   const showEmptyState = hasConfirmedData && filteredArtworks.length === 0;
 
-  // Hide #artworks-ssr ONLY once real confirmed artworks are rendered in the React grid.
-  // This keeps it visible for Googlebot and users on slow connections until data is ready.
+  // Keep the SEO SSR block visible until the real React grid is populated
   useEffect(() => {
-    const ssrSection = document.getElementById('artworks-ssr');
+    const ssrSection = document.getElementById("artworks-ssr");
     if (!ssrSection) return;
     const hasRealGrid = hasConfirmedData && artworks.length > 0;
-    ssrSection.style.display = hasRealGrid ? 'none' : '';
+    ssrSection.style.display = hasRealGrid ? "none" : "";
   }, [hasConfirmedData, artworks.length]);
 
-  const handleViewDetails = (artwork: Artwork) => {
-    setSelectedArtwork(artwork);
-    setModalOpen(true);
+  const priceLabel = (artwork: Artwork) => {
+    if (artwork.availability !== "available") {
+      return artwork.availability === "reserved" ? "Reserved" : "Sold";
+    }
+    if (SHOW_PRICES && artwork.price) return `€${artwork.price.toLocaleString()}`;
+    return "Inquire";
   };
-
-  const handleCloseModal = () => {
-    setModalOpen(false);
-    setSelectedArtwork(null);
-  };
-
-  // Full-page loading skeleton — only when truly loading with no data at all
-  if (isLoading && !isPlaceholderData) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="text-center mb-20">
-            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-6 animate-pulse">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              Loading collection...
-            </div>
-            <div className="animate-pulse">
-              <div className="h-16 bg-gradient-to-r from-slate-200 to-slate-300 rounded-2xl w-80 mx-auto mb-6"></div>
-              <div className="h-6 bg-slate-200 rounded-xl w-96 mx-auto"></div>
-            </div>
-          </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div
-                key={index}
-                className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 p-6 animate-pulse"
-              >
-                <div className="aspect-[3/4] bg-gradient-to-br from-slate-200 to-slate-300 rounded-2xl mb-4"></div>
-                <div className="space-y-3">
-                  <div className="h-6 bg-slate-200 rounded-xl w-3/4"></div>
-                  <div className="h-4 bg-slate-200 rounded-lg w-1/2"></div>
-                  <div className="h-4 bg-slate-200 rounded-lg w-2/3"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Hero Section */}
-        <div className="text-center mb-20">
-          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-6 animate-fadeIn">
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-            Original Artworks Collection
-          </div>
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6 animate-slideUp">
-            Artworks
-          </h1>
-          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed animate-slideUp animation-delay-200">
-            Explore my complete collection of abstract realism paintings, each piece telling its own unique story through color, texture, and emotion.
-          </p>
-        </div>
+    <div className="min-h-screen bg-[#f5f1ea]">
+      {/* ── Header ─────────────────────────────────────────── */}
+      <section className="px-6 pt-20 md:pt-28 pb-10 text-center">
+        <Eyebrow>The Collection</Eyebrow>
+        <h1 className="font-playfair text-5xl md:text-6xl text-stone-900 mb-5">Originals</h1>
+        <p className="mx-auto max-w-xl text-sm md:text-base text-stone-600">
+          Original oil paintings on canvas — figurative works and landscapes, each made to hold a
+          quiet moment. Available pieces can be inquired about directly.
+        </p>
+      </section>
 
-        {/* Modern Filters */}
-        <div className="mb-16 animate-slideUp animation-delay-400">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 p-8 hover:shadow-3xl transition-shadow duration-500">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-slate-900">Filter Collection</h3>
-            </div>
-            <div className="max-w-md">
-              <label className="block text-sm font-medium text-slate-700 mb-3">Filter by Availability</label>
-              <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
-                <SelectTrigger className="h-12 rounded-xl border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors">
-                  <SelectValue placeholder="All artworks" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-slate-200">
-                  <SelectItem value="all" className="rounded-lg">All artworks</SelectItem>
-                  <SelectItem value="available" className="rounded-lg">Available for purchase</SelectItem>
-                  <SelectItem value="sold" className="rounded-lg">Sold pieces</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-
-        {/* Gallery Grid */}
-        {showEmptyState ? (
-          <div className="text-center py-20">
-            <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 bg-gradient-to-r from-slate-200 to-slate-300 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-slate-900 mb-2">No artworks found</h3>
-              <p className="text-slate-600">No artworks match your current filters. Try adjusting your selection.</p>
-            </div>
-          </div>
-        ) : filteredArtworks.length > 0 ? (
-          <div className="animate-slideUp animation-delay-600">
-            <div className="mb-8">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-slate-900">
-                  {filteredArtworks.length} {filteredArtworks.length === 1 ? 'Artwork' : 'Artworks'}
-                </h2>
-                <div className="text-sm text-slate-500">
-                  {availabilityFilter === 'available' && 'Available for purchase'}
-                  {availabilityFilter === 'sold' && 'Sold pieces'}
-                  {(availabilityFilter === 'all' || !availabilityFilter) && 'Complete collection'}
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredArtworks.map((artwork, index) => (
-                <div
-                  key={artwork.id}
-                  className="group animate-fadeIn hover-lift"
-                  style={{ 
-                    animationDelay: `${index * 100}ms`,
-                    animationFillMode: 'both'
-                  }}
+      {/* ── Category tabs + availability filters ───────────── */}
+      <section className="px-6">
+        <div className="mx-auto max-w-6xl">
+          {/* Category tabs */}
+          <div className="flex justify-center gap-8 md:gap-12 border-b border-stone-300">
+            {CATEGORY_TABS.map((tab) => {
+              const active = category === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => setCategory(tab.value)}
+                  className={`relative -mb-px pb-4 font-playfair text-lg md:text-xl transition-colors ${
+                    active ? "text-stone-900" : "text-stone-400 hover:text-stone-600"
+                  }`}
                 >
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl blur opacity-0 group-hover:opacity-20 transition-opacity duration-500"></div>
-                    <ArtworkCard
-                      artwork={artwork}
-                      onViewDetails={handleViewDetails}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                  {tab.label}
+                  {active && <span className="absolute inset-x-0 bottom-0 h-px bg-stone-900" />}
+                </button>
+              );
+            })}
           </div>
-        ) : null /* still loading — #artworks-ssr remains visible as fallback */}
 
-        {/* Internal contextual links for SEO */}
-        <div className="mt-16 text-center">
-          <p className="text-slate-600 text-lg">
-            <Link href="/about" className="text-blue-600 hover:underline font-medium">
-              Learn about Ani Muradyan
-            </Link>{" "}
-            and her artistic journey, or browse the{" "}
-            <Link href="/gallery" className="text-blue-600 hover:underline font-medium">
-              exhibition gallery
-            </Link>.
-          </p>
+          {/* Availability filters */}
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-8">
+            {AVAILABILITY_FILTERS.map((f) => {
+              const active = availability === f.value;
+              return (
+                <button
+                  key={f.value}
+                  onClick={() => setAvailability(f.value)}
+                  className={`px-5 py-2 text-[11px] tracking-[0.2em] uppercase transition-colors ${
+                    active
+                      ? "bg-stone-900 text-stone-50"
+                      : "border border-stone-300 text-stone-600 hover:border-stone-500 hover:text-stone-900"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
+      </section>
 
-        {/* Artwork Modal */}
-        <ArtworkModal
-          artwork={selectedArtwork}
-          open={modalOpen}
-          onClose={handleCloseModal}
-        />
-      </div>
+      {/* ── Grid ───────────────────────────────────────────── */}
+      <section className="px-6 py-14 md:py-20">
+        <div className="mx-auto max-w-6xl">
+          {showEmptyState ? (
+            <div className="py-20 text-center">
+              <p className="font-playfair italic text-2xl text-stone-700 mb-3">
+                Nothing here just yet
+              </p>
+              <p className="text-sm text-stone-500">
+                No paintings match these filters. Try another category or availability.
+              </p>
+            </div>
+          ) : filteredArtworks.length > 0 ? (
+            <>
+              <p className="mb-10 text-center text-[11px] tracking-[0.2em] uppercase text-stone-400">
+                {filteredArtworks.length}{" "}
+                {filteredArtworks.length === 1 ? "painting" : "paintings"}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
+                {filteredArtworks.map((artwork) => (
+                  <div key={artwork.id} className="animate-fadeIn">
+                    <Link href={`/artworks/${artwork.slug || toSlug(artwork.title)}`}>
+                      <div className="group aspect-[4/5] overflow-hidden cursor-pointer bg-stone-200">
+                        <img
+                          src={artwork.images[0]}
+                          alt={generateArtworkAlt(artwork.title, artwork.medium)}
+                          className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          loading="lazy"
+                        />
+                      </div>
+                    </Link>
+                    <h3 className="font-playfair italic text-lg text-stone-900 mt-4">
+                      {artwork.title}
+                    </h3>
+                    <p className="text-xs text-stone-500 mt-1">
+                      {artwork.medium || "Oil on canvas"} · {artwork.dimensions}
+                    </p>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-sm text-stone-800">{priceLabel(artwork)}</span>
+                      <Link href={`/artworks/${artwork.slug || toSlug(artwork.title)}`}>
+                        <span className="text-[10px] tracking-[0.2em] uppercase text-stone-700 border-b border-stone-400 pb-0.5 hover:text-stone-900 hover:border-stone-800 transition-colors">
+                          View Work
+                        </span>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            // Still loading — #artworks-ssr remains visible as fallback
+            <div className="py-20 text-center text-sm text-stone-400">Loading the collection…</div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Footer note ────────────────────────────────────── */}
+      <section className="px-6 pb-24 text-center">
+        <p className="text-sm text-stone-500">
+          <Link href="/about" className="border-b border-stone-400 hover:text-stone-900 hover:border-stone-800 transition-colors">
+            Learn about Ani Muradyan
+          </Link>{" "}
+          and her practice, or browse the{" "}
+          <Link href="/gallery" className="border-b border-stone-400 hover:text-stone-900 hover:border-stone-800 transition-colors">
+            exhibition gallery
+          </Link>
+          .
+        </p>
+      </section>
     </div>
   );
 }

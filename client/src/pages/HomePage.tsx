@@ -6,33 +6,10 @@ import backgroundImage from "@assets/1bg_1750936488071.png";
 import { updateCanonicalUrl, updateMetaDescription, toSlug, generateArtworkAlt } from "@/lib/seo";
 import { SHOW_PRICES } from "@/lib/featureFlags";
 import { useToast } from "@/hooks/use-toast";
+import { Eyebrow, OutlineButton, ViewLink } from "@/components/editorial";
 
 const NAVY = "#0d1434";
 const SAGE = "#9c9d95";
-
-/** Small uppercase tracked eyebrow label used across sections */
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] tracking-[0.3em] uppercase text-stone-500 mb-4">{children}</p>
-  );
-}
-
-/** Outlined, letter-spaced action link/button in the design's style */
-function OutlineButton({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-block border border-stone-800 px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-900 hover:bg-stone-900 hover:text-stone-50 transition-colors duration-300">
-      {children}
-    </span>
-  );
-}
-
-function ViewLink({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-[10px] tracking-[0.2em] uppercase text-stone-700 border-b border-stone-400 pb-0.5 hover:text-stone-900 hover:border-stone-800 transition-colors">
-      {children}
-    </span>
-  );
-}
 
 export default function HomePage() {
   useEffect(() => {
