@@ -8,7 +8,7 @@ import { SHOW_PRICES } from "@/lib/featureFlags";
 import { useToast } from "@/hooks/use-toast";
 
 const NAVY = "#0d1434";
-const ORANGE = "#f59007";
+const SAGE = "#9c9d95";
 
 /** Small uppercase tracked eyebrow label used across sections */
 function Eyebrow({ children }: { children: React.ReactNode }) {
@@ -60,11 +60,8 @@ export default function HomePage() {
     queryKey: ["/api/exhibitions"],
   });
 
-  // The design features a vivid figure painting as the hero panel — prefer
-  // "Rebirth"; fall back to the admin-configured hero image.
-  const heroArtwork = artworks.find((a) => a.title === "Rebirth");
-  const heroImage =
-    heroArtwork?.images[0] || homepageSettings?.heroImage || backgroundImage;
+  // Used as the About-section fallback portrait
+  const heroImage = homepageSettings?.heroImage || backgroundImage;
 
   // Curated picks for the two category cards — prefer known pieces, fall back by index
   const figurativeCard =
@@ -126,49 +123,46 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#f5f1ea]">
       {/* ── Hero ─────────────────────────────────────────────── */}
       <section className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
-        <div className="relative mx-auto max-w-[1920px]">
-          {/* Center painting column */}
-          <div className="relative mx-auto w-full sm:w-[70%] md:w-[43%] min-h-[70vh] md:min-h-[85vh]">
-            <img
-              src={heroImage}
-              alt="Painting by Ani Muradyan"
-              className="absolute inset-0 h-full w-full object-cover opacity-80"
-            />
-            <div
-              className="absolute inset-0"
-              style={{ background: `linear-gradient(to bottom, ${NAVY}55, ${NAVY}22 40%, ${NAVY}cc)` }}
-            />
-            {/* Column hairlines */}
-            <div className="absolute inset-y-0 -left-px w-px bg-white/10 hidden md:block" />
-            <div className="absolute inset-y-0 -right-px w-px bg-white/10 hidden md:block" />
-          </div>
+        <div className="relative h-[72vh] md:h-[88vh] min-h-[480px]">
+          {/* Soft-motion painting loop */}
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            poster="/hero-poster.jpg"
+            aria-label="Animated painting by Ani Muradyan"
+            className="absolute inset-0 h-full w-full object-cover"
+          >
+            <source src="/hero-loop.mp4" type="video/mp4" />
+          </video>
+          <div className="absolute inset-0" style={{ backgroundColor: "rgba(13,20,52,0.55)" }} />
 
-          {/* Name overlay */}
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full px-6 md:px-0">
-              <div className="mx-auto max-w-[1500px] md:pl-[13%]">
-                <p
-                  className="text-white font-semibold text-xl md:text-3xl mb-2 animate-fadeIn"
-                  style={{ fontFamily: "'Poppins', sans-serif" }}
-                >
-                  Hello, I am
-                </p>
-                <h1
-                  className="font-extrabold leading-[0.95] tracking-tight text-[17vw] sm:text-[13vw] md:text-[8.5vw] animate-slideUp"
-                  style={{ fontFamily: "'Poppins', sans-serif" }}
-                >
-                  <span style={{ color: ORANGE }}>Ani</span>{" "}
-                  <span className="text-white">Murad</span>
-                  <span style={{ color: ORANGE }}>yan</span>
-                </h1>
-                <p
-                  className="mt-1 text-2xl md:text-4xl font-light animate-slideUp animation-delay-200"
-                  style={{ fontFamily: "'Poppins', sans-serif" }}
-                >
-                  <span style={{ color: ORANGE }}>Contempor</span>
-                  <span className="text-white">ary Artist</span>
-                </p>
-              </div>
+          {/* Centered name */}
+          <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+            <div>
+              <p
+                className="text-white/90 font-extralight text-lg md:text-2xl animate-fadeIn"
+                style={{ fontFamily: "'Poppins', sans-serif" }}
+              >
+                Hello, I am
+              </p>
+              <h1
+                className="whitespace-nowrap leading-tight text-[13vw] sm:text-[10vw] md:text-[7.5vw] animate-slideUp"
+                style={{ fontFamily: "'SHK Dzeragir', 'Playfair Display', serif", fontStyle: "italic", letterSpacing: "0.02em" }}
+              >
+                <span style={{ color: SAGE }}>Ani </span>
+                <span className="text-white">Murad</span>
+                <span style={{ color: SAGE }}>yan</span>
+              </h1>
+              <p
+                className="font-extralight text-xl md:text-[2.75vw] animate-slideUp animation-delay-200"
+                style={{ fontFamily: "'Poppins', sans-serif" }}
+              >
+                <span style={{ color: SAGE }}>Contempor</span>
+                <span className="text-white">ary Artist</span>
+              </p>
             </div>
           </div>
         </div>
