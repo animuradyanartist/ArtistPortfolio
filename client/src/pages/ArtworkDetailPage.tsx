@@ -1,193 +1,224 @@
 import { useState, useEffect } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Artwork } from "@shared/schema";
-import { updateCanonicalUrl, updateMetaDescription, injectJsonLd, removeJsonLd, BASE_URL, toSlug, generateArtworkAlt } from "@/lib/seo";
+import {
+  updateCanonicalUrl,
+  updateMetaDescription,
+  injectJsonLd,
+  removeJsonLd,
+  BASE_URL,
+  toSlug,
+  generateArtworkAlt,
+} from "@/lib/seo";
 import { SHOW_PRICES } from "@/lib/featureFlags";
+import { Eyebrow, OutlineButton } from "@/components/editorial";
+import { artworkCategory } from "@/lib/artworkCategory";
+
+const CATEGORY_LABEL = { landscape: "Landscape", figurative: "Figurative" } as const;
+
+/** Solid dark action button matching the homepage CTAs */
+function DarkButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className="inline-block px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-50 hover:opacity-90 transition-opacity"
+      style={{ backgroundColor: "#26221c" }}
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function ArtworkDetailPage() {
   const params = useParams();
   const [location, setLocation] = useLocation();
   const idParam = params.id as string;
-  const isNumeric = /^\d+$/.test(idParam);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const { data: artwork, isLoading, error } = useQuery<Artwork>({
-    queryKey: ['/api/artworks', idParam],
+    queryKey: ["/api/artworks", idParam],
     queryFn: async () => {
-      const res = await fetch(`/api/artworks/${idParam}`, { credentials: 'include' });
+      const res = await fetch(`/api/artworks/${idParam}`, { credentials: "include" });
       if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
       return res.json();
     },
-    enabled: !!idParam
+    enabled: !!idParam,
   });
 
-  // Set page title, canonical URL, and per-artwork JSON-LD for SEO
+  // Full collection — for the "More from the collection" strip (cached query)
+  const { data: allArtworks = [] } = useQuery<Artwork[]>({
+    queryKey: ["/api/artworks"],
+  });
+
+  // Reset gallery to first image when navigating between artworks
+  useEffect(() => {
+    setCurrentImageIndex(0);
+  }, [idParam]);
+
+  // Page title, canonical URL, and per-artwork JSON-LD for SEO
   useEffect(() => {
     if (artwork) {
       const slug = toSlug(artwork.title);
-      // Canonical: if artwork has a seoSlug use that path, otherwise /artworks/slug
       const canonicalPath = artwork.seoSlug ? `/${artwork.seoSlug}` : `/artworks/${slug}`;
       document.title = `${artwork.title} | Original ${artwork.medium} by Ani Muradyan`;
       updateCanonicalUrl(canonicalPath);
-      updateMetaDescription(`${artwork.title} – original ${artwork.medium} painting by Armenian contemporary artist Ani Muradyan. ${artwork.dimensions}, ${artwork.year}. ${artwork.availability === 'available' ? 'Available for purchase.' : ''}`);
+      updateMetaDescription(
+        `${artwork.title} – original ${artwork.medium} painting by Armenian contemporary artist Ani Muradyan. ${artwork.dimensions}, ${artwork.year}. ${artwork.availability === "available" ? "Available for purchase." : ""}`
+      );
 
-      injectJsonLd('artwork-jsonld', {
+      injectJsonLd("artwork-jsonld", {
         "@context": "https://schema.org",
         "@type": "VisualArtwork",
-        "name": artwork.title,
-        "description": artwork.description,
-        "artMedium": artwork.medium || "Oil on canvas",
-        "artform": "Painting",
-        "artworkSurface": "Canvas",
-        "dateCreated": artwork.year?.toString(),
-        "height": artwork.dimensions,
-        "image": artwork.images?.[0]
-          ? (artwork.images[0].startsWith('http') ? artwork.images[0] : `${BASE_URL}${artwork.images[0]}`)
+        name: artwork.title,
+        description: artwork.description,
+        artMedium: artwork.medium || "Oil on canvas",
+        artform: "Painting",
+        artworkSurface: "Canvas",
+        dateCreated: artwork.year?.toString(),
+        height: artwork.dimensions,
+        image: artwork.images?.[0]
+          ? artwork.images[0].startsWith("http")
+            ? artwork.images[0]
+            : `${BASE_URL}${artwork.images[0]}`
           : undefined,
-        "url": `${BASE_URL}${canonicalPath}`,
-        "creator": {
+        url: `${BASE_URL}${canonicalPath}`,
+        creator: {
           "@type": ["Person", "VisualArtist"],
-          "name": "Ani Muradyan",
-          "url": BASE_URL,
-          "nationality": { "@type": "Country", "name": "Armenia" }
+          name: "Ani Muradyan",
+          url: BASE_URL,
+          nationality: { "@type": "Country", name: "Armenia" },
         },
-        "offers": SHOW_PRICES && artwork.availability === 'available' ? {
-          "@type": "Offer",
-          "price": artwork.price,
-          "priceCurrency": "USD",
-          "availability": "https://schema.org/InStock"
-        } : undefined
+        offers:
+          SHOW_PRICES && artwork.availability === "available"
+            ? {
+                "@type": "Offer",
+                price: artwork.price,
+                priceCurrency: "USD",
+                availability: "https://schema.org/InStock",
+              }
+            : undefined,
       });
 
-      // Silently correct the URL if the current path doesn't match the canonical one
-      // (covers numeric IDs, old long slugs, and any other mismatches)
       if (location !== canonicalPath) {
-        window.history.replaceState(null, '', canonicalPath);
+        window.history.replaceState(null, "", canonicalPath);
       }
     }
-    return () => removeJsonLd('artwork-jsonld');
+    return () => removeJsonLd("artwork-jsonld");
   }, [artwork, location]);
 
-  const nextImage = () => {
-    if (!artwork || !artwork.images || artwork.images.length === 0) return;
-    setCurrentImageIndex((prev) => 
-      prev === artwork.images.length - 1 ? 0 : prev + 1
-    );
-  };
-
-  const prevImage = () => {
-    if (!artwork || !artwork.images || artwork.images.length === 0) return;
-    setCurrentImageIndex((prev) => 
-      prev === 0 ? artwork.images.length - 1 : prev - 1
-    );
-  };
-
-  const selectImage = (index: number) => {
-    setCurrentImageIndex(index);
-  };
+  const images = artwork?.images ?? [];
+  const nextImage = () =>
+    setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+  const prevImage = () =>
+    setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-soft-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-deep-blue"></div>
-          <p className="mt-4 text-charcoal">Loading artwork...</p>
-        </div>
+      <div className="min-h-screen bg-[#f5f1ea] flex items-center justify-center">
+        <p className="font-playfair italic text-xl text-stone-500">Loading…</p>
       </div>
     );
   }
 
   if (error || !artwork) {
     return (
-      <div className="min-h-screen bg-soft-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#f5f1ea] flex items-center justify-center px-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-charcoal mb-4">Artwork Not Found</h1>
-          <p className="text-gray-600 mb-6">The artwork you're looking for doesn't exist or has been removed.</p>
-          <Button onClick={() => setLocation("/artworks")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Artworks
-          </Button>
+          <h1 className="font-playfair text-3xl text-stone-900 mb-3">Artwork not found</h1>
+          <p className="text-sm text-stone-600 mb-8">
+            The piece you're looking for doesn't exist or has been removed.
+          </p>
+          <Link href="/artworks">
+            <OutlineButton>Back to Originals</OutlineButton>
+          </Link>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-soft-white">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <Button
-          variant="ghost"
-          onClick={() => setLocation("/artworks")}
-          className="mb-8 text-charcoal hover:text-deep-blue"
-          data-testid="button-back-artworks"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Artworks
-        </Button>
+  const availabilityLabel =
+    artwork.availability === "available"
+      ? "Available"
+      : artwork.availability === "sold"
+        ? "Sold"
+        : "Reserved";
 
-        <div className="grid lg:grid-cols-2 gap-12">
-          <div className="space-y-4">
-            <div className="relative">
-              {artwork.images && artwork.images.length > 0 ? (
-                <img 
-                  src={artwork.images[currentImageIndex]} 
+  const priceLine =
+    artwork.availability === "available"
+      ? SHOW_PRICES && artwork.price
+        ? `€${artwork.price.toLocaleString()}`
+        : "Inquire"
+      : availabilityLabel;
+
+  const moreWorks = allArtworks.filter((a) => a.id !== artwork.id).slice(0, 3);
+
+  return (
+    <div className="min-h-screen bg-[#f5f1ea]">
+      <div className="mx-auto max-w-6xl px-6 py-10 md:py-14">
+        {/* Back link */}
+        <Link href="/artworks">
+          <span className="inline-flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase text-stone-500 hover:text-stone-900 transition-colors mb-10">
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Originals
+          </span>
+        </Link>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
+          {/* Image column */}
+          <div>
+            <div className="relative bg-stone-200 overflow-hidden">
+              {images.length > 0 ? (
+                <img
+                  src={images[currentImageIndex]}
                   alt={generateArtworkAlt(artwork.title, artwork.medium)}
                   title={`${artwork.title} – ${artwork.medium} by Ani Muradyan`}
-                  className="w-full rounded-lg shadow-xl object-cover aspect-[3/4]"
-                  data-testid={`img-artwork-main-${artwork.id}`}
-                  loading="lazy"
+                  className="w-full object-cover aspect-[4/5]"
+                  loading="eager"
                 />
               ) : (
-                <div className="w-full rounded-lg shadow-xl bg-gray-200 aspect-[3/4] flex items-center justify-center">
-                  <p className="text-gray-500">No image available</p>
+                <div className="w-full aspect-[4/5] flex items-center justify-center">
+                  <p className="text-sm text-stone-400">No image available</p>
                 </div>
               )}
-              
-              {artwork.images && artwork.images.length > 1 && (
+
+              {images.length > 1 && (
                 <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  <button
                     onClick={prevImage}
-                    className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white shadow-md"
-                    data-testid="button-prev-image"
+                    aria-label="Previous image"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 h-10 w-10 flex items-center justify-center bg-white/85 hover:bg-white text-stone-800 shadow-md transition-colors"
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
                     onClick={nextImage}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white shadow-md"
-                    data-testid="button-next-image"
+                    aria-label="Next image"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 h-10 w-10 flex items-center justify-center bg-white/85 hover:bg-white text-stone-800 shadow-md transition-colors"
                   >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
                 </>
               )}
             </div>
 
-            {artwork.images && artwork.images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {artwork.images.map((image, index) => (
+            {images.length > 1 && (
+              <div className="flex gap-3 overflow-x-auto pt-4">
+                {images.map((image, index) => (
                   <button
                     key={index}
-                    onClick={() => selectImage(index)}
-                    className={`flex-shrink-0 w-20 h-20 rounded-md overflow-hidden border-2 transition-all ${
+                    onClick={() => setCurrentImageIndex(index)}
+                    aria-label={`View image ${index + 1}`}
+                    className={`flex-shrink-0 w-16 h-20 overflow-hidden transition-all ${
                       index === currentImageIndex
-                        ? "border-deep-blue shadow-md"
-                        : "border-gray-200 hover:border-gray-300"
+                        ? "ring-1 ring-stone-800 ring-offset-2 ring-offset-[#f5f1ea]"
+                        : "opacity-70 hover:opacity-100"
                     }`}
-                    data-testid={`button-thumbnail-${index}`}
                   >
                     <img
                       src={image}
-                      alt={`${artwork.title} by Ani Muradyan – ${artwork.medium} (view ${index + 1})`}
-                      title={`${artwork.title} – ${artwork.medium} by Ani Muradyan`}
+                      alt={`${artwork.title} – view ${index + 1}`}
                       className="w-full h-full object-cover"
                       loading="lazy"
                     />
@@ -197,90 +228,90 @@ export default function ArtworkDetailPage() {
             )}
           </div>
 
-          <div className="space-y-6">
-            <div>
-              <h1 className="text-4xl font-playfair text-deep-blue mb-4" data-testid={`text-title-${artwork.id}`}>
-                {artwork?.title || "Untitled"}
-              </h1>
-              
-              <div className="flex items-center gap-4 mb-6">
-                <Badge 
-                  variant={artwork.availability === "available" ? "default" : "secondary"}
-                  className="text-sm"
-                  data-testid={`badge-availability-${artwork.id}`}
+          {/* Details column */}
+          <div className="lg:pt-4">
+            <Eyebrow>{CATEGORY_LABEL[artworkCategory(artwork)]}</Eyebrow>
+            <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">
+              {artwork.title || "Untitled"}
+            </h1>
+            <p className="text-sm text-stone-800 mb-8">{priceLine}</p>
+
+            {artwork.description && (
+              <p className="text-sm leading-relaxed text-stone-700 mb-10 max-w-md">
+                {artwork.description}
+              </p>
+            )}
+
+            {/* Detail rows */}
+            <dl className="border-t border-stone-300 mb-10">
+              {[
+                ["Medium", artwork.medium],
+                ["Dimensions", artwork.dimensions],
+                ["Year", artwork.year?.toString()],
+                ["Availability", availabilityLabel],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="flex justify-between gap-6 border-b border-stone-300 py-4"
                 >
-                  {artwork.availability === "available" ? "Available" : 
-                   artwork.availability === "sold" ? "Sold" : "Reserved"}
-                </Badge>
-                {SHOW_PRICES && (
-                  <span className="text-2xl font-semibold text-charcoal" data-testid={`text-price-${artwork.id}`}>
-                    ${artwork.price?.toLocaleString()}
-                  </span>
-                )}
-              </div>
-            </div>
+                  <dt className="text-[11px] tracking-[0.2em] uppercase text-stone-500">{label}</dt>
+                  <dd className="text-sm text-stone-800 text-right">{value}</dd>
+                </div>
+              ))}
+            </dl>
 
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold text-charcoal mb-2">Description</h3>
-                <p className="text-gray-700 leading-relaxed" data-testid={`text-description-${artwork.id}`}>
-                  {artwork.description}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-semibold text-charcoal">Medium</h4>
-                  <p className="text-gray-700">{artwork.medium}</p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-charcoal">Dimensions</h4>
-                  <p className="text-gray-700">{artwork.dimensions}</p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-charcoal">Year</h4>
-                  <p className="text-gray-700">{artwork.year}</p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-charcoal">Type</h4>
-                  <p className="text-gray-700 capitalize">{artwork.type}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4 pt-6">
-              {artwork.availability === "available" && (
-                <div className="space-y-3">
-                  {artwork.saatchiUrl && (
-                    <Button 
-                      className="w-full bg-deep-blue hover:bg-deep-blue/90"
-                      onClick={() => artwork.saatchiUrl && window.open(artwork.saatchiUrl, '_blank')}
-                      data-testid="button-saatchi-link"
-                    >
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      View on Saatchi Art
-                    </Button>
-                  )}
-                  {artwork.buyLink && (
-                    <Button 
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => artwork.buyLink && window.open(artwork.buyLink, '_blank')}
-                      data-testid="button-buy-link"
-                    >
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      Buy Now
-                    </Button>
-                  )}
-                </div>
+            {/* Actions */}
+            <div className="flex flex-wrap items-center gap-4">
+              <Link href="/contact">
+                <DarkButton>Inquire About This Work</DarkButton>
+              </Link>
+              {artwork.availability === "available" && artwork.saatchiUrl && (
+                <button
+                  onClick={() => window.open(artwork.saatchiUrl!, "_blank")}
+                  className="inline-block border border-stone-800 px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-900 hover:bg-stone-900 hover:text-stone-50 transition-colors duration-300"
+                >
+                  View on Saatchi Art
+                </button>
               )}
-              
-              <div className="text-sm text-gray-600 text-center pt-4">
-                <p>For inquiries about this artwork, please visit our <a href="/contact" className="text-deep-blue hover:underline">contact page</a>.</p>
-              </div>
             </div>
           </div>
         </div>
+
+        {/* More from the collection */}
+        {moreWorks.length > 0 && (
+          <div className="mt-24 md:mt-32">
+            <div className="flex items-end justify-between mb-10">
+              <h2 className="font-playfair text-3xl md:text-4xl text-stone-900">
+                More from the collection
+              </h2>
+              <Link href="/artworks">
+                <span className="text-[10px] tracking-[0.2em] uppercase text-stone-700 border-b border-stone-400 pb-0.5 hover:text-stone-900 hover:border-stone-800 transition-colors">
+                  View All Originals
+                </span>
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-12">
+              {moreWorks.map((a) => (
+                <div key={a.id}>
+                  <Link href={`/artworks/${a.slug || toSlug(a.title)}`}>
+                    <div className="group aspect-[4/5] overflow-hidden cursor-pointer bg-stone-200">
+                      <img
+                        src={a.images[0]}
+                        alt={generateArtworkAlt(a.title, a.medium)}
+                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                    </div>
+                  </Link>
+                  <h3 className="font-playfair italic text-lg text-stone-900 mt-4">{a.title}</h3>
+                  <p className="text-xs text-stone-500 mt-1">
+                    {a.medium || "Oil on canvas"} · {a.dimensions}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

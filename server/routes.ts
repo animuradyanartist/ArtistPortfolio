@@ -169,7 +169,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         artwork = await storage.getArtwork(parseInt(param));
       } else {
         const allArtworks = await storage.getAllArtworks();
-        artwork = allArtworks.find(a => (a.slug || toSlug(a.title)) === param);
+        // Resolve by stored slug, seoSlug, OR the clean toSlug(title) — the
+        // detail page's canonical URL uses toSlug(title), so it must resolve
+        // too (otherwise the canonical/reload URL 404s).
+        artwork =
+          allArtworks.find(a => a.slug === param || a.seoSlug === param) ||
+          allArtworks.find(a => toSlug(a.title) === param);
       }
       if (!artwork) {
         return res.status(404).json({ message: "Artwork not found" });
