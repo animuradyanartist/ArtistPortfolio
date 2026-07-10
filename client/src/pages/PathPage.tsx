@@ -362,7 +362,7 @@ export default function PathPage() {
           <Reveal delay={120} className="mt-14 md:mt-20">
             <Plate
               artwork={picks.c2a}
-              aspect="aspect-[16/9]"
+              aspect="aspect-[4/3]"
               caption={
                 picks.c2a && (
                   <figcaption className="flex items-baseline justify-between gap-4 px-1 pt-3 text-[10px] tracking-[0.14em] uppercase text-stone-400">
@@ -461,7 +461,7 @@ export default function PathPage() {
           <Reveal delay={100} className="mt-12 md:mt-16">
             <Plate
               artwork={picks.c3}
-              aspect="aspect-[16/10]"
+              aspect="aspect-[4/3]"
               mat="bg-[#fbf8f2]"
               caption={
                 picks.c3 && (
