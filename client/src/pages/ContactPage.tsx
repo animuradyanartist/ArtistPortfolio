@@ -1,18 +1,15 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Mail, MapPin, Instagram, Palette } from "lucide-react";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 import { Link } from "wouter";
+import { Eyebrow } from "@/components/editorial";
 
 const contactSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name is too long"),
@@ -23,93 +20,78 @@ const contactSchema = z.object({
 
 type ContactFormData = z.infer<typeof contactSchema>;
 
+const EMAIL = "animuradyan.artist@gmail.com";
+const inputClass =
+  "w-full border border-stone-300 bg-white px-4 py-3 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-stone-500 rounded-none";
+
 export default function ContactPage() {
   const { toast } = useToast();
-  
+
   useEffect(() => {
     document.title = "Contact Ani Muradyan | Commissions & Inquiries";
-    updateCanonicalUrl('/contact');
-    updateMetaDescription('Contact Armenian contemporary artist Ani Muradyan for artwork inquiries, commissions, and collaborations. Based in Yerevan, Armenia.');
+    updateCanonicalUrl("/contact");
+    updateMetaDescription(
+      "Contact Armenian contemporary artist Ani Muradyan for artwork inquiries, commissions, and collaborations. Based in Yerevan, Armenia."
+    );
   }, []);
-  
+
   const form = useForm<ContactFormData>({
     resolver: zodResolver(contactSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      subject: "",
-      message: "",
-    },
+    defaultValues: { name: "", email: "", subject: "", message: "" },
   });
 
   const contactMutation = useMutation({
-    mutationFn: async (data: ContactFormData) => {
-      return apiRequest("POST", "/api/contact", data);
-    },
+    mutationFn: async (data: ContactFormData) => apiRequest("POST", "/api/contact", data),
     onSuccess: () => {
       toast({
-        title: "Message sent successfully!",
-        description: "Thank you for your message. I will get back to you soon.",
+        title: "Message sent",
+        description: "Thank you for reaching out — I'll get back to you soon.",
       });
       form.reset();
     },
-    onError: (error) => {
+    onError: () => {
       toast({
-        title: "Failed to send message",
-        description: "Please try again or contact me directly via email.",
+        title: "Couldn't send the message",
+        description: `Please try again, or email me directly at ${EMAIL}.`,
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = (data: ContactFormData) => {
-    contactMutation.mutate(data);
-  };
+  const onSubmit = (data: ContactFormData) => contactMutation.mutate(data);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <div className="text-center mb-20">
-          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-8 animate-fadeIn">
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-            Get in Touch
-          </div>
-          <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6 animate-slideUp">
-            Let's Connect
-          </h1>
-          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed animate-slideUp animation-delay-200">
-            I'd love to hear from you. Whether you're interested in my work, have questions, or want to discuss a commission, please don't hesitate to reach out.
-          </p>
-        </div>
+    <div className="min-h-screen bg-[#f5f1ea]">
+      {/* ── Header ─────────────────────────────────────────── */}
+      <section className="px-6 pt-20 md:pt-28 pb-8 text-center">
+        <Eyebrow>Get in Touch</Eyebrow>
+        <h1 className="font-playfair text-5xl md:text-6xl text-stone-900 mb-5">Let's Connect</h1>
+        <p className="mx-auto max-w-xl text-sm md:text-base text-stone-600">
+          For artwork inquiries, commissions, or collaborations — I'd love to hear from you.
+        </p>
+      </section>
 
-        <div className="grid lg:grid-cols-2 gap-16">
-          {/* Contact Form */}
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 p-8 hover:shadow-3xl transition-shadow duration-500 animate-slideLeft">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900">Send Message</h2>
-            </div>
+      {/* ── Form + details ─────────────────────────────────── */}
+      <section className="px-6 py-12 md:py-16">
+        <div className="mx-auto grid max-w-5xl grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
+          {/* Form */}
+          <div>
+            <Eyebrow>Send a Message</Eyebrow>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <FormField
                     control={form.control}
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-slate-700 font-medium">Name</FormLabel>
+                        <FormLabel className="text-[11px] tracking-[0.2em] uppercase text-stone-500">
+                          Name
+                        </FormLabel>
                         <FormControl>
-                          <Input 
-                            placeholder="Your name" 
-                            {...field}
-                            className="h-12 border-slate-200 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl"
-                          />
+                          <input placeholder="Your name" {...field} className={inputClass} />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="text-xs" />
                       </FormItem>
                     )}
                   />
@@ -118,15 +100,13 @@ export default function ContactPage() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-slate-700 font-medium">Email</FormLabel>
+                        <FormLabel className="text-[11px] tracking-[0.2em] uppercase text-stone-500">
+                          Email
+                        </FormLabel>
                         <FormControl>
-                          <Input 
-                            placeholder="your.email@example.com" 
-                            {...field}
-                            className="h-12 border-slate-200 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl"
-                          />
+                          <input placeholder="you@example.com" {...field} className={inputClass} />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage className="text-xs" />
                       </FormItem>
                     )}
                   />
@@ -136,15 +116,13 @@ export default function ContactPage() {
                   name="subject"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-slate-700 font-medium">Subject (Optional)</FormLabel>
+                      <FormLabel className="text-[11px] tracking-[0.2em] uppercase text-stone-500">
+                        Subject <span className="normal-case tracking-normal text-stone-400">(optional)</span>
+                      </FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="What's this about?" 
-                          {...field}
-                          className="h-12 border-slate-200 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl"
-                        />
+                        <input placeholder="What's this about?" {...field} className={inputClass} />
                       </FormControl>
-                      <FormMessage />
+                      <FormMessage className="text-xs" />
                     </FormItem>
                   )}
                 />
@@ -153,176 +131,137 @@ export default function ContactPage() {
                   name="message"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-slate-700 font-medium">Message</FormLabel>
+                      <FormLabel className="text-[11px] tracking-[0.2em] uppercase text-stone-500">
+                        Message
+                      </FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Tell me more about your inquiry..."
+                        <textarea
                           rows={6}
+                          placeholder="Tell me more about your inquiry…"
                           {...field}
-                          className="border-slate-200 focus:border-blue-500 focus:ring-blue-500/20 rounded-xl resize-none"
+                          className={`${inputClass} resize-none`}
                         />
                       </FormControl>
-                      <FormMessage />
+                      <FormMessage className="text-xs" />
                     </FormItem>
                   )}
                 />
-                <Button 
-                  type="submit" 
-                  className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
+                <button
+                  type="submit"
                   disabled={contactMutation.isPending}
+                  className="px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-50 disabled:opacity-60 transition-opacity"
+                  style={{ backgroundColor: "#26221c" }}
                 >
-                  {contactMutation.isPending ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Sending...
-                    </div>
-                  ) : (
-                    "Send Message"
-                  )}
-                </Button>
+                  {contactMutation.isPending ? "Sending…" : "Send Message"}
+                </button>
               </form>
             </Form>
           </div>
 
-          {/* Contact Information */}
-          <div className="space-y-8 animate-slideRight">
-            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 p-8 hover:shadow-3xl transition-shadow duration-500">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-slate-900">Contact Information</h2>
-              </div>
-              <div className="space-y-6">
-                <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl hover:from-blue-100 hover:to-indigo-100 transition-colors duration-300">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center">
-                    <Mail className="text-white w-5 h-5" />
-                  </div>
+          {/* Details */}
+          <div className="space-y-12">
+            <div>
+              <Eyebrow>Reach Out Directly</Eyebrow>
+              <ul className="space-y-4">
+                <li className="flex items-start gap-3">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-stone-500" />
                   <div>
-                    <p className="text-slate-700 font-medium">Email</p>
-                    <a 
-                      href="mailto:animuradyan.artist@gmail.com" 
-                      className="text-blue-600 hover:text-blue-700 transition-colors duration-200"
+                    <p className="text-[11px] tracking-[0.2em] uppercase text-stone-400">Email</p>
+                    <a
+                      href={`mailto:${EMAIL}`}
+                      className="text-sm text-stone-800 border-b border-stone-400 hover:text-stone-900 hover:border-stone-800 transition-colors"
                     >
-                      animuradyan.artist@gmail.com
+                      {EMAIL}
                     </a>
                   </div>
-                </div>
-                <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl hover:from-blue-100 hover:to-indigo-100 transition-colors duration-300">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center">
-                    <MapPin className="text-white w-5 h-5" />
-                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-stone-500" />
                   <div>
-                    <p className="text-slate-700 font-medium">Location</p>
-                    <p className="text-slate-600">Yerevan, Armenia</p>
+                    <p className="text-[11px] tracking-[0.2em] uppercase text-stone-400">Location</p>
+                    <p className="text-sm text-stone-800">Yerevan, Armenia</p>
                   </div>
-                </div>
-              </div>
+                </li>
+              </ul>
             </div>
 
-            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 p-8 hover:shadow-3xl transition-shadow duration-500">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-slate-900">Follow My Work</h2>
-              </div>
-              <div className="space-y-4">
-                <a 
-                  href="https://www.instagram.com/animoria.art/" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-4 p-4 bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl hover:from-pink-100 hover:to-purple-100 transition-all duration-300 transform hover:scale-105"
-                >
-                  <div className="w-10 h-10 bg-gradient-to-r from-pink-500 to-purple-500 rounded-xl flex items-center justify-center">
-                    <Instagram className="text-white w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-slate-700 font-medium">Instagram</p>
-                    <p className="text-slate-600 text-sm">@animoria.art</p>
-                  </div>
-                </a>
-                <a 
-                  href="https://www.saatchiart.com/account/profile/1980379" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl hover:from-blue-100 hover:to-indigo-100 transition-all duration-300 transform hover:scale-105"
-                >
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center">
-                    <Palette className="text-white w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-slate-700 font-medium">Saatchi Art</p>
-                    <p className="text-slate-600 text-sm">Shop original artworks</p>
-                  </div>
-                </a>
-                <a
-                  href="https://www.singulart.com/en/artist/ani-muradyan-62448"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl hover:from-amber-100 hover:to-orange-100 transition-all duration-300 transform hover:scale-105"
-                >
-                  <div className="w-10 h-10 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Palette className="text-white w-5 h-5" />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <p className="text-slate-700 font-medium">Singulart</p>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#0b08c8", padding: "6px 12px", borderRadius: "20px" }}>
-                      <span style={{ fontSize: "13px", fontWeight: 500, color: "#c8c6ff" }}>Verified artist on Singulart</span>
+            <div>
+              <Eyebrow>Follow the Work</Eyebrow>
+              <ul className="space-y-3">
+                <li>
+                  <a
+                    href="https://www.instagram.com/animoria.art/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-3 text-sm text-stone-700 hover:text-stone-900 transition-colors"
+                  >
+                    <Instagram className="h-4 w-4 text-stone-500 group-hover:text-stone-800" />
+                    <span className="border-b border-transparent group-hover:border-stone-800">
+                      Instagram · @animoria.art
                     </span>
-                  </div>
-                </a>
-              </div>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.saatchiart.com/account/profile/1980379"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-3 text-sm text-stone-700 hover:text-stone-900 transition-colors"
+                  >
+                    <Palette className="h-4 w-4 text-stone-500 group-hover:text-stone-800" />
+                    <span className="border-b border-transparent group-hover:border-stone-800">
+                      Saatchi Art · Shop originals
+                    </span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.singulart.com/en/artist/ani-muradyan-62448"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-3 text-sm text-stone-700 hover:text-stone-900 transition-colors"
+                  >
+                    <Palette className="h-4 w-4 text-stone-500 group-hover:text-stone-800" />
+                    <span className="border-b border-transparent group-hover:border-stone-800">
+                      Singulart · Verified artist
+                    </span>
+                  </a>
+                </li>
+              </ul>
             </div>
 
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-3xl shadow-xl border border-slate-200/50 p-8 hover:shadow-2xl transition-shadow duration-500">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900">Commission Work</h3>
-              </div>
-              <p className="text-slate-600 mb-4">
-                Interested in commissioning a custom piece? I accept a limited number of commissions each year. Contact me to discuss your vision and timeline.
+            <div className="border-t border-stone-300 pt-8">
+              <Eyebrow>Commissions</Eyebrow>
+              <p className="max-w-sm text-sm leading-relaxed text-stone-600">
+                I accept a limited number of commissions each year — custom sizes, a 4–8 week
+                completion window, and progress updates along the way. Reach out to discuss your
+                vision and timeline.
               </p>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span className="text-slate-600 text-sm">Custom sizes available</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span className="text-slate-600 text-sm">4-8 week completion time</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span className="text-slate-600 text-sm">Progress updates provided</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Internal contextual links for SEO */}
-        <div className="mt-12 text-center">
-          <p className="text-slate-600 text-lg">
-            Browse{" "}
-            <Link href="/artworks" className="text-blue-600 hover:underline font-medium">
-              original artworks by Ani Muradyan
-            </Link>{" "}
-            or visit the{" "}
-            <Link href="/gallery" className="text-blue-600 hover:underline font-medium">
-              exhibition gallery
-            </Link>.
-          </p>
-        </div>
-      </div>
+      {/* ── Closing note ───────────────────────────────────── */}
+      <section className="px-6 pb-24 text-center">
+        <p className="text-sm text-stone-500">
+          Browse the{" "}
+          <Link
+            href="/artworks"
+            className="border-b border-stone-400 hover:text-stone-900 hover:border-stone-800 transition-colors"
+          >
+            original paintings
+          </Link>{" "}
+          or visit the{" "}
+          <Link
+            href="/gallery"
+            className="border-b border-stone-400 hover:text-stone-900 hover:border-stone-800 transition-colors"
+          >
+            exhibition gallery
+          </Link>
+          .
+        </p>
+      </section>
     </div>
   );
 }
