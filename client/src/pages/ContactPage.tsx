@@ -230,14 +230,6 @@ export default function ContactPage() {
               </ul>
             </div>
 
-            <div className="border-t border-stone-300 pt-8">
-              <Eyebrow>Commissions</Eyebrow>
-              <p className="max-w-sm text-sm leading-relaxed text-stone-600">
-                I accept a limited number of commissions each year — custom sizes, a 4–8 week
-                completion window, and progress updates along the way. Reach out to discuss your
-                vision and timeline.
-              </p>
-            </div>
           </div>
         </div>
       </section>

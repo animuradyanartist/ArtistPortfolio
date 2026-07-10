@@ -22,7 +22,9 @@ export default function AboutPage() {
     queryKey: ["/api/exhibitions"],
   });
 
-  const portrait = artistBio?.image || backgroundImage;
+  // Studio portrait of Ani (bundled asset) — shown regardless of the
+  // admin bio image so the About page always leads with her photo.
+  const portrait = "/ani-portrait.webp";
   const recentExhibitions = [...exhibitions].sort((a, b) => (b.year || 0) - (a.year || 0));
 
   return (
