@@ -14,34 +14,28 @@ if (!hasDb) {
 }
 
 /**
- * Returns the correct database connection string based on the environment.
+ * Returns the database connection string.
  *
- * - production  (NODE_ENV === 'production'): DATABASE_URL — the live Neon database
- *   that powers anymoore.am. Untouched by dev work.
+ * There is ONE database everywhere by default — the live Neon database in
+ * DATABASE_URL that powers the published site. The workspace preview
+ * (`npm run dev`) and the published site (`npm run start`) both use it, so
+ * admin edits made in either place persist and show up on the live site, and
+ * republishing (a code-only deploy) never "resets" content.
  *
- * - development (NODE_ENV === 'development'): prefers DEV_DATABASE_URL when
- *   explicitly set in secrets/env. Falls back to deriving a sibling database
- *   from DATABASE_URL by appending "_dev" to the database name
- *   (e.g. neondb → neondb_dev). The sibling DB must exist and have the schema
- *   pushed to it (`DATABASE_URL=<dev_url> npm run db:push`).
+ * Opt-in isolation: set DEV_DATABASE_URL in Replit Secrets (development scope)
+ * to point the workspace preview at a SEPARATE database. Only do this if you
+ * deliberately want dev work isolated from live content.
  *
- * To explicitly pin the dev database without relying on URL derivation, add
- *   DEV_DATABASE_URL=<your-connection-string>
- * to Replit Secrets (development scope).
+ * NOTE: this used to auto-derive a "<db>_dev" sibling database in development.
+ * That silently split content in two — admin changes made in the workspace
+ * never reached the live site — so the auto-derivation was removed.
  */
 function getConnectionString(): string {
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.DATABASE_URL!;
-  }
-
-  if (process.env.DEV_DATABASE_URL) {
+  if (process.env.NODE_ENV !== 'production' && process.env.DEV_DATABASE_URL) {
     return process.env.DEV_DATABASE_URL;
   }
 
-  const url = new URL(process.env.DATABASE_URL!);
-  const dbName = url.pathname.slice(1);
-  url.pathname = `/${dbName}_dev`;
-  return url.toString();
+  return process.env.DATABASE_URL!;
 }
 
 const connectionString = hasDb ? getConnectionString() : null;
@@ -49,7 +43,9 @@ const connectionString = hasDb ? getConnectionString() : null;
 if (hasDb) {
   if (process.env.NODE_ENV === 'development') {
     const url = new URL(connectionString!);
-    const source = process.env.DEV_DATABASE_URL ? 'DEV_DATABASE_URL' : 'auto-derived';
+    const source = process.env.DEV_DATABASE_URL
+      ? 'DEV_DATABASE_URL (isolated dev DB)'
+      : 'shared DATABASE_URL (same DB as the live site)';
     console.log(`[DB] development → ${url.pathname.slice(1)} @ ${url.hostname} (${source})`);
   } else {
     console.log(`[DB] production → DATABASE_URL`);
