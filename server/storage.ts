@@ -1,6 +1,29 @@
 import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, contactSettings, galleryPhotos, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback, type ContactSettings, type InsertContactSettings, type GalleryPhoto, type InsertGalleryPhoto } from "@shared/schema";
 import { pathSettings, type PathSettings, type InsertPathSettings } from "@shared/pathSchema";
-import { db } from "./db";
+import { db, pool } from "./db";
+
+// Self-heal for the admin-editable `category` column: if an artwork query
+// fails because the column is missing on an un-migrated database, add it
+// (idempotent) and let the caller retry. This guarantees artworks keep
+// loading even if the boot migration hasn't run yet.
+let artworkSchemaEnsured = false;
+async function ensureArtworkSchema(): Promise<void> {
+  if (artworkSchemaEnsured || !pool) return;
+  try {
+    await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS category text`);
+    artworkSchemaEnsured = true;
+  } catch (err) {
+    console.error("[storage] ensureArtworkSchema failed:", err);
+  }
+}
+async function healArtworkOp<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    await ensureArtworkSchema();
+    return await run();
+  }
+}
 import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
@@ -701,33 +724,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllArtworks(): Promise<Artwork[]> {
-    return await db.select().from(artworks).orderBy(artworks.position);
+    return healArtworkOp(() => db.select().from(artworks).orderBy(artworks.position));
   }
 
   async getArtwork(id: number): Promise<Artwork | undefined> {
-    const [artwork] = await db.select().from(artworks).where(eq(artworks.id, id));
+    const [artwork] = await healArtworkOp(() => db.select().from(artworks).where(eq(artworks.id, id)));
     return artwork || undefined;
   }
 
   async getArtworkBySeoSlug(seoSlug: string): Promise<Artwork | undefined> {
-    const [artwork] = await db.select().from(artworks).where(eq(artworks.seoSlug, seoSlug));
+    const [artwork] = await healArtworkOp(() =>
+      db.select().from(artworks).where(eq(artworks.seoSlug, seoSlug))
+    );
     return artwork || undefined;
   }
 
   async createArtwork(insertArtwork: InsertArtwork): Promise<Artwork> {
-    const [artwork] = await db
-      .insert(artworks)
-      .values(insertArtwork)
-      .returning();
+    const [artwork] = await healArtworkOp(() =>
+      db.insert(artworks).values(insertArtwork).returning()
+    );
     return artwork;
   }
 
   async updateArtwork(id: number, updateData: Partial<InsertArtwork>): Promise<Artwork | undefined> {
-    const [artwork] = await db
-      .update(artworks)
-      .set(updateData)
-      .where(eq(artworks.id, id))
-      .returning();
+    const [artwork] = await healArtworkOp(() =>
+      db.update(artworks).set(updateData).where(eq(artworks.id, id)).returning()
+    );
     return artwork || undefined;
   }
 
@@ -737,7 +759,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getFeaturedArtworks(): Promise<Artwork[]> {
-    return await db.select().from(artworks).where(eq(artworks.featured, true));
+    return healArtworkOp(() => db.select().from(artworks).where(eq(artworks.featured, true)));
   }
 
   async reorderArtwork(id: number, direction: 'up' | 'down'): Promise<Artwork[]> {
