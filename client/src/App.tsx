@@ -12,6 +12,7 @@ import ArtworkDetailPage from "@/pages/ArtworkDetailPage";
 // import PrintsPage from "@/pages/PrintsPage";
 // import PrintArtworkPage from "@/pages/PrintArtworkPage";
 import AboutPage from "@/pages/AboutPage";
+import PathPage from "@/pages/PathPage";
 import ExhibitionsPage from "@/pages/ExhibitionsPage";
 import GalleryPage from "@/pages/GalleryPage";
 import ContactPage from "@/pages/ContactPage";
@@ -40,6 +41,7 @@ function Router() {
       <Route path="/prints">{() => <Redirect to="/" />}</Route>
       <Route path="/prints/:id">{() => <Redirect to="/" />}</Route>
       <Route path="/about" component={AboutPage} />
+      <Route path="/path" component={PathPage} />
       <Route path="/exhibitions" component={ExhibitionsPage} />
       <Route path="/gallery" component={GalleryPage} />
       <Route path="/contact" component={ContactPage} />
