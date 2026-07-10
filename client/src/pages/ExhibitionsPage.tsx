@@ -43,7 +43,7 @@ export default function ExhibitionsPage() {
       list.push(ex);
       byYear.set(ex.year, list);
     }
-    return [...byYear.entries()].sort((a, b) => b[0] - a[0]);
+    return Array.from(byYear.entries()).sort((a, b) => b[0] - a[0]);
   }, [filtered]);
 
   const locationLine = (ex: Exhibition) =>
