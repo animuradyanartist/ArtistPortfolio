@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type ElementType 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { Artwork } from "@shared/schema";
-import { updateCanonicalUrl, updateMetaDescription, toSlug } from "@/lib/seo";
+import { updateCanonicalUrl, updateMetaDescription, artworkPath } from "@/lib/seo";
 import { artworkCategory } from "@/lib/artworkCategory";
 
 const NAVY = "#0d1434";
@@ -105,7 +105,7 @@ function Plate({
 }) {
   if (!artwork) return null;
   return (
-    <Link href={`/artworks/${artwork.slug || toSlug(artwork.title)}`}>
+    <Link href={artworkPath(artwork)}>
       <figure
         className={`group m-0 p-2 ${mat} shadow-[0_30px_60px_-40px_rgba(0,0,0,0.5)] cursor-pointer ${className}`}
       >
@@ -533,7 +533,7 @@ export default function PathPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-12">
             {picks.series.map((a, i) => (
               <Reveal key={a.id} delay={i * 90}>
-                <Link href={`/artworks/${a.slug || toSlug(a.title)}`}>
+                <Link href={artworkPath(a)}>
                   <div className="group aspect-[4/5] overflow-hidden cursor-pointer bg-stone-200">
                     <img
                       src={a.images[0]}

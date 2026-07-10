@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { Artwork, HomepageSettings, ArtistBio, Exhibition } from "@shared/schema";
 import backgroundImage from "@assets/1bg_1750936488071.png";
-import { updateCanonicalUrl, updateMetaDescription, toSlug, generateArtworkAlt } from "@/lib/seo";
+import { updateCanonicalUrl, updateMetaDescription, artworkPath, generateArtworkAlt } from "@/lib/seo";
 import { SHOW_PRICES } from "@/lib/featureFlags";
 import { useToast } from "@/hooks/use-toast";
 import { Eyebrow, OutlineButton, ViewLink } from "@/components/editorial";
@@ -219,7 +219,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
             {collectArtworks.map((artwork) => (
               <div key={artwork.id}>
-                <Link href={`/artworks/${artwork.slug || toSlug(artwork.title)}`}>
+                <Link href={artworkPath(artwork)}>
                   <div className="group aspect-[4/5] overflow-hidden cursor-pointer bg-stone-200">
                     <img
                       src={artwork.images[0]}
@@ -237,7 +237,7 @@ export default function HomePage() {
                 </p>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-sm text-stone-800">{priceLabel(artwork)}</span>
-                  <Link href={`/artworks/${artwork.slug || toSlug(artwork.title)}`}>
+                  <Link href={artworkPath(artwork)}>
                     <ViewLink>View Work</ViewLink>
                   </Link>
                 </div>

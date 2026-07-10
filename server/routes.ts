@@ -169,11 +169,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         artwork = await storage.getArtwork(parseInt(param));
       } else {
         const allArtworks = await storage.getAllArtworks();
-        // Resolve by stored slug, seoSlug, OR the clean toSlug(title) — the
-        // detail page's canonical URL uses toSlug(title), so it must resolve
-        // too (otherwise the canonical/reload URL 404s).
+        // Resolve in priority order so every URL form lands on the exact
+        // piece — including duplicate titles:
+        //   1. exact stored slug / seoSlug (legacy + Singulart slugs)
+        //   2. our canonical "<title>-<id>" form: match the trailing id
+        //   3. clean toSlug(title) (older short URLs; first match)
+        const trailingId = param.match(/-(\d+)$/);
         artwork =
           allArtworks.find(a => a.slug === param || a.seoSlug === param) ||
+          (trailingId ? allArtworks.find(a => a.id === parseInt(trailingId[1])) : undefined) ||
           allArtworks.find(a => toSlug(a.title) === param);
       }
       if (!artwork) {

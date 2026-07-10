@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { Artwork } from "@shared/schema";
-import { updateCanonicalUrl, updateMetaDescription, toSlug, generateArtworkAlt } from "@/lib/seo";
+import { updateCanonicalUrl, updateMetaDescription, artworkPath, generateArtworkAlt } from "@/lib/seo";
 import { SHOW_PRICES } from "@/lib/featureFlags";
 import { Eyebrow } from "@/components/editorial";
 import { artworkCategory, type ArtworkCategory } from "@/lib/artworkCategory";
@@ -149,7 +149,7 @@ export default function ArtworksPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
                 {filteredArtworks.map((artwork) => (
                   <div key={artwork.id} className="animate-fadeIn">
-                    <Link href={`/artworks/${artwork.slug || toSlug(artwork.title)}`}>
+                    <Link href={artworkPath(artwork)}>
                       <div className="group aspect-[4/5] overflow-hidden cursor-pointer bg-stone-200">
                         <img
                           src={artwork.images[0]}
@@ -167,7 +167,7 @@ export default function ArtworksPage() {
                     </p>
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-sm text-stone-800">{priceLabel(artwork)}</span>
-                      <Link href={`/artworks/${artwork.slug || toSlug(artwork.title)}`}>
+                      <Link href={artworkPath(artwork)}>
                         <span className="text-[10px] tracking-[0.2em] uppercase text-stone-700 border-b border-stone-400 pb-0.5 hover:text-stone-900 hover:border-stone-800 transition-colors">
                           {artwork.availability === "available" ? "Buy Now" : "View Work"}
                         </span>

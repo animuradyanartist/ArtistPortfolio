@@ -9,7 +9,7 @@ import {
   injectJsonLd,
   removeJsonLd,
   BASE_URL,
-  toSlug,
+  artworkPath,
   generateArtworkAlt,
 } from "@/lib/seo";
 import { SHOW_PRICES } from "@/lib/featureFlags";
@@ -60,8 +60,7 @@ export default function ArtworkDetailPage() {
   // Page title, canonical URL, and per-artwork JSON-LD for SEO
   useEffect(() => {
     if (artwork) {
-      const slug = toSlug(artwork.title);
-      const canonicalPath = artwork.seoSlug ? `/${artwork.seoSlug}` : `/artworks/${slug}`;
+      const canonicalPath = artwork.seoSlug ? `/${artwork.seoSlug}` : artworkPath(artwork);
       document.title = `${artwork.title} | Original ${artwork.medium} by Ani Muradyan`;
       updateCanonicalUrl(canonicalPath);
       updateMetaDescription(
@@ -295,7 +294,7 @@ export default function ArtworkDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-12">
               {moreWorks.map((a) => (
                 <div key={a.id}>
-                  <Link href={`/artworks/${a.slug || toSlug(a.title)}`}>
+                  <Link href={artworkPath(a)}>
                     <div className="group aspect-[4/5] overflow-hidden cursor-pointer bg-stone-200">
                       <img
                         src={a.images[0]}

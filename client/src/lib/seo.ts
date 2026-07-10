@@ -52,6 +52,17 @@ export function toSlug(title: string): string {
     .replace(/^-|-$/g, '');
 }
 
+/**
+ * The canonical link to an artwork's detail page: a readable title slug
+ * plus the artwork id, e.g. /artworks/silent-bliss-62. The id keeps the
+ * URL unique even when two paintings share a title, so links, reloads,
+ * and shares always resolve to the exact piece. The API resolves this by
+ * the trailing -id (see server/routes.ts).
+ */
+export function artworkPath(artwork: { id: number; title: string }): string {
+  return `/artworks/${toSlug(artwork.title)}-${artwork.id}`;
+}
+
 export function generateArtworkAlt(title: string, medium?: string): string {
   const safeTitle = title?.trim() || 'Original artwork';
   const base = medium
