@@ -1,4 +1,5 @@
 import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, contactSettings, galleryPhotos, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback, type ContactSettings, type InsertContactSettings, type GalleryPhoto, type InsertGalleryPhoto } from "@shared/schema";
+import { pathSettings, type PathSettings, type InsertPathSettings } from "@shared/pathSchema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import fs from "fs";
@@ -62,6 +63,10 @@ export interface IStorage {
   deleteGalleryPhoto(id: number): Promise<boolean>;
   getFeaturedGalleryPhotos(): Promise<GalleryPhoto[]>;
   reorderGalleryPhoto(id: number, direction: 'up' | 'down'): Promise<GalleryPhoto[]>;
+
+  // Path page settings (single row)
+  getPathSettings(): Promise<PathSettings | undefined>;
+  updatePathSettings(settings: InsertPathSettings): Promise<PathSettings>;
 }
 
 export class MemStorage implements IStorage {
@@ -662,8 +667,17 @@ export class MemStorage implements IStorage {
     // Update in storage
     this.galleryPhotos.set(photos[currentIndex].id, photos[currentIndex]);
     this.galleryPhotos.set(photos[newIndex].id, photos[newIndex]);
-    
+
     return this.getAllGalleryPhotos();
+  }
+
+  private pathSettingsRow: PathSettings | undefined;
+  async getPathSettings(): Promise<PathSettings | undefined> {
+    return this.pathSettingsRow;
+  }
+  async updatePathSettings(settings: InsertPathSettings): Promise<PathSettings> {
+    this.pathSettingsRow = { ...(this.pathSettingsRow ?? {}), ...settings, id: 1 } as PathSettings;
+    return this.pathSettingsRow;
   }
 }
 
@@ -1041,8 +1055,27 @@ export class DatabaseStorage implements IStorage {
       .update(galleryPhotos)
       .set({ position: tempPosition })
       .where(eq(galleryPhotos.id, photos[newIndex].id));
-    
+
     return this.getAllGalleryPhotos();
+  }
+
+  async getPathSettings(): Promise<PathSettings | undefined> {
+    const [row] = await db.select().from(pathSettings).limit(1);
+    return row || undefined;
+  }
+
+  async updatePathSettings(settings: InsertPathSettings): Promise<PathSettings> {
+    const [existing] = await db.select().from(pathSettings).limit(1);
+    if (existing) {
+      const [updated] = await db
+        .update(pathSettings)
+        .set(settings)
+        .where(eq(pathSettings.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(pathSettings).values(settings).returning();
+    return created;
   }
 }
 

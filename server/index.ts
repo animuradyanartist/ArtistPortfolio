@@ -7,6 +7,7 @@ import fs from "fs";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { pool, hasDatabase } from "./db";
+import { PATH_SETTINGS_DDL } from "@shared/pathSchema";
 
 const app = express();
 
@@ -75,6 +76,18 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Ensure the /path page settings table exists on the production database,
+  // the same way the session store auto-creates its table. This means the
+  // feature works on the live Neon DB with no manual migration step —
+  // it can't "miss" on production even if db:push is never run.
+  if (hasDatabase) {
+    try {
+      await pool.query(PATH_SETTINGS_DDL);
+    } catch (err) {
+      console.error("[boot] Failed to ensure path_settings table:", err);
+    }
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

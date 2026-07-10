@@ -134,18 +134,29 @@ export default function PathPage() {
   }, []);
 
   const { data: artworks = [] } = useQuery<Artwork[]>({ queryKey: ["/api/artworks"] });
+  const { data: settings = {} } = useQuery<Record<string, string | null>>({
+    queryKey: ["/api/path-settings"],
+  });
 
   const picks = useMemo(() => {
     const find = (t: string) => artworks.find((a) => a.title === t);
     const firstOf = (c: "landscape" | "figurative", exclude: Artwork[] = []) =>
       artworks.find((a) => artworkCategory(a) === c && !exclude.includes(a));
+    // Admin-chosen painting for a slot (by id), if set and still exists
+    const chosen = (id?: string | null) =>
+      id ? artworks.find((a) => String(a.id) === String(id)) : undefined;
 
-    const hero = find("Evening Calm") || find("Endless Horizon") || firstOf("landscape");
-    const c1a = find("Blue Detachment") || firstOf("figurative");
-    const c1b = find("Strength in Shadows") || find("Reflective Gaze") || firstOf("figurative", [c1a!]);
-    const c2a = find("Endless Horizon") || find("Layered horizons") || firstOf("landscape", [hero!]);
-    const c2b = find("Quiet Pathway") || find("Evening Calm") || firstOf("landscape", [hero!, c2a!]);
-    const c3 = find("Threshold of Memories") || find("A Safe Distance") || find("Rebirth");
+    const hero =
+      chosen(settings.heroArtworkId) || find("Evening Calm") || find("Endless Horizon") || firstOf("landscape");
+    const c1a = chosen(settings.chapterOneArtworkId) || find("Blue Detachment") || firstOf("figurative");
+    const c1b =
+      chosen(settings.chapterOneDetailArtworkId) || find("Strength in Shadows") || find("Reflective Gaze") || firstOf("figurative", [c1a!]);
+    const c2a =
+      chosen(settings.chapterTwoArtworkId) || find("Endless Horizon") || find("Layered horizons") || firstOf("landscape", [hero!]);
+    const c2b =
+      chosen(settings.chapterTwoDetailArtworkId) || find("Quiet Pathway") || find("Evening Calm") || firstOf("landscape", [hero!, c2a!]);
+    const c3 =
+      chosen(settings.chapterThreeArtworkId) || find("Threshold of Memories") || find("A Safe Distance") || find("Rebirth");
 
     // Current series — available works with a "threshold" feel, then top up
     const preferred = ["Rebirth", "A Safe Distance", "Beyond Every Limit", "Threshold of Memories", "Layered horizons"];
@@ -166,7 +177,7 @@ export default function PathPage() {
       }
     }
     return { hero, c1a, c1b, c2a, c2b, c3, series: series.slice(0, 3) };
-  }, [artworks]);
+  }, [artworks, settings]);
 
   const dims = (a?: Artwork) => (a ? `${a.medium || "Oil on canvas"} · ${a.dimensions}` : "");
 

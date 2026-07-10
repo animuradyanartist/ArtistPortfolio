@@ -16,10 +16,21 @@ import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSe
 import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
+// Editable painting slots on the storytelling "/path" page. Each stores an
+// artwork id; empty = the page auto-picks a fitting painting.
+const PATH_IMAGE_SLOTS = [
+  { key: "heroArtworkId", label: "Hero painting", hint: "Large painting in the intro" },
+  { key: "chapterOneArtworkId", label: "Chapter One — main", hint: "The Weight Within · dark figure" },
+  { key: "chapterOneDetailArtworkId", label: "Chapter One — detail", hint: "Small companion image" },
+  { key: "chapterTwoArtworkId", label: "Chapter Two — main", hint: "Toward My Own Language · wide landscape" },
+  { key: "chapterTwoDetailArtworkId", label: "Chapter Two — detail", hint: "Small companion image" },
+  { key: "chapterThreeArtworkId", label: "Chapter Three — main", hint: "Returning Changed · current work" },
+] as const;
+
 export default function AdminPage() {
   const [, setLocation] = useLocation();
   const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<'homepage' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact'>('homepage');
+  const [activeTab, setActiveTab] = useState<'homepage' | 'path' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact'>('homepage');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
@@ -103,6 +114,22 @@ export default function AdminPage() {
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: pathSettings } = useQuery<Record<string, string | null>>({
+    queryKey: ["/api/path-settings"],
+    enabled: isAuthenticated,
+  });
+  const [pathForm, setPathForm] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (pathSettings) {
+      setPathForm(
+        PATH_IMAGE_SLOTS.reduce((acc, s) => {
+          acc[s.key] = (pathSettings[s.key] as string) || "";
+          return acc;
+        }, {} as Record<string, string>)
+      );
+    }
+  }, [pathSettings]);
 
   const { data: homepageSettings, isLoading: homepageLoading } = useQuery<HomepageSettings>({
     queryKey: ["/api/homepage-settings"],
@@ -252,6 +279,17 @@ export default function AdminPage() {
     },
     onError: () => {
       toast({ title: "Failed to update homepage", variant: "destructive" });
+    },
+  });
+
+  const updatePathMutation = useMutation({
+    mutationFn: async (data: any) => apiRequest("PUT", "/api/path-settings", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/path-settings"] });
+      toast({ title: "The Path updated", description: "Chapter paintings saved." });
+    },
+    onError: () => {
+      toast({ title: "Failed to update The Path", variant: "destructive" });
     },
   });
 
@@ -717,18 +755,18 @@ export default function AdminPage() {
         {/* Modern Tabs */}
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-2 mb-8">
           <div className="flex space-x-1">
-            {(['homepage', 'artworks', 'prints', 'exhibitions', 'gallery', 'artist', 'contact'] as const).map((tab) => (
+            {(['homepage', 'path', 'artworks', 'prints', 'exhibitions', 'gallery', 'artist', 'contact'] as const).map((tab) => (
               <Button
                 key={tab}
                 variant="ghost"
                 onClick={() => setActiveTab(tab)}
                 className={`capitalize flex-1 h-10 rounded-xl transition-all duration-200 ${
-                  activeTab === tab 
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' 
+                  activeTab === tab
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
-                {tab === 'artist' ? 'About Artist' : tab}
+                {tab === 'artist' ? 'About Artist' : tab === 'path' ? 'The Path' : tab}
               </Button>
             ))}
           </div>
@@ -865,6 +903,90 @@ export default function AdminPage() {
                   </form>
                 </Form>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* The Path Tab */}
+        {activeTab === 'path' && (
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
+            <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-8 py-6 border-b border-slate-200/50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-slate-900">The Path — Chapter Paintings</h3>
+                  <p className="text-sm text-slate-600">
+                    Choose which painting leads each chapter of the story page
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="p-8">
+              <p className="mb-6 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                Pick a painting for each slot below. Leave a slot on <strong>Auto</strong> to let the
+                page choose a fitting painting on its own. The “Works from the Threshold” row at the
+                bottom of the page shows your <em>available</em> paintings automatically. Changes
+                save to the live site.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {PATH_IMAGE_SLOTS.map((slot) => {
+                  const selected = artworks.find((a) => String(a.id) === pathForm[slot.key]);
+                  return (
+                    <div key={slot.key} className="border border-slate-200 rounded-2xl p-4">
+                      <div className="flex items-start gap-4">
+                        <div className="w-16 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center">
+                          {selected?.images?.[0] ? (
+                            <img src={selected.images[0]} alt={selected.title} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[10px] text-slate-400 text-center px-1">Auto</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-900 text-sm">{slot.label}</p>
+                          <p className="text-xs text-slate-500 mb-2">{slot.hint}</p>
+                          <select
+                            value={pathForm[slot.key] ?? ""}
+                            onChange={(e) =>
+                              setPathForm((f) => ({ ...f, [slot.key]: e.target.value }))
+                            }
+                            className="w-full h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="">Auto (default)</option>
+                            {artworks.map((a) => (
+                              <option key={a.id} value={String(a.id)}>
+                                {a.title}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-8 flex items-center gap-4">
+                <Button
+                  onClick={() => updatePathMutation.mutate(pathForm)}
+                  disabled={updatePathMutation.isPending}
+                  className="h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl transition-all duration-200"
+                >
+                  {updatePathMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+                <a
+                  href="/path"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  Preview The Path →
+                </a>
+              </div>
             </div>
           </div>
         )}

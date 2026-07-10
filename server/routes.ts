@@ -668,6 +668,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Path page settings (which painting leads each chapter) ──
+  const PATH_SLOT_KEYS = [
+    "heroArtworkId",
+    "chapterOneArtworkId",
+    "chapterOneDetailArtworkId",
+    "chapterTwoArtworkId",
+    "chapterTwoDetailArtworkId",
+    "chapterThreeArtworkId",
+  ] as const;
+
+  app.get("/api/path-settings", async (req, res) => {
+    // Resilient: if the table doesn't exist yet or anything fails, return
+    // empty settings so the public /path page always renders (it falls back
+    // to its automatic painting picks).
+    try {
+      const settings = await storage.getPathSettings();
+      res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=300");
+      res.json(settings || {});
+    } catch (error) {
+      console.error("path-settings GET failed (returning defaults):", error);
+      res.json({});
+    }
+  });
+
+  app.put("/api/path-settings", requireAdminAuth, async (req, res) => {
+    try {
+      const data: Record<string, string | null> = {};
+      for (const key of PATH_SLOT_KEYS) {
+        if (key in req.body) {
+          const v = req.body[key];
+          data[key] = v === "" || v == null ? null : String(v);
+        }
+      }
+      const updated = await storage.updatePathSettings(data);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({
+        message: "Failed to update path settings",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
   app.post("/api/upload", requireAdminAuth, upload.single('image'), async (req, res) => {
     try {
       if (!req.file) {
