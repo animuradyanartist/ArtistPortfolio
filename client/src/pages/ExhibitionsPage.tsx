@@ -1,11 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { Exhibition } from "@shared/schema";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 import { Eyebrow, OutlineButton } from "@/components/editorial";
-
-type TypeFilter = "all" | "solo" | "group";
 
 export default function ExhibitionsPage() {
   useEffect(() => {
@@ -16,35 +14,20 @@ export default function ExhibitionsPage() {
     );
   }, []);
 
-  const [filter, setFilter] = useState<TypeFilter>("all");
-
   const { data: exhibitions = [] } = useQuery<Exhibition[]>({
     queryKey: ["/api/exhibitions"],
   });
 
-  // Only offer a type filter for types that actually exist
-  const availableFilters = useMemo<{ value: TypeFilter; label: string }[]>(() => {
-    const base: { value: TypeFilter; label: string }[] = [{ value: "all", label: "All" }];
-    if (exhibitions.some((e) => e.type === "solo")) base.push({ value: "solo", label: "Solo" });
-    if (exhibitions.some((e) => e.type === "group")) base.push({ value: "group", label: "Group" });
-    return base;
-  }, [exhibitions]);
-
-  const filtered = useMemo(
-    () => exhibitions.filter((e) => filter === "all" || e.type === filter),
-    [exhibitions, filter]
-  );
-
   // Group by year, newest first
   const years = useMemo(() => {
     const byYear = new Map<number, Exhibition[]>();
-    for (const ex of filtered) {
+    for (const ex of exhibitions) {
       const list = byYear.get(ex.year) ?? [];
       list.push(ex);
       byYear.set(ex.year, list);
     }
     return Array.from(byYear.entries()).sort((a, b) => b[0] - a[0]);
-  }, [filtered]);
+  }, [exhibitions]);
 
   const locationLine = (ex: Exhibition) =>
     [ex.venue, ex.location].map((s) => s?.trim()).filter(Boolean).join(", ");
@@ -60,30 +43,6 @@ export default function ExhibitionsPage() {
           shows and art fairs from Yerevan to Paris, Madrid, and beyond.
         </p>
       </section>
-
-      {/* ── Type filter (only when >1 option) ──────────────── */}
-      {availableFilters.length > 1 && (
-        <section className="px-6">
-          <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-3">
-            {availableFilters.map((f) => {
-              const active = filter === f.value;
-              return (
-                <button
-                  key={f.value}
-                  onClick={() => setFilter(f.value)}
-                  className={`px-5 py-2 text-[11px] tracking-[0.2em] uppercase transition-colors ${
-                    active
-                      ? "bg-stone-900 text-stone-50"
-                      : "border border-stone-300 text-stone-600 hover:border-stone-500 hover:text-stone-900"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {/* ── Year-grouped list ──────────────────────────────── */}
       <section className="px-6 py-14 md:py-20">
