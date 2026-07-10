@@ -86,13 +86,17 @@ app.use((req, res, next) => {
     } catch (err) {
       console.error("[boot] Failed to ensure path_settings table:", err);
     }
-    // Ensure the admin-editable artwork Category column exists on the live
-    // artworks table — so choosing Landscape/Figurative saves in production
-    // with no manual db:push (ADD COLUMN IF NOT EXISTS is idempotent).
+    // Ensure the schema-added artworks columns exist on the live/workspace
+    // table so artwork queries never 500 on an un-migrated database — with no
+    // manual db:push (ADD COLUMN IF NOT EXISTS is idempotent). `category` is
+    // the admin Landscape/Figurative selector; `seo_slug` backs the clean
+    // Google-friendly URLs. Both are selected by every artwork query, so a DB
+    // missing either column breaks the whole Originals/detail flow.
     try {
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS category text`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS seo_slug text`);
     } catch (err) {
-      console.error("[boot] Failed to ensure artworks.category column:", err);
+      console.error("[boot] Failed to ensure artworks columns:", err);
     }
   }
 

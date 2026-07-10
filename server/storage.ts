@@ -2,15 +2,16 @@ import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feed
 import { pathSettings, type PathSettings, type InsertPathSettings } from "@shared/pathSchema";
 import { db, pool } from "./db";
 
-// Self-heal for the admin-editable `category` column: if an artwork query
-// fails because the column is missing on an un-migrated database, add it
-// (idempotent) and let the caller retry. This guarantees artworks keep
-// loading even if the boot migration hasn't run yet.
+// Self-heal for schema-added artworks columns (`category`, `seo_slug`): if an
+// artwork query fails because a column is missing on an un-migrated database,
+// add them (idempotent) and let the caller retry. This guarantees artworks
+// keep loading even if the boot migration hasn't run yet.
 let artworkSchemaEnsured = false;
 async function ensureArtworkSchema(): Promise<void> {
   if (artworkSchemaEnsured || !pool) return;
   try {
     await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS category text`);
+    await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS seo_slug text`);
     artworkSchemaEnsured = true;
   } catch (err) {
     console.error("[storage] ensureArtworkSchema failed:", err);
