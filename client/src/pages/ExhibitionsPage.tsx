@@ -1,135 +1,151 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Link } from "wouter";
 import type { Exhibition } from "@shared/schema";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
+import { Eyebrow, OutlineButton } from "@/components/editorial";
+
+type TypeFilter = "all" | "solo" | "group";
 
 export default function ExhibitionsPage() {
   useEffect(() => {
     document.title = "Exhibitions by Ani Muradyan | Solo & Group Art Shows";
-    updateCanonicalUrl('/exhibitions');
-    updateMetaDescription('Explore solo and group exhibitions by Armenian contemporary artist Ani Muradyan. Abstract realism oil paintings exhibited internationally.');
+    updateCanonicalUrl("/exhibitions");
+    updateMetaDescription(
+      "Solo and group exhibitions by Armenian contemporary artist Ani Muradyan — shown internationally and across Armenia."
+    );
   }, []);
 
-  const [activeTab, setActiveTab] = useState<'solo' | 'group'>('solo');
+  const [filter, setFilter] = useState<TypeFilter>("all");
 
-  const { data: exhibitions = [], isLoading } = useQuery<Exhibition[]>({
-    queryKey: ["/api/exhibitions"]
+  const { data: exhibitions = [] } = useQuery<Exhibition[]>({
+    queryKey: ["/api/exhibitions"],
   });
 
-  const soloExhibitions = exhibitions.filter(ex => ex.type === 'solo');
-  const groupExhibitions = exhibitions.filter(ex => ex.type === 'group');
+  // Only offer a type filter for types that actually exist
+  const availableFilters = useMemo<{ value: TypeFilter; label: string }[]>(() => {
+    const base: { value: TypeFilter; label: string }[] = [{ value: "all", label: "All" }];
+    if (exhibitions.some((e) => e.type === "solo")) base.push({ value: "solo", label: "Solo" });
+    if (exhibitions.some((e) => e.type === "group")) base.push({ value: "group", label: "Group" });
+    return base;
+  }, [exhibitions]);
 
-  const currentExhibitions = activeTab === 'solo' ? soloExhibitions : groupExhibitions;
+  const filtered = useMemo(
+    () => exhibitions.filter((e) => filter === "all" || e.type === filter),
+    [exhibitions, filter]
+  );
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-64 mx-auto mb-4"></div>
-              <div className="h-4 bg-gray-200 rounded w-96 mx-auto"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Group by year, newest first
+  const years = useMemo(() => {
+    const byYear = new Map<number, Exhibition[]>();
+    for (const ex of filtered) {
+      const list = byYear.get(ex.year) ?? [];
+      list.push(ex);
+      byYear.set(ex.year, list);
+    }
+    return [...byYear.entries()].sort((a, b) => b[0] - a[0]);
+  }, [filtered]);
+
+  const locationLine = (ex: Exhibition) =>
+    [ex.venue, ex.location].map((s) => s?.trim()).filter(Boolean).join(", ");
 
   return (
-    <div className="min-h-screen py-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h1 className="font-playfair text-4xl md:text-5xl font-semibold text-deep-blue mb-4">
-            Exhibitions
-          </h1>
-          <p className="text-soft-gray text-lg max-w-2xl mx-auto">
-            A comprehensive overview of solo and group exhibitions showcasing my artistic journey.
-          </p>
-        </div>
+    <div className="min-h-screen bg-[#f5f1ea]">
+      {/* ── Header ─────────────────────────────────────────── */}
+      <section className="px-6 pt-20 md:pt-28 pb-8 text-center">
+        <Eyebrow>Recognition</Eyebrow>
+        <h1 className="font-playfair text-5xl md:text-6xl text-stone-900 mb-5">Exhibitions</h1>
+        <p className="mx-auto max-w-xl text-sm md:text-base text-stone-600">
+          Ani Muradyan's work has been exhibited internationally and across Armenia — in solo
+          shows and art fairs from Yerevan to Paris, Madrid, and beyond.
+        </p>
+      </section>
 
-        <div className="flex justify-center mb-12">
-          <div className="bg-white rounded-lg shadow-sm p-2">
-            <Button
-              variant={activeTab === 'solo' ? 'default' : 'ghost'}
-              onClick={() => setActiveTab('solo')}
-              className={activeTab === 'solo' 
-                ? 'bg-deep-blue text-white hover:bg-deep-blue/90' 
-                : 'text-charcoal hover:bg-gray-100'
-              }
-            >
-              Solo Exhibitions
-            </Button>
-            <Button
-              variant={activeTab === 'group' ? 'default' : 'ghost'}
-              onClick={() => setActiveTab('group')}
-              className={activeTab === 'group' 
-                ? 'bg-deep-blue text-white hover:bg-deep-blue/90' 
-                : 'text-charcoal hover:bg-gray-100'
-              }
-            >
-              Group Exhibitions
-            </Button>
+      {/* ── Type filter (only when >1 option) ──────────────── */}
+      {availableFilters.length > 1 && (
+        <section className="px-6">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-3">
+            {availableFilters.map((f) => {
+              const active = filter === f.value;
+              return (
+                <button
+                  key={f.value}
+                  onClick={() => setFilter(f.value)}
+                  className={`px-5 py-2 text-[11px] tracking-[0.2em] uppercase transition-colors ${
+                    active
+                      ? "bg-stone-900 text-stone-50"
+                      : "border border-stone-300 text-stone-600 hover:border-stone-500 hover:text-stone-900"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </section>
+      )}
 
-        {currentExhibitions.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-soft-gray text-lg">
-              No {activeTab} exhibitions to display.
+      {/* ── Year-grouped list ──────────────────────────────── */}
+      <section className="px-6 py-14 md:py-20">
+        <div className="mx-auto max-w-4xl">
+          {years.length === 0 ? (
+            <p className="py-16 text-center font-playfair italic text-2xl text-stone-500">
+              No exhibitions to show yet.
             </p>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 gap-8">
-            {currentExhibitions.map((exhibition) => (
-              <Card key={exhibition.id} className="bg-white shadow-lg overflow-hidden">
-                {exhibition.image && (
-                  <img 
-                    src={exhibition.image} 
-                    alt={`${exhibition.title} – ${exhibition.type} exhibition by Armenian artist Ani Muradyan at ${exhibition.venue}, ${exhibition.location}`}
-                    className="w-full h-48 object-cover"
-                  />
-                )}
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className="font-playfair text-xl font-semibold text-deep-blue">
-                      "{exhibition.title}"
-                    </h3>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className="text-soft-gray text-sm">{exhibition.year}</span>
-                      <Badge 
-                        variant={exhibition.type === 'solo' ? 'default' : 'secondary'}
-                        className={exhibition.type === 'solo' 
-                          ? 'bg-blue-100 text-blue-800 hover:bg-blue-100' 
-                          : 'bg-green-100 text-green-800 hover:bg-green-100'
-                        }
-                      >
-                        {exhibition.type === 'solo' ? 'Solo' : 'Group'}
-                      </Badge>
+          ) : (
+            years.map(([year, list]) => (
+              <div
+                key={year}
+                className="grid grid-cols-1 md:grid-cols-[120px_1fr] gap-4 md:gap-8 border-t border-stone-300 py-8 md:py-10"
+              >
+                <div className="font-playfair text-3xl text-stone-400">{year}</div>
+                <div className="space-y-7">
+                  {list.map((ex) => (
+                    <div key={ex.id}>
+                      <div className="flex items-baseline justify-between gap-4">
+                        <h3 className="font-playfair text-lg md:text-xl text-stone-900">
+                          {ex.title}
+                        </h3>
+                        <span className="shrink-0 text-[10px] tracking-[0.2em] uppercase text-stone-400">
+                          {ex.type === "group" ? "Group" : "Solo"}
+                        </span>
+                      </div>
+                      {locationLine(ex) && (
+                        <p className="mt-1 text-sm text-stone-500">{locationLine(ex)}</p>
+                      )}
+                      {ex.description && (
+                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone-600">
+                          {ex.description}
+                        </p>
+                      )}
                     </div>
-                  </div>
-                  <p className="text-deep-blue font-medium mb-2">
-                    {exhibition.venue}, {exhibition.location}
-                  </p>
-                  {exhibition.description && (
-                    <p className="text-soft-gray text-sm mb-4">
-                      {exhibition.description}
-                    </p>
-                  )}
-                  <div className="text-sm text-charcoal space-y-1">
-                    {exhibition.startDate && exhibition.endDate && (
-                      <p><strong>Duration:</strong> {exhibition.startDate} - {exhibition.endDate}</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      {/* ── Closing CTA ────────────────────────────────────── */}
+      <section className="py-20 md:py-28 px-6 text-center">
+        <h2 className="font-playfair mx-auto max-w-xl text-4xl md:text-[44px] leading-tight text-stone-900 mb-10">
+          See the paintings in person.
+        </h2>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <Link href="/artworks">
+            <span
+              className="inline-block px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-50 hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: "#26221c" }}
+            >
+              View Originals
+            </span>
+          </Link>
+          <Link href="/contact">
+            <OutlineButton>Contact the Artist</OutlineButton>
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }
