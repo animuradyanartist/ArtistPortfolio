@@ -20,6 +20,7 @@ export const artworks = pgTable("artworks", {
   price: integer("price").notNull(),
   images: text("images").array().notNull(),
   type: text("type").notNull(), // oil, acrylic, mixed
+  category: text("category"), // landscape, figurative (nullable — falls back to keyword classifier)
   size: text("size").notNull(), // small, medium, large
   availability: text("availability").notNull(), // available, sold
   saatchiUrl: text("saatchi_url"),

@@ -86,6 +86,14 @@ app.use((req, res, next) => {
     } catch (err) {
       console.error("[boot] Failed to ensure path_settings table:", err);
     }
+    // Ensure the admin-editable artwork Category column exists on the live
+    // artworks table — so choosing Landscape/Figurative saves in production
+    // with no manual db:push (ADD COLUMN IF NOT EXISTS is idempotent).
+    try {
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS category text`);
+    } catch (err) {
+      console.error("[boot] Failed to ensure artworks.category column:", err);
+    }
   }
 
   const server = await registerRoutes(app);

@@ -63,6 +63,7 @@ export default function CreateArtworkPage() {
       price: 0,
       images: [""],
       type: "oil",
+      category: "auto",
       size: "medium",
       availability: "available",
       saatchiUrl: "",
@@ -210,6 +211,7 @@ export default function CreateArtworkPage() {
     // Add print size data to the submission
     const submissionData = {
       ...data,
+      category: data.category === "auto" ? null : data.category,
       availableForPrint,
       printSizes: availableForPrint ? JSON.stringify(printSizes) : null,
     };
@@ -413,6 +415,33 @@ export default function CreateArtworkPage() {
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={artworkForm.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category (Originals page tab)</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="auto">Auto (detect from title)</SelectItem>
+                          <SelectItem value="landscape">Landscape</SelectItem>
+                          <SelectItem value="figurative">Figurative</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Controls which tab this piece appears under on the Originals page.
+                        "Auto" classifies it from the title/description.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
