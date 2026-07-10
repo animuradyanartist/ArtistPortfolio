@@ -69,7 +69,7 @@ export default function ArtworksPage() {
       return artwork.availability === "reserved" ? "Reserved" : "Sold";
     }
     if (SHOW_PRICES && artwork.price) return `€${artwork.price.toLocaleString()}`;
-    return "Inquire";
+    return "Available";
   };
 
   return (
@@ -169,7 +169,7 @@ export default function ArtworksPage() {
                       <span className="text-sm text-stone-800">{priceLabel(artwork)}</span>
                       <Link href={`/artworks/${artwork.slug || toSlug(artwork.title)}`}>
                         <span className="text-[10px] tracking-[0.2em] uppercase text-stone-700 border-b border-stone-400 pb-0.5 hover:text-stone-900 hover:border-stone-800 transition-colors">
-                          View Work
+                          {artwork.availability === "available" ? "Buy Now" : "View Work"}
                         </span>
                       </Link>
                     </div>
