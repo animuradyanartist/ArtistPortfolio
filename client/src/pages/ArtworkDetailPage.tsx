@@ -260,20 +260,22 @@ export default function ArtworkDetailPage() {
               ))}
             </dl>
 
-            {/* Actions */}
-            <div className="flex flex-wrap items-center gap-4">
-              <Link href="/contact">
-                <DarkButton>Inquire About This Work</DarkButton>
-              </Link>
-              {artwork.availability === "available" && artwork.saatchiUrl && (
-                <button
-                  onClick={() => window.open(artwork.saatchiUrl!, "_blank")}
-                  className="inline-block border border-stone-800 px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-900 hover:bg-stone-900 hover:text-stone-50 transition-colors duration-300"
-                >
-                  View on Saatchi Art
-                </button>
-              )}
-            </div>
+            {/* Actions — only for pieces that are still available */}
+            {artwork.availability === "available" && (
+              <div className="flex flex-wrap items-center gap-4">
+                <Link href="/contact">
+                  <DarkButton>Buy Now</DarkButton>
+                </Link>
+                {artwork.saatchiUrl && (
+                  <button
+                    onClick={() => window.open(artwork.saatchiUrl!, "_blank")}
+                    className="inline-block border border-stone-800 px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-900 hover:bg-stone-900 hover:text-stone-50 transition-colors duration-300"
+                  >
+                    View on Saatchi Art
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
