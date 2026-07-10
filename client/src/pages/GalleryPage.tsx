@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { GalleryPhoto } from "@shared/schema";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Link } from "wouter";
 import { Eyebrow } from "@/components/editorial";
@@ -112,6 +112,9 @@ export default function GalleryPage() {
       {/* ── Lightbox ───────────────────────────────────────── */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-transparent border-none shadow-none">
+          <DialogTitle className="sr-only">
+            {currentPhoto?.title || "Gallery photo"}
+          </DialogTitle>
           <div className="relative flex items-center justify-center">
             <button
               onClick={() => setLightboxOpen(false)}
