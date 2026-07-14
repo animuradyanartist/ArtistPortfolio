@@ -145,6 +145,44 @@ app.use((req, res, next) => {
     } catch (err) {
       console.error("[boot] Failed to merge Singulart exhibitions:", err);
     }
+
+    // One-time fix: correct artwork dimensions to match the sizes shown on the
+    // artist's Singulart pages (the stored values were off by ~1cm). Matched by
+    // the stable Singulart id at the end of each buy_link. Guarded by an
+    // app_migrations flag so it runs once — any size the artist later edits in
+    // the admin persists and is never overwritten by a redeploy.
+    try {
+      const dimensionFixes: Array<[string, string]> = [
+        ["2520049", "80x70cm"], ["2520872", "100x80cm"], ["2631637", "90x80cm"],
+        ["2130937", "80x60cm"], ["2627626", "70x60cm"], ["2176588", "90x80cm"],
+        ["2130915", "60x70cm"], ["2602903", "60x50cm"], ["2130951", "60x60cm"],
+        ["2130923", "100x80cm"], ["2621071", "80x100cm"], ["2130940", "120x90cm"],
+        ["2098242", "35x28cm"], ["2130944", "50x40cm"], ["2610387", "42x30cm"],
+        ["2539922", "42x30cm"], ["2532244", "30x21cm"], ["2554547", "30x21cm"],
+        ["2588239", "30x42cm"], ["2128391", "35x28cm"], ["2096775", "120x110cm"],
+        ["2176590", "80x100cm"], ["2130929", "100x80cm"], ["2130943", "70x60cm"],
+        ["2573886", "42x30cm"], ["2534421", "60x50cm"], ["2525788", "100x80cm"],
+        ["2095342", "90x80cm"],
+      ];
+      const { rows } = await pool.query(
+        `SELECT 1 FROM app_migrations WHERE key = $1`,
+        ["singulart_dimensions_fix_v1"]
+      );
+      if (rows.length === 0) {
+        for (const [sid, dim] of dimensionFixes) {
+          await pool.query(
+            `UPDATE artworks SET dimensions = $1 WHERE buy_link LIKE $2`,
+            [dim, `%-${sid}`]
+          );
+        }
+        await pool.query(
+          `INSERT INTO app_migrations (key) VALUES ($1) ON CONFLICT DO NOTHING`,
+          ["singulart_dimensions_fix_v1"]
+        );
+      }
+    } catch (err) {
+      console.error("[boot] Failed to fix Singulart dimensions:", err);
+    }
   }
 
   const server = await registerRoutes(app);
