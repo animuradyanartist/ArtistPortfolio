@@ -166,7 +166,13 @@ export default function ArtworksPage() {
                       {artwork.medium || "Oil on canvas"} · {artwork.dimensions}
                     </p>
                     <div className="mt-3 flex items-center justify-between">
-                      <span className="text-sm text-stone-800">{priceLabel(artwork)}</span>
+                      <span
+                        className={`text-sm ${
+                          artwork.availability === "available" ? "text-stone-800" : "text-red-600"
+                        }`}
+                      >
+                        {priceLabel(artwork)}
+                      </span>
                       <Link href={artworkPath(artwork)}>
                         <span className="text-[10px] tracking-[0.2em] uppercase text-stone-700 border-b border-stone-400 pb-0.5 hover:text-stone-900 hover:border-stone-800 transition-colors">
                           {artwork.availability === "available" ? "Buy Now" : "View Work"}

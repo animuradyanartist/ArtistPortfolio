@@ -254,7 +254,15 @@ export default function ArtworkDetailPage() {
                   className="flex justify-between gap-6 border-b border-stone-300 py-4"
                 >
                   <dt className="text-[11px] tracking-[0.2em] uppercase text-stone-500">{label}</dt>
-                  <dd className="text-sm text-stone-800 text-right">{value}</dd>
+                  <dd
+                    className={`text-sm text-right ${
+                      label === "Availability" && artwork.availability !== "available"
+                        ? "text-red-600"
+                        : "text-stone-800"
+                    }`}
+                  >
+                    {value}
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -262,9 +270,15 @@ export default function ArtworkDetailPage() {
             {/* Actions — only for pieces that are still available */}
             {artwork.availability === "available" && (
               <div className="flex flex-wrap items-center gap-4">
-                <Link href="/contact">
-                  <DarkButton>Buy Now</DarkButton>
-                </Link>
+                {artwork.buyLink ? (
+                  <a href={artwork.buyLink} target="_blank" rel="noopener noreferrer">
+                    <DarkButton>Buy Now</DarkButton>
+                  </a>
+                ) : (
+                  <Link href="/contact">
+                    <DarkButton>Buy Now</DarkButton>
+                  </Link>
+                )}
                 {artwork.saatchiUrl && (
                   <button
                     onClick={() => window.open(artwork.saatchiUrl!, "_blank")}

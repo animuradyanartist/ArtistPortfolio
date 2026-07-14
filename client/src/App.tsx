@@ -32,6 +32,15 @@ function CanonicalManager() {
   return null;
 }
 
+// Open every navigated page from the top (wouter has no scroll restoration).
+function ScrollToTop() {
+  const [location] = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location]);
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
@@ -62,6 +71,7 @@ function App() {
       <TooltipProvider>
         <div className="min-h-screen bg-soft-white">
           <CanonicalManager />
+          <ScrollToTop />
           <Navigation />
           <main>
             <Router />
