@@ -140,6 +140,13 @@ export const feedback = pgTable('feedback', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Collector List signups from the homepage "Join the Collector List" form.
+export const collectors = pgTable('collectors', {
+  id: serial('id').primaryKey(),
+  email: text('email').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 export const galleryPhotos = pgTable('gallery_photos', {
   id: serial('id').primaryKey(),
   title: text('title'),
@@ -172,3 +179,10 @@ export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
 export type Feedback = typeof feedback.$inferSelect;
 export type InsertGalleryPhoto = z.infer<typeof insertGalleryPhotoSchema>;
 export type GalleryPhoto = typeof galleryPhotos.$inferSelect;
+
+export const insertCollectorSchema = createInsertSchema(collectors).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertCollector = z.infer<typeof insertCollectorSchema>;
+export type Collector = typeof collectors.$inferSelect;

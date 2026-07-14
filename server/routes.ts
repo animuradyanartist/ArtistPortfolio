@@ -835,6 +835,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Collector List — public signup + admin-only list
+  app.post("/api/collectors", async (req, res) => {
+    try {
+      const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        return res.status(400).json({ message: "A valid email is required" });
+      }
+      const collector = await storage.addCollector(email);
+      res.status(201).json({ ok: true, id: collector.id });
+    } catch (error) {
+      console.error("Error adding collector:", error);
+      res.status(500).json({ message: "Failed to join the collector list" });
+    }
+  });
+
+  app.get("/api/collectors", requireAdminAuth, async (req, res) => {
+    try {
+      const list = await storage.getAllCollectors();
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching collectors:", error);
+      res.status(500).json({ message: "Failed to fetch collectors" });
+    }
+  });
+
   // Contact Settings routes
   app.get("/api/contact-settings", async (req, res) => {
     try {

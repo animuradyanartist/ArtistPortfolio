@@ -97,8 +97,36 @@ app.use((req, res, next) => {
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS seo_slug text`);
       // "Where the work lives" section content (JSON array of {image, caption}).
       await pool.query(`ALTER TABLE homepage_settings ADD COLUMN IF NOT EXISTS room_items text`);
+      // Collector List signups (homepage "Join the Collector List" form).
+      await pool.query(`CREATE TABLE IF NOT EXISTS collectors (
+        id serial PRIMARY KEY,
+        email text NOT NULL,
+        created_at timestamp NOT NULL DEFAULT now()
+      )`);
     } catch (err) {
       console.error("[boot] Failed to ensure artworks columns:", err);
+    }
+
+    // One-time content merge: add the exhibitions listed on the artist's
+    // Singulart profile that aren't already in the DB. Idempotent — matched by
+    // (title, year), so it never duplicates and it won't resurrect an entry
+    // the admin deletes under a different title/year. Safe to remove once run.
+    try {
+      const singulartExhibitions = [
+        { title: "Woman. Love. Harmony", type: "group", venue: "Russian Museum of Art", location: "Armenia, Yerevan", year: 2026 },
+        { title: "Solo Art Exhibition", type: "solo", venue: "", location: "Armenia, Yerevan", year: 2024 },
+        { title: "Christmas Art Fair", type: "group", venue: "Liver Gallery", location: "Armenia, Yerevan", year: 2023 },
+      ];
+      for (const ex of singulartExhibitions) {
+        await pool.query(
+          `INSERT INTO exhibitions (title, type, venue, location, year)
+           SELECT $1, $2, $3, $4, $5
+           WHERE NOT EXISTS (SELECT 1 FROM exhibitions WHERE title = $1 AND year = $5)`,
+          [ex.title, ex.type, ex.venue, ex.location, ex.year]
+        );
+      }
+    } catch (err) {
+      console.error("[boot] Failed to merge Singulart exhibitions:", err);
     }
   }
 

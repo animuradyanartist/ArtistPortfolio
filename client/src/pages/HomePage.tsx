@@ -87,15 +87,10 @@ export default function HomePage() {
     if (!email.trim()) return;
     setJoining(true);
     try {
-      const res = await fetch("/api/contact", {
+      const res = await fetch("/api/collectors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Collector List Signup",
-          email: email.trim(),
-          subject: "Join the Collector List",
-          message: `Please add ${email.trim()} to the collector list.`,
-        }),
+        body: JSON.stringify({ email: email.trim() }),
       });
       if (!res.ok) throw new Error("Request failed");
       toast({
@@ -346,28 +341,31 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── About Ani ────────────────────────────────────────── */}
+      {/* ── The Path (invitation) ────────────────────────────── */}
       <section className="bg-[#f8f4ed] py-20 md:py-28 px-6">
         <div className="mx-auto grid max-w-6xl grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div className="mx-auto w-full max-w-md">
             <img
-              src={artistBio?.image || heroImage}
-              alt="Ani Muradyan, contemporary oil painter"
+              src={(landscapeCard || figurativeCard)?.images?.[0] || artistBio?.image || heroImage}
+              alt="A painting from Ani Muradyan's series, The Path"
               className="w-full shadow-[0_24px_60px_rgba(0,0,0,0.18)]"
               loading="lazy"
             />
           </div>
           <div>
-            <Eyebrow>The Artist</Eyebrow>
-            <h2 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-6">About Ani</h2>
-            <p className="max-w-md text-sm leading-relaxed text-stone-700 mb-8">
-              Ani Muradyan is an Armenian contemporary oil painter working with simplified forms,
-              colour, space, and emotional atmosphere. Her paintings explore the quiet dialogue
-              between inner life and the outside world — through human presence, landscapes,
-              light, memory, and hope.
+            <Eyebrow>The Path</Eyebrow>
+            <h2 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-6">
+              From Silence to Open Space
+            </h2>
+            <p className="font-playfair italic text-lg text-stone-600 mb-5 max-w-md">
+              I paint the moment when an inner state becomes a landscape.
             </p>
-            <Link href="/about">
-              <OutlineButton>Read About the Artist</OutlineButton>
+            <p className="max-w-md text-sm leading-relaxed text-stone-700 mb-8">
+              Over time, my work has moved from enclosed figures and emotional weight toward open
+              horizons, quiet fields of colour, and the uncertain space of becoming.
+            </p>
+            <Link href="/path">
+              <OutlineButton>Enter The Path</OutlineButton>
             </Link>
           </div>
         </div>

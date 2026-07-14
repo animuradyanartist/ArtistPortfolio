@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/hooks/useAdmin";
 import { apiRequest } from "@/lib/queryClient";
 import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema, insertContactSettingsSchema, insertGalleryPhotoSchema } from "@shared/schema";
-import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings, GalleryPhoto } from "@shared/schema";
+import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings, GalleryPhoto, Collector } from "@shared/schema";
 import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
@@ -30,7 +30,7 @@ const PATH_IMAGE_SLOTS = [
 export default function AdminPage() {
   const [, setLocation] = useLocation();
   const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<'homepage' | 'path' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact'>('homepage');
+  const [activeTab, setActiveTab] = useState<'homepage' | 'path' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact' | 'collectors'>('homepage');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
@@ -150,6 +150,12 @@ export default function AdminPage() {
     queryKey: ["/api/contact-settings"],
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: collectors = [], isLoading: collectorsLoading } = useQuery<Collector[]>({
+    queryKey: ["/api/collectors"],
+    enabled: isAuthenticated,
+    staleTime: 60 * 1000,
   });
 
   const { data: galleryPhotos = [], isLoading: galleryPhotosLoading } = useQuery<GalleryPhoto[]>({
@@ -773,7 +779,7 @@ export default function AdminPage() {
         {/* Modern Tabs */}
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-2 mb-8">
           <div className="flex space-x-1">
-            {(['homepage', 'path', 'artworks', 'prints', 'exhibitions', 'gallery', 'artist', 'contact'] as const).map((tab) => (
+            {(['homepage', 'path', 'artworks', 'prints', 'exhibitions', 'gallery', 'artist', 'contact', 'collectors'] as const).map((tab) => (
               <Button
                 key={tab}
                 variant="ghost"
@@ -2064,6 +2070,81 @@ export default function AdminPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Collectors Tab */}
+        {activeTab === 'collectors' && (
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
+            <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-8 py-6 border-b border-slate-200/50">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-semibold text-slate-900">Collector List</h3>
+                  <p className="text-sm text-slate-600">
+                    People who joined from the homepage “Join the Collector List” form.
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700">
+                  {collectors.length} {collectors.length === 1 ? "email" : "emails"}
+                </span>
+              </div>
+            </div>
+            <div className="p-8">
+              {collectorsLoading ? (
+                <p className="text-sm text-slate-500">Loading…</p>
+              ) : collectors.length === 0 ? (
+                <p className="text-sm text-slate-400 italic">
+                  No signups yet. Emails from the homepage “Join the Collector List” form will appear here.
+                </p>
+              ) : (
+                <>
+                  <div className="overflow-hidden rounded-xl border border-slate-200">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Email</th>
+                          <th className="px-4 py-3 font-medium">Joined</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {collectors.map((c) => (
+                          <tr key={c.id} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 text-slate-800">
+                              <a href={`mailto:${c.email}`} className="hover:underline">
+                                {c.email}
+                              </a>
+                            </td>
+                            <td className="px-4 py-3 text-slate-500">
+                              {new Date(c.createdAt).toLocaleDateString(undefined, {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-6">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(collectors.map((c) => c.email).join("\n"));
+                        toast({
+                          title: "Emails copied",
+                          description: `${collectors.length} email${collectors.length === 1 ? "" : "s"} copied to clipboard`,
+                        });
+                      }}
+                    >
+                      Copy all emails
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

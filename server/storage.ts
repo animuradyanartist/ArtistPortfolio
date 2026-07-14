@@ -1,5 +1,6 @@
 import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, contactSettings, galleryPhotos, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback, type ContactSettings, type InsertContactSettings, type GalleryPhoto, type InsertGalleryPhoto } from "@shared/schema";
 import { pathSettings, type PathSettings, type InsertPathSettings } from "@shared/pathSchema";
+import { collectors, type Collector } from "@shared/schema";
 import { db, pool } from "./db";
 
 // Self-heal for schema-added artworks columns (`category`, `seo_slug`): if an
@@ -25,7 +26,7 @@ async function healArtworkOp<T>(run: () => Promise<T>): Promise<T> {
     return await run();
   }
 }
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 
@@ -75,6 +76,10 @@ export interface IStorage {
   createFeedback(feedback: InsertFeedback): Promise<Feedback>;
   getAllFeedback(): Promise<Feedback[]>;
 
+  // Collector List
+  addCollector(email: string): Promise<Collector>;
+  getAllCollectors(): Promise<Collector[]>;
+
   // Contact Settings
   getContactSettings(): Promise<ContactSettings | undefined>;
   updateContactSettings(settings: InsertContactSettings): Promise<ContactSettings>;
@@ -103,6 +108,8 @@ export class MemStorage implements IStorage {
   private contactSettings: ContactSettings | undefined;
   private feedbacks: Map<number, Feedback>;
   private galleryPhotos: Map<number, GalleryPhoto>;
+  private collectors: Collector[] = [];
+  private currentCollectorId = 1;
   private currentUserId: number;
   private currentArtworkId: number;
   private currentPrintId: number;
@@ -614,6 +621,18 @@ export class MemStorage implements IStorage {
     return Array.from(this.feedbacks.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
+  async addCollector(email: string): Promise<Collector> {
+    const existing = this.collectors.find((c) => c.email.toLowerCase() === email.toLowerCase());
+    if (existing) return existing;
+    const collector: Collector = { id: this.currentCollectorId++, email, createdAt: new Date() };
+    this.collectors.push(collector);
+    return collector;
+  }
+
+  async getAllCollectors(): Promise<Collector[]> {
+    return [...this.collectors].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
   async getContactSettings(): Promise<ContactSettings | undefined> {
     return this.contactSettings;
   }
@@ -990,6 +1009,17 @@ export class DatabaseStorage implements IStorage {
 
   async getAllFeedback(): Promise<Feedback[]> {
     return await db.select().from(feedback).orderBy(feedback.createdAt);
+  }
+
+  async addCollector(email: string): Promise<Collector> {
+    const [existing] = await db.select().from(collectors).where(eq(collectors.email, email));
+    if (existing) return existing;
+    const [created] = await db.insert(collectors).values({ email }).returning();
+    return created;
+  }
+
+  async getAllCollectors(): Promise<Collector[]> {
+    return await db.select().from(collectors).orderBy(desc(collectors.createdAt));
   }
 
   async getContactSettings(): Promise<ContactSettings | undefined> {
