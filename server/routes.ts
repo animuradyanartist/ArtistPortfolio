@@ -1026,10 +1026,10 @@ Crawl-delay: 1
       const artworks = await storage.getAllArtworks();
       const today = new Date().toISOString().split('T')[0];
 
-      // Static public pages — /prints is excluded (client redirects it to /)
+      // Static public pages — /prints is excluded (client redirects it to /),
+      // /about is hidden for now (route still works, just not promoted/linked)
       const staticPages = [
         { url: '/', priority: '1.0', changefreq: 'weekly' },
-        { url: '/about', priority: '0.8', changefreq: 'monthly' },
         { url: '/artworks', priority: '0.9', changefreq: 'weekly' },
         { url: '/exhibitions', priority: '0.8', changefreq: 'monthly' },
         { url: '/gallery', priority: '0.8', changefreq: 'monthly' },

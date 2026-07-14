@@ -267,9 +267,6 @@ export default function SeoArtworkPage() {
               <Link href="/artworks" className="text-sm text-deep-blue hover:underline underline-offset-2">
                 Browse all paintings
               </Link>
-              <Link href="/about" className="text-sm text-deep-blue hover:underline underline-offset-2">
-                Learn about Ani Muradyan
-              </Link>
               <Link href="/contact" className="text-sm text-deep-blue hover:underline underline-offset-2">
                 Contact the artist
               </Link>

@@ -96,13 +96,6 @@ export default function GalleryPage() {
               className="border-b border-stone-400 hover:text-stone-900 hover:border-stone-800 transition-colors"
             >
               collection of original paintings
-            </Link>{" "}
-            or{" "}
-            <Link
-              href="/about"
-              className="border-b border-stone-400 hover:text-stone-900 hover:border-stone-800 transition-colors"
-            >
-              learn about the artist
             </Link>
             .
           </p>

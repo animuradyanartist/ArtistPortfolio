@@ -193,10 +193,7 @@ export default function ArtworksPage() {
       {/* ── Footer note ────────────────────────────────────── */}
       <section className="px-6 pb-24 text-center">
         <p className="text-sm text-stone-500">
-          <Link href="/about" className="border-b border-stone-400 hover:text-stone-900 hover:border-stone-800 transition-colors">
-            Learn about Ani Muradyan
-          </Link>{" "}
-          and her practice, or browse the{" "}
+          Browse the{" "}
           <Link href="/gallery" className="border-b border-stone-400 hover:text-stone-900 hover:border-stone-800 transition-colors">
             exhibition gallery
           </Link>

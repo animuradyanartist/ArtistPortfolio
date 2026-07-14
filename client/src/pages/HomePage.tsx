@@ -472,7 +472,6 @@ export default function HomePage() {
             <ul className="space-y-2 text-sm text-stone-700">
               <li><Link href="/artworks" className="hover:text-stone-900 transition-colors">Originals</Link></li>
               <li><Link href="/prints" className="hover:text-stone-900 transition-colors">Prints</Link></li>
-              <li><Link href="/about" className="hover:text-stone-900 transition-colors">About</Link></li>
               <li><Link href="/exhibitions" className="hover:text-stone-900 transition-colors">Exhibitions</Link></li>
               <li><Link href="/gallery" className="hover:text-stone-900 transition-colors">Gallery</Link></li>
             </ul>

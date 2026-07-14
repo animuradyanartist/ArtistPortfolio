@@ -760,7 +760,7 @@ export default function PathPage() {
 
             <div className="invite__secondary">
               <Link href="/artworks" className="btn btn--ghost">View Original Paintings</Link>
-              <Link href="/about" className="btn btn--ghost">Read About the Artist</Link>
+              <Link href="/exhibitions" className="btn btn--ghost">View Exhibitions</Link>
             </div>
           </div>
           <p className="folio">— 16 —</p>
