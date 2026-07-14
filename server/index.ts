@@ -108,21 +108,38 @@ app.use((req, res, next) => {
     }
 
     // One-time content merge: add the exhibitions listed on the artist's
-    // Singulart profile that aren't already in the DB. Idempotent — matched by
-    // (title, year), so it never duplicates and it won't resurrect an entry
-    // the admin deletes under a different title/year. Safe to remove once run.
+    // Singulart profile. Guarded by an app_migrations flag so it runs EXACTLY
+    // ONCE, ever. After that, deploys never touch exhibitions again — so any
+    // exhibition the artist later adds, edits, or deletes in the admin sticks
+    // and is never reset or resurrected by a deploy.
     try {
-      const singulartExhibitions = [
-        { title: "Woman. Love. Harmony", type: "group", venue: "Russian Museum of Art", location: "Armenia, Yerevan", year: 2026 },
-        { title: "Solo Art Exhibition", type: "solo", venue: "", location: "Armenia, Yerevan", year: 2024 },
-        { title: "Christmas Art Fair", type: "group", venue: "Liver Gallery", location: "Armenia, Yerevan", year: 2023 },
-      ];
-      for (const ex of singulartExhibitions) {
+      await pool.query(
+        `CREATE TABLE IF NOT EXISTS app_migrations (
+          key text PRIMARY KEY,
+          applied_at timestamp NOT NULL DEFAULT now()
+        )`
+      );
+      const { rows } = await pool.query(
+        `SELECT 1 FROM app_migrations WHERE key = $1`,
+        ["singulart_exhibitions_merge_v1"]
+      );
+      if (rows.length === 0) {
+        const singulartExhibitions = [
+          { title: "Woman. Love. Harmony", type: "group", venue: "Russian Museum of Art", location: "Armenia, Yerevan", year: 2026 },
+          { title: "Solo Art Exhibition", type: "solo", venue: "", location: "Armenia, Yerevan", year: 2024 },
+          { title: "Christmas Art Fair", type: "group", venue: "Liver Gallery", location: "Armenia, Yerevan", year: 2023 },
+        ];
+        for (const ex of singulartExhibitions) {
+          await pool.query(
+            `INSERT INTO exhibitions (title, type, venue, location, year)
+             SELECT $1, $2, $3, $4, $5
+             WHERE NOT EXISTS (SELECT 1 FROM exhibitions WHERE title = $1 AND year = $5)`,
+            [ex.title, ex.type, ex.venue, ex.location, ex.year]
+          );
+        }
         await pool.query(
-          `INSERT INTO exhibitions (title, type, venue, location, year)
-           SELECT $1, $2, $3, $4, $5
-           WHERE NOT EXISTS (SELECT 1 FROM exhibitions WHERE title = $1 AND year = $5)`,
-          [ex.title, ex.type, ex.venue, ex.location, ex.year]
+          `INSERT INTO app_migrations (key) VALUES ($1) ON CONFLICT DO NOTHING`,
+          ["singulart_exhibitions_merge_v1"]
         );
       }
     } catch (err) {
