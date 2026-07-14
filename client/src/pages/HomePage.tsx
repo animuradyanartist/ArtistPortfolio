@@ -56,6 +56,20 @@ export default function HomePage() {
     landscapeCard,
   ].filter(Boolean) as Artwork[];
 
+  // Admin-managed "Where the work lives" images (uploaded via the admin tool).
+  // Each item is { image, caption }. When set, these replace the fallback
+  // mock-up below. Parsed defensively so bad/old data never breaks the page.
+  const roomItems: { image: string; caption?: string }[] = (() => {
+    try {
+      const parsed = JSON.parse(homepageSettings?.roomItems || "[]");
+      return Array.isArray(parsed)
+        ? parsed.filter((x) => x && typeof x.image === "string" && x.image.trim())
+        : [];
+    } catch {
+      return [];
+    }
+  })();
+
   const recentExhibitions = [...exhibitions]
     .sort((a, b) => (b.year || 0) - (a.year || 0))
     .slice(0, 7);
@@ -266,7 +280,7 @@ export default function HomePage() {
       </section>
 
       {/* ── Where the work lives ─────────────────────────────── */}
-      {roomArtworks.length > 0 && (
+      {(roomItems.length > 0 || roomArtworks.length > 0) && (
         <section className="py-20 md:py-28 px-6">
           <div className="mx-auto max-w-6xl">
             <Eyebrow>In Your Space</Eyebrow>
@@ -278,35 +292,55 @@ export default function HomePage() {
               day and settle into the life around it.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {roomArtworks.map((artwork, i) => (
-                <figure key={artwork.id}>
-                  {/* CSS room mock-up: wall, framed painting, floor */}
-                  <div
-                    className="relative aspect-[16/10] overflow-hidden"
-                    style={{
-                      background:
-                        i % 2 === 0
-                          ? "linear-gradient(to bottom, #d8cfc4 78%, #a89a89 78%, #93857a 100%)"
-                          : "linear-gradient(to bottom, #d6d6d2 78%, #a4988c 78%, #8f8378 100%)",
-                    }}
-                  >
-                    <div className="absolute left-1/2 top-[12%] w-[34%] -translate-x-1/2 bg-white p-[3%] shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
-                      <img
-                        src={artwork.images[0]}
-                        alt={`${artwork.title} shown in an interior`}
-                        className="block w-full"
-                        loading="lazy"
-                      />
-                    </div>
-                  </div>
-                  <figcaption className="font-playfair italic text-xs text-stone-500 mt-3">
-                    “{artwork.title}”{" "}
-                    {artwork.availability === "sold"
-                      ? "— in a private collection"
-                      : "— available as an original oil painting"}
-                  </figcaption>
-                </figure>
-              ))}
+              {roomItems.length > 0
+                ? // Admin-uploaded photos: show them directly, no mock-up frame.
+                  roomItems.map((item, i) => (
+                    <figure key={i}>
+                      <div className="aspect-[16/10] overflow-hidden bg-stone-200 shadow-[0_18px_40px_rgba(0,0,0,0.18)]">
+                        <img
+                          src={item.image}
+                          alt={item.caption || "Ani Muradyan painting shown in an interior"}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      {item.caption?.trim() && (
+                        <figcaption className="font-playfair italic text-xs text-stone-500 mt-3">
+                          {item.caption}
+                        </figcaption>
+                      )}
+                    </figure>
+                  ))
+                : // Fallback: CSS room mock-up with a couple of paintings.
+                  roomArtworks.map((artwork, i) => (
+                    <figure key={artwork.id}>
+                      {/* CSS room mock-up: wall, framed painting, floor */}
+                      <div
+                        className="relative aspect-[16/10] overflow-hidden"
+                        style={{
+                          background:
+                            i % 2 === 0
+                              ? "linear-gradient(to bottom, #d8cfc4 78%, #a89a89 78%, #93857a 100%)"
+                              : "linear-gradient(to bottom, #d6d6d2 78%, #a4988c 78%, #8f8378 100%)",
+                        }}
+                      >
+                        <div className="absolute left-1/2 top-[12%] w-[34%] -translate-x-1/2 bg-white p-[3%] shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
+                          <img
+                            src={artwork.images[0]}
+                            alt={`${artwork.title} shown in an interior`}
+                            className="block w-full"
+                            loading="lazy"
+                          />
+                        </div>
+                      </div>
+                      <figcaption className="font-playfair italic text-xs text-stone-500 mt-3">
+                        “{artwork.title}”{" "}
+                        {artwork.availability === "sold"
+                          ? "— in a private collection"
+                          : "— available as an original oil painting"}
+                      </figcaption>
+                    </figure>
+                  ))}
             </div>
           </div>
         </section>

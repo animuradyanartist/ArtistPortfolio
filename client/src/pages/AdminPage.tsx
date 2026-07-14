@@ -40,6 +40,9 @@ export default function AdminPage() {
   const [draggedArtwork, setDraggedArtwork] = useState<number | null>(null);
   const [dragOverArtwork, setDragOverArtwork] = useState<number | null>(null);
 
+  // "Where the work lives" homepage section — admin-managed list of {image, caption}
+  const [roomItems, setRoomItems] = useState<{ image: string; caption: string }[]>([]);
+
   // Exhibition editing state
   const [editingExhibitionId, setEditingExhibitionId] = useState<number | null>(null);
 
@@ -236,6 +239,18 @@ export default function AdminPage() {
   useEffect(() => {
     if (homepageSettings) {
       homepageForm.reset(homepageSettings);
+      try {
+        const parsed = JSON.parse((homepageSettings as any).roomItems || "[]");
+        setRoomItems(
+          Array.isArray(parsed)
+            ? parsed
+                .filter((x: any) => x && typeof x.image === "string")
+                .map((x: any) => ({ image: x.image, caption: x.caption || "" }))
+            : []
+        );
+      } catch {
+        setRoomItems([]);
+      }
     }
   }, [homepageSettings, homepageForm]);
 
@@ -561,7 +576,10 @@ export default function AdminPage() {
 
   // Form handlers
   const handleHomepageSubmit = (data: any) => {
-    updateHomepageMutation.mutate(data);
+    // Persist the "Where the work lives" list as a JSON string, dropping any
+    // rows without an image.
+    const cleanedRoom = roomItems.filter((r) => r.image?.trim());
+    updateHomepageMutation.mutate({ ...data, roomItems: JSON.stringify(cleanedRoom) });
   };
 
   const handleArtistSubmit = (data: any) => {
@@ -893,8 +911,116 @@ export default function AdminPage() {
                       )}
                     />
 
+                    {/* "Where the work lives" section images */}
+                    <div className="border-t border-slate-200 pt-6">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="text-base font-semibold text-slate-900">
+                          “Where the work lives” images
+                        </h4>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setRoomItems((prev) => [...prev, { image: "", caption: "" }])
+                          }
+                        >
+                          Add image
+                        </Button>
+                      </div>
+                      <p className="text-sm text-slate-500 mb-4">
+                        Photos shown in the “Where the work lives” section of the homepage — e.g. your
+                        paintings hanging in a room. Upload an image and add an optional caption. Leave
+                        this empty to show the default paintings instead.
+                      </p>
+
+                      {roomItems.length === 0 ? (
+                        <p className="text-sm text-slate-400 italic">
+                          No images yet — the homepage shows the default paintings.
+                        </p>
+                      ) : (
+                        <div className="space-y-4">
+                          {roomItems.map((item, i) => (
+                            <div
+                              key={i}
+                              className="flex gap-4 items-start rounded-xl border border-slate-200 p-4"
+                            >
+                              <div className="w-28 h-20 shrink-0 rounded border bg-slate-100 overflow-hidden flex items-center justify-center">
+                                {item.image ? (
+                                  <img
+                                    src={item.image}
+                                    alt={`Room image ${i + 1}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-xs text-slate-400">No image</span>
+                                )}
+                              </div>
+                              <div className="flex-1 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    id={`room-image-upload-${i}`}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file)
+                                        handleImageUpload(file, (path) =>
+                                          setRoomItems((prev) =>
+                                            prev.map((r, idx) =>
+                                              idx === i ? { ...r, image: path } : r
+                                            )
+                                          )
+                                        );
+                                    }}
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      document
+                                        .getElementById(`room-image-upload-${i}`)
+                                        ?.click()
+                                    }
+                                    disabled={uploadImageMutation.isPending}
+                                  >
+                                    <Upload className="w-4 h-4 mr-2" />
+                                    {item.image ? "Replace image" : "Upload image"}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700"
+                                    onClick={() =>
+                                      setRoomItems((prev) => prev.filter((_, idx) => idx !== i))
+                                    }
+                                  >
+                                    Remove
+                                  </Button>
+                                </div>
+                                <Input
+                                  placeholder="Caption (optional)"
+                                  value={item.caption}
+                                  onChange={(e) =>
+                                    setRoomItems((prev) =>
+                                      prev.map((r, idx) =>
+                                        idx === i ? { ...r, caption: e.target.value } : r
+                                      )
+                                    )
+                                  }
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     <Button
-                      type="submit" 
+                      type="submit"
                       disabled={updateHomepageMutation.isPending}
                       className="h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl transition-all duration-200"
                     >

@@ -68,6 +68,9 @@ export const homepageSettings = pgTable("homepage_settings", {
   heroQuote: text("hero_quote").notNull(),
   heroImage: text("hero_image").notNull(),
   featuredArtworkIds: text("featured_artwork_ids").array().notNull(),
+  // "Where the work lives" section — a JSON array of { image, caption }.
+  // Nullable so older rows keep working; admin manages it via the homepage tab.
+  roomItems: text("room_items"),
 });
 
 export const artistBio = pgTable("artist_bio", {

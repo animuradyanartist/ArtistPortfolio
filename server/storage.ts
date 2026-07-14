@@ -129,7 +129,8 @@ export class MemStorage implements IStorage {
       id: 1,
       heroQuote: "Art must bring hope into people's lives.",
       heroImage: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080",
-      featuredArtworkIds: ["1", "2", "3"]
+      featuredArtworkIds: ["1", "2", "3"],
+      roomItems: null,
     };
 
     // Initialize with default artist bio

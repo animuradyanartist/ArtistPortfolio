@@ -95,6 +95,8 @@ app.use((req, res, next) => {
     try {
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS category text`);
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS seo_slug text`);
+      // "Where the work lives" section content (JSON array of {image, caption}).
+      await pool.query(`ALTER TABLE homepage_settings ADD COLUMN IF NOT EXISTS room_items text`);
     } catch (err) {
       console.error("[boot] Failed to ensure artworks columns:", err);
     }
