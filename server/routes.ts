@@ -1166,6 +1166,97 @@ Crawl-delay: 1
     // Serve static assets (JS, CSS, images) without auto-serving index.html
     app.use(express.static(distPath, { index: false }));
 
+    const escAttr = (s: string) =>
+      String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // Resolve the artwork behind a detail URL (/artworks/<slug>-<id>,
+    // /artworks/<id>, or a bare SEO slug /<seoSlug>). Mirrors the API's
+    // resolution order and prefers cheap indexed lookups.
+    const RESERVED_PATHS = new Set([
+      '', 'artworks', 'about', 'path', 'exhibitions', 'gallery', 'contact',
+      'admin', 'prints', 'img', 'sitemap.xml', 'image-sitemap.xml', 'robots.txt', 'favicon.ico',
+    ]);
+    const resolveArtworkForPath = async (pathname: string) => {
+      let param: string | null = null;
+      if (pathname.startsWith('/artworks/')) param = pathname.slice('/artworks/'.length);
+      else {
+        const seg = pathname.replace(/^\//, '');
+        if (seg && !seg.includes('/')) param = seg;
+      }
+      if (!param) return null;
+      param = decodeURIComponent(param.split('?')[0].split('#')[0]);
+      if (!param || RESERVED_PATHS.has(param)) return null;
+      if (/^\d+$/.test(param)) return (await storage.getArtwork(parseInt(param))) || null;
+      const bySeo = await storage.getArtworkBySeoSlug(param);
+      if (bySeo) return bySeo;
+      const trailing = param.match(/-(\d+)$/);
+      if (trailing) {
+        const byId = await storage.getArtwork(parseInt(trailing[1]));
+        if (byId) return byId;
+      }
+      const all = await storage.getAllArtworks();
+      return all.find((a) => a.slug === param || toSlug(a.title) === param) || null;
+    };
+
+    // Rewrite the shared <head> tags (title, description, OG, Twitter,
+    // canonical) to the specific painting + add VisualArtwork JSON-LD, so
+    // shared links and crawlers show the actual work, not the generic home page.
+    const injectArtworkMeta = (html: string, a: any) => {
+      const medium = a.medium || 'oil on canvas';
+      const bits = [a.dimensions, a.year ? String(a.year) : null].filter(Boolean).join(', ');
+      const availLine =
+        a.availability === 'sold'
+          ? 'This original work is in a private collection.'
+          : 'Original painting available — inquire to acquire.';
+      const title = `${a.title} — Original ${medium} Painting by Ani Muradyan`;
+      const desc = (a.description && a.description.trim())
+        ? a.description.trim().replace(/\s+/g, ' ').slice(0, 300)
+        : `${a.title}, an original ${medium} painting${bits ? ` (${bits})` : ''} by Armenian contemporary artist Ani Muradyan. ${availLine}`;
+      const raw = Array.isArray(a.images) ? a.images[0] : undefined;
+      const image = raw && /^https?:\/\//i.test(raw) ? raw : `${SEO_BASE_URL}/img/artwork/${a.id}/0`;
+      const url = `${SEO_BASE_URL}/artworks/${toSlug(a.title)}-${a.id}`;
+
+      const setMeta = (h: string, sel: string, val: string) => {
+        const re = new RegExp(`(<meta\\s+${sel}\\s+content=")[^"]*(">)`, 'i');
+        return re.test(h) ? h.replace(re, `$1${escAttr(val)}$2`) : h;
+      };
+      html = html.replace(/<title>[^<]*<\/title>/i, `<title>${escAttr(title)}</title>`);
+      html = setMeta(html, 'name="title"', title);
+      html = setMeta(html, 'name="description"', desc);
+      html = setMeta(html, 'property="og:title"', title);
+      html = setMeta(html, 'property="og:description"', desc);
+      html = setMeta(html, 'property="og:image"', image);
+      html = setMeta(html, 'property="og:url"', url);
+      html = setMeta(html, 'property="og:type"', 'article');
+      html = setMeta(html, 'name="twitter:title"', title);
+      html = setMeta(html, 'name="twitter:description"', desc);
+      html = setMeta(html, 'name="twitter:image"', image);
+      html = setMeta(html, 'name="twitter:url"', url);
+      html = html.replace(/<link rel="canonical"[^>]*>/i, `<link rel="canonical" href="${escAttr(url)}">`);
+
+      const jsonld: Record<string, any> = {
+        '@context': 'https://schema.org',
+        '@type': 'VisualArtwork',
+        name: a.title,
+        image,
+        url,
+        artform: 'Painting',
+        artMedium: medium,
+        artworkSurface: 'Canvas',
+        creator: { '@type': 'Person', name: 'Ani Muradyan', url: SEO_BASE_URL },
+      };
+      if (a.year) jsonld.dateCreated = String(a.year);
+      if (a.price && a.availability === 'available') {
+        jsonld.offers = {
+          '@type': 'Offer', price: a.price, priceCurrency: 'EUR',
+          availability: 'https://schema.org/InStock', url,
+        };
+      }
+      const jsonStr = JSON.stringify(jsonld).replace(/</g, '\\u003c');
+      html = html.replace('</head>', `  <script type="application/ld+json">${jsonStr}</script>\n</head>`);
+      return html;
+    };
+
     // Catch-all: serve index.html with per-request canonical URL injected
     app.get('*', async (req, res, next) => {
       // Skip paths with file extensions (assets already handled above)
@@ -1216,6 +1307,15 @@ Crawl-delay: 1
             html = html.replace('<div id="root">', ssrSection + '<div id="root">');
           } catch (e) {
             console.error('[SSR] /artworks prerender failed:', e);
+          }
+        } else {
+          // Artwork detail pages: rewrite title/description/OG/Twitter tags +
+          // add VisualArtwork JSON-LD so shared links and crawlers see the piece.
+          try {
+            const artwork = await resolveArtworkForPath(req.path);
+            if (artwork) html = injectArtworkMeta(html, artwork);
+          } catch (e) {
+            console.error('[SSR] artwork meta injection failed:', e);
           }
         }
 
