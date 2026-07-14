@@ -46,7 +46,11 @@ export default function HomePage() {
   const landscapeCard =
     artworks.find((a) => a.title === "Endless Horizon") || artworks[0];
 
-  const collectArtworks = artworks.slice(0, 6);
+  // "Available Original Paintings" must only show pieces a collector can
+  // actually buy — never sold (or reserved) works.
+  const collectArtworks = artworks
+    .filter((a) => a.availability === "available")
+    .slice(0, 6);
   const roomArtworks = [
     artworks.find((a) => a.title === "Silent Bliss") || artworks[2],
     landscapeCard,
