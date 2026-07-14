@@ -14,26 +14,21 @@ import { artworkCategory } from "@/lib/artworkCategory";
 
 const CSS = `
 .pp-root {
-  --ground:#F4EFE7; --surface:#FBF8F2; --ink:#2B2926; --ink-soft:#55514A;
-  --bluegrey:#77858E; --beige:#C9BCA6; --stone:#E2D9CA; --stone-deep:#D3C7B2;
-  --coral:#BE7C68; --coral-soft:rgba(190,124,104,0.16);
+  /* palette + type matched to the Home / Originals editorial style:
+     cream ground, warm stone text, Playfair headings, Poppins body,
+     neutral dark-stone accents (no separate accent colour). */
+  --ground:#f5f1ea; --surface:#fbf8f2; --ink:#1c1917; --ink-soft:#57534e;
+  --bluegrey:#78716c; --beige:#a8a29e; --stone:#d6d3d1; --stone-deep:#a8a29e;
+  --coral:#1c1917; --coral-soft:rgba(28,25,23,0.07);
   --c1-a:#4B5259; --c1-b:#2E3238; --c1-c:#6C6357;
   --c2-a:#AEB9BC; --c2-b:#DDD6C7; --c2-c:#C9D2D2;
   --c3-a:#C88E76; --c3-b:#E4DBCB; --c3-c:#9FB0B4;
   --measure:60ch;
-  --serif:'Baskerville','Hoefler Text','Cormorant Garamond',Georgia,'Times New Roman',serif;
-  --sans:'Helvetica Neue','Inter',ui-sans-serif,system-ui,sans-serif;
+  --serif:'Playfair Display',Georgia,'Times New Roman',serif;
+  --sans:'Poppins',ui-sans-serif,system-ui,sans-serif;
   position:relative; background:var(--ground); color:var(--ink);
-  font-family:var(--serif); -webkit-font-smoothing:antialiased; line-height:1.6;
+  font-family:var(--sans); -webkit-font-smoothing:antialiased; line-height:1.6;
   overflow-x:clip; min-height:100vh;
-}
-html.dark .pp-root {
-  --ground:#181513; --surface:#211D1A; --ink:#EDE7DC; --ink-soft:#B7AE9F;
-  --bluegrey:#93A0A8; --beige:#B6A98F; --stone:#37312A; --stone-deep:#453D33;
-  --coral:#CE8A74; --coral-soft:rgba(206,138,116,0.20);
-  --c1-a:#3A4046; --c1-b:#1C1F23; --c1-c:#4E463C;
-  --c2-a:#899397; --c2-b:#4C4F4C; --c2-c:#5D6A6C;
-  --c3-a:#B07A62; --c3-b:#574C3F; --c3-c:#6B7C80;
 }
 html.pp-snap { scroll-snap-type:y proximity; scroll-behavior:smooth; }
 @media (prefers-reduced-motion:reduce) { html.pp-snap { scroll-behavior:auto; } }
@@ -88,9 +83,9 @@ html.dark .pp-root::before { mix-blend-mode:screen; opacity:0.22; }
 .pp-root .folio { position:absolute; bottom:clamp(1.1rem,2.6vh,1.8rem); left:0; right:0; text-align:center; font-family:var(--sans); font-size:0.62rem; letter-spacing:0.24em; color:var(--beige); pointer-events:none; }
 
 .pp-root .act { position:relative; }
-.pp-root .act--one { background:color-mix(in srgb, var(--bluegrey) 8%, var(--ground)); }
+.pp-root .act--one { background:#f8f4ed; }
 .pp-root .act--two { background:var(--ground); }
-.pp-root .act--three { background:color-mix(in srgb, var(--coral) 6%, var(--ground)); }
+.pp-root .act--three { background:#eee9df; }
 
 .pp-root .cover { text-align:center; justify-items:center; padding-block:clamp(2rem,4.5vh,3.5rem); }
 .pp-root .cover__title { font-family:var(--serif); font-weight:400; font-size:clamp(3.2rem,9vw,6.5rem); line-height:0.98; letter-spacing:-0.01em; margin:1.4rem 0 0; text-wrap:balance; }
@@ -147,7 +142,7 @@ html.dark .pp-root .bloom { opacity:0.4; }
 .pp-root .when { font-family:var(--sans); font-size:0.7rem; font-weight:500; letter-spacing:0.26em; text-transform:uppercase; color:var(--coral); margin:0 0 0.7rem; }
 .pp-root .story__title { position:relative; font-family:var(--serif); font-weight:400; font-size:clamp(1.9rem,4.2vw,3rem); line-height:1.05; color:var(--ink); margin:0 0 1.4rem; padding-top:1.1rem; text-wrap:balance; }
 .pp-root .story__title::before { content:""; position:absolute; top:0; left:0.05em; width:2.2rem; height:2px; background:var(--coral); }
-.pp-root .story__copy .body p:first-of-type::first-letter { font-size:2.9em; line-height:0.85; float:left; padding:0.08em 0.12em 0 0; color:var(--ink); }
+.pp-root .story__copy .body p:first-of-type::first-letter { font-family:var(--serif); font-size:2.9em; line-height:0.85; float:left; padding:0.08em 0.12em 0 0; color:var(--ink); }
 .pp-root .bridge { text-align:center; margin:clamp(1.5rem,4vh,2.5rem) auto 0; max-width:40ch; }
 .pp-root .bridge__line { display:block; width:1px; height:26px; margin:0 auto 0.8rem; background:linear-gradient(transparent,var(--stone-deep)); }
 .pp-root .bridge__say { font-family:var(--serif); font-style:italic; font-size:clamp(1.05rem,2vw,1.35rem); color:var(--ink-soft); margin:0; text-wrap:balance; }
@@ -191,7 +186,7 @@ html.dark .pp-root .bloom { opacity:0.4; }
 .pp-root .invite__text p { margin:0 0 1.4em; }
 .pp-root .invite__text p:last-child { margin-bottom:0; }
 .pp-root .invite__form { display:flex; flex-wrap:wrap; justify-content:center; gap:0.7rem; margin-top:2.2rem; }
-.pp-root .invite__form input[type="email"] { font-family:var(--serif); font-size:1.02rem; color:var(--ink); background:var(--surface); border:1px solid var(--stone-deep); border-radius:999px; padding:0.9rem 1.4rem; min-width:min(340px,78vw); outline:none; transition:border-color 0.35s ease, box-shadow 0.35s ease; }
+.pp-root .invite__form input[type="email"] { font-family:var(--sans); font-size:1rem; color:var(--ink); background:var(--surface); border:1px solid var(--stone-deep); border-radius:999px; padding:0.9rem 1.4rem; min-width:min(340px,78vw); outline:none; transition:border-color 0.35s ease, box-shadow 0.35s ease; }
 .pp-root .invite__form input[type="email"]::placeholder { color:var(--bluegrey); font-style:italic; }
 .pp-root .invite__form input[type="email"]:focus { border-color:var(--coral); box-shadow:0 0 0 4px var(--coral-soft); }
 .pp-root .invite__small { font-family:var(--sans); font-size:0.72rem; letter-spacing:0.06em; color:var(--bluegrey); margin:1rem auto 0; max-width:44ch; line-height:1.6; }
