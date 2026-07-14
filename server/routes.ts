@@ -786,18 +786,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/contact", async (req, res) => {
     try {
       const { name, email, subject, message } = req.body;
-      
+
       if (!name || !email || !message) {
         return res.status(400).json({ message: "Name, email, and message are required" });
       }
 
-      // In a real application, you would send the email here
-      // For now, we'll just return success
-      console.log("Contact form submission:", { name, email, subject, message });
-      
+      // Persist the message so it shows up in the admin Messages tab.
+      await storage.addMessage({
+        name: String(name).trim(),
+        email: String(email).trim(),
+        subject: subject ? String(subject).trim() : null,
+        message: String(message).trim(),
+      });
+
       res.json({ message: "Message sent successfully" });
     } catch (error) {
+      console.error("Error saving contact message:", error);
       res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+  app.get("/api/messages", requireAdminAuth, async (req, res) => {
+    try {
+      const list = await storage.getAllMessages();
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
     }
   });
 

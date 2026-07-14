@@ -103,6 +103,15 @@ app.use((req, res, next) => {
         email text NOT NULL,
         created_at timestamp NOT NULL DEFAULT now()
       )`);
+      // Contact-page messages.
+      await pool.query(`CREATE TABLE IF NOT EXISTS messages (
+        id serial PRIMARY KEY,
+        name text NOT NULL,
+        email text NOT NULL,
+        subject text,
+        message text NOT NULL,
+        created_at timestamp NOT NULL DEFAULT now()
+      )`);
     } catch (err) {
       console.error("[boot] Failed to ensure artworks columns:", err);
     }

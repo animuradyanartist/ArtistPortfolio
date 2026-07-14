@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAdmin } from "@/hooks/useAdmin";
 import { apiRequest } from "@/lib/queryClient";
 import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema, insertContactSettingsSchema, insertGalleryPhotoSchema } from "@shared/schema";
-import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings, GalleryPhoto, Collector } from "@shared/schema";
+import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings, GalleryPhoto, Collector, Message } from "@shared/schema";
 import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
@@ -30,7 +30,7 @@ const PATH_IMAGE_SLOTS = [
 export default function AdminPage() {
   const [, setLocation] = useLocation();
   const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<'homepage' | 'path' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact' | 'collectors'>('homepage');
+  const [activeTab, setActiveTab] = useState<'homepage' | 'path' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact' | 'collectors' | 'messages'>('homepage');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
@@ -154,6 +154,12 @@ export default function AdminPage() {
 
   const { data: collectors = [], isLoading: collectorsLoading } = useQuery<Collector[]>({
     queryKey: ["/api/collectors"],
+    enabled: isAuthenticated,
+    staleTime: 60 * 1000,
+  });
+
+  const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
+    queryKey: ["/api/messages"],
     enabled: isAuthenticated,
     staleTime: 60 * 1000,
   });
@@ -779,7 +785,7 @@ export default function AdminPage() {
         {/* Modern Tabs */}
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-2 mb-8">
           <div className="flex space-x-1">
-            {(['homepage', 'path', 'artworks', 'prints', 'exhibitions', 'gallery', 'artist', 'contact', 'collectors'] as const).map((tab) => (
+            {(['homepage', 'path', 'artworks', 'prints', 'exhibitions', 'gallery', 'artist', 'contact', 'collectors', 'messages'] as const).map((tab) => (
               <Button
                 key={tab}
                 variant="ghost"
@@ -2142,6 +2148,63 @@ export default function AdminPage() {
                     </Button>
                   </div>
                 </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Messages Tab */}
+        {activeTab === 'messages' && (
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
+            <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-8 py-6 border-b border-slate-200/50">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-semibold text-slate-900">Messages</h3>
+                  <p className="text-sm text-slate-600">Messages left through the Contact page.</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700">
+                  {messages.length} {messages.length === 1 ? "message" : "messages"}
+                </span>
+              </div>
+            </div>
+            <div className="p-8">
+              {messagesLoading ? (
+                <p className="text-sm text-slate-500">Loading…</p>
+              ) : messages.length === 0 ? (
+                <p className="text-sm text-slate-400 italic">
+                  No messages yet. Messages from the Contact page will appear here.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {messages.map((m) => (
+                    <div key={m.id} className="rounded-xl border border-slate-200 p-5">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <span className="font-medium text-slate-900">{m.name}</span>
+                          <a href={`mailto:${m.email}`} className="text-sm text-blue-700 hover:underline">
+                            {m.email}
+                          </a>
+                        </div>
+                        <span className="text-xs text-slate-400">
+                          {new Date(m.createdAt).toLocaleString(undefined, {
+                            year: "numeric", month: "short", day: "numeric",
+                            hour: "2-digit", minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                      {m.subject && <p className="text-sm font-medium text-slate-700 mb-1">{m.subject}</p>}
+                      <p className="text-sm text-slate-600 whitespace-pre-wrap">{m.message}</p>
+                      <div className="mt-3">
+                        <a
+                          href={`mailto:${m.email}?subject=${encodeURIComponent("Re: " + (m.subject || "Your message"))}`}
+                          className="text-xs text-slate-500 hover:text-slate-800 underline underline-offset-2"
+                        >
+                          Reply by email
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

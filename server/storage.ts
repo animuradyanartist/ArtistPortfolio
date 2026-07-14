@@ -1,6 +1,6 @@
 import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, contactSettings, galleryPhotos, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback, type ContactSettings, type InsertContactSettings, type GalleryPhoto, type InsertGalleryPhoto } from "@shared/schema";
 import { pathSettings, type PathSettings, type InsertPathSettings } from "@shared/pathSchema";
-import { collectors, type Collector } from "@shared/schema";
+import { collectors, type Collector, messages, type Message, type InsertMessage } from "@shared/schema";
 import { db, pool } from "./db";
 
 // Self-heal for schema-added artworks columns (`category`, `seo_slug`): if an
@@ -80,6 +80,10 @@ export interface IStorage {
   addCollector(email: string): Promise<Collector>;
   getAllCollectors(): Promise<Collector[]>;
 
+  // Contact messages
+  addMessage(msg: InsertMessage): Promise<Message>;
+  getAllMessages(): Promise<Message[]>;
+
   // Contact Settings
   getContactSettings(): Promise<ContactSettings | undefined>;
   updateContactSettings(settings: InsertContactSettings): Promise<ContactSettings>;
@@ -110,6 +114,8 @@ export class MemStorage implements IStorage {
   private galleryPhotos: Map<number, GalleryPhoto>;
   private collectors: Collector[] = [];
   private currentCollectorId = 1;
+  private messages: Message[] = [];
+  private currentMessageId = 1;
   private currentUserId: number;
   private currentArtworkId: number;
   private currentPrintId: number;
@@ -633,6 +639,23 @@ export class MemStorage implements IStorage {
     return [...this.collectors].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
+  async addMessage(msg: InsertMessage): Promise<Message> {
+    const record: Message = {
+      id: this.currentMessageId++,
+      name: msg.name,
+      email: msg.email,
+      subject: msg.subject ?? null,
+      message: msg.message,
+      createdAt: new Date(),
+    };
+    this.messages.push(record);
+    return record;
+  }
+
+  async getAllMessages(): Promise<Message[]> {
+    return [...this.messages].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
   async getContactSettings(): Promise<ContactSettings | undefined> {
     return this.contactSettings;
   }
@@ -1020,6 +1043,15 @@ export class DatabaseStorage implements IStorage {
 
   async getAllCollectors(): Promise<Collector[]> {
     return await db.select().from(collectors).orderBy(desc(collectors.createdAt));
+  }
+
+  async addMessage(msg: InsertMessage): Promise<Message> {
+    const [created] = await db.insert(messages).values(msg).returning();
+    return created;
+  }
+
+  async getAllMessages(): Promise<Message[]> {
+    return await db.select().from(messages).orderBy(desc(messages.createdAt));
   }
 
   async getContactSettings(): Promise<ContactSettings | undefined> {

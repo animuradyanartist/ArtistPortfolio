@@ -147,6 +147,16 @@ export const collectors = pgTable('collectors', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Messages left through the Contact page form.
+export const messages = pgTable('messages', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  subject: text('subject'),
+  message: text('message').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 export const galleryPhotos = pgTable('gallery_photos', {
   id: serial('id').primaryKey(),
   title: text('title'),
@@ -186,3 +196,10 @@ export const insertCollectorSchema = createInsertSchema(collectors).omit({
 });
 export type InsertCollector = z.infer<typeof insertCollectorSchema>;
 export type Collector = typeof collectors.$inferSelect;
+
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type Message = typeof messages.$inferSelect;
