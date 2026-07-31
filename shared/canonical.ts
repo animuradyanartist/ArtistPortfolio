@@ -15,8 +15,12 @@ export interface CanonicalArtwork {
   id: number;
 }
 
-/** Title → URL slug. Mirrors toSlug() in server/routes.ts and client lib/seo.ts. */
-export function toCanonicalSlug(title: string): string {
+/**
+ * Title → URL slug. The single source of truth for slugification, shared by
+ * server/routes.ts and client lib/seo.ts (which re-exports it). Behavior is
+ * byte-identical to the previous per-file copies.
+ */
+export function toSlug(title: string): string {
   return title
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "")
@@ -34,7 +38,7 @@ export function toCanonicalSlug(title: string): string {
  */
 export function artworkCanonicalPath(a: CanonicalArtwork): string {
   const seo = a.seoSlug?.trim();
-  return seo ? `/${seo}` : `/artworks/${toCanonicalSlug(a.title)}-${a.id}`;
+  return seo ? `/${seo}` : `/artworks/${toSlug(a.title)}-${a.id}`;
 }
 
 /** The absolute canonical URL for an artwork detail page (base + canonical path). */
