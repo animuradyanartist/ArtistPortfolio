@@ -6,7 +6,7 @@ import fs from "fs";
 import sharp from "sharp";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, prints } from "@shared/schema";
-import { artworkCanonicalUrl } from "@shared/canonical";
+import { artworkCanonicalUrl, toSlug } from "@shared/canonical";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
@@ -1001,15 +1001,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Slug helper
-  function toSlug(title: string): string {
-    return title
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
-  }
+  // Slug helper: toSlug is imported from @shared/canonical (single source).
 
   // SEO Routes
   const SEO_BASE_URL = 'https://animuradyan.com';

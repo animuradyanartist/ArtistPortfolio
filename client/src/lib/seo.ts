@@ -1,3 +1,9 @@
+import { toSlug } from '@shared/canonical';
+
+// Slug logic lives in @shared/canonical (single source of truth); re-exported
+// here so existing `@/lib/seo` importers keep working unchanged.
+export { toSlug };
+
 export const BASE_URL = 'https://animuradyan.com';
 
 export function updateCanonicalUrl(path: string) {
@@ -41,15 +47,6 @@ export function injectJsonLd(id: string, data: object) {
 export function removeJsonLd(id: string) {
   const script = document.getElementById(id);
   if (script) script.remove();
-}
-
-export function toSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
 }
 
 /**
