@@ -6,6 +6,7 @@ import fs from "fs";
 import sharp from "sharp";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, prints } from "@shared/schema";
+import { artworkCanonicalUrl } from "@shared/canonical";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
@@ -1229,7 +1230,10 @@ Crawl-delay: 1
         : `${a.title}, an original ${medium} painting${bits ? ` (${bits})` : ''} by Armenian contemporary artist Ani Muradyan. ${availLine}`;
       const raw = Array.isArray(a.images) ? a.images[0] : undefined;
       const image = raw && /^https?:\/\//i.test(raw) ? raw : `${SEO_BASE_URL}/img/artwork/${a.id}/0`;
-      const url = `${SEO_BASE_URL}/artworks/${toSlug(a.title)}-${a.id}`;
+      // Canonical URL: prefer /{seoSlug} (matches sitemap.xml + client canonical),
+      // fall back to /artworks/{titleSlug}-{id} only when seoSlug is absent.
+      // Feeds BOTH the canonical <link> and og:url below (single source).
+      const url = artworkCanonicalUrl(SEO_BASE_URL, a);
 
       const setMeta = (h: string, sel: string, val: string) => {
         const re = new RegExp(`(<meta\\s+${sel}\\s+content=")[^"]*(">)`, 'i');
