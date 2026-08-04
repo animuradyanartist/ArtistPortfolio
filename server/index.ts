@@ -86,6 +86,27 @@ app.use((req, res, next) => {
     } catch (err) {
       console.error("[boot] Failed to ensure path_settings table:", err);
     }
+    // Ensure the session table exists eagerly. connect-pg-simple only creates it
+    // lazily on the first session write (admin login), so on a freshly-provisioned
+    // database it can be absent — which makes Replit's dev→prod deploy diff want to
+    // DROP it from production. Creating it here with connect-pg-simple's exact
+    // structure keeps the dev and production schemas identical. Idempotent: a no-op
+    // wherever it already exists (e.g. production).
+    try {
+      await pool.query(`CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL COLLATE "default",
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL
+      )`);
+      await pool.query(`DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'session_pkey') THEN
+          ALTER TABLE "session" ADD CONSTRAINT "session_pkey" PRIMARY KEY ("sid");
+        END IF;
+      END $$;`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")`);
+    } catch (err) {
+      console.error("[boot] Failed to ensure session table:", err);
+    }
     // Ensure the schema-added artworks columns exist on the live/workspace
     // table so artwork queries never 500 on an un-migrated database — with no
     // manual db:push (ADD COLUMN IF NOT EXISTS is idempotent). `category` is
