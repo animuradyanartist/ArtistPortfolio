@@ -12,7 +12,13 @@ export const artworks = pgTable("artworks", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   slug: text("slug"),
-  seoSlug: text("seo_slug"),
+  // Production already has a unique index `artworks_seo_slug_unique` (created by
+  // an earlier `.unique()` that was dropped from this file). Re-declaring it —
+  // like `singulart_id` below — keeps the Drizzle diff empty so deploys don't
+  // propose `DROP INDEX artworks_seo_slug_unique`. Multiple NULLs are allowed in
+  // a Postgres unique index, and routes.ts stores empty seoSlug as NULL, so this
+  // never blocks inserts.
+  seoSlug: text("seo_slug").unique(),
   description: text("description").notNull(),
   medium: text("medium").notNull(),
   dimensions: text("dimensions").notNull(),
