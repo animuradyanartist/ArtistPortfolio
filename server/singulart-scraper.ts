@@ -184,7 +184,40 @@ export function parseSingulartPage(html: string): ScrapedArtwork[] {
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
+// Transport for retrieving a Singulart gallery page. Singulart sits behind an
+// AWS WAF JavaScript challenge that blocks plain server-side fetches from a
+// datacenter IP (Replit). When ZYTE_API_KEY is set, we fetch through Zyte's
+// residential/browser rendering (which executes the challenge and returns the
+// rendered HTML); otherwise we fall back to a direct fetch (works only from a
+// residential IP). Only the transport changes here — the parser and the
+// sync/upsert logic downstream are untouched.
 export async function fetchSingulartPage(url: string): Promise<string> {
+  const zyteKey = process.env.ZYTE_API_KEY;
+  if (zyteKey) {
+    const res = await fetch("https://api.zyte.com/v1/extract", {
+      method: "POST",
+      headers: {
+        Authorization: "Basic " + Buffer.from(zyteKey + ":").toString("base64"),
+        "Content-Type": "application/json",
+      },
+      // browserHtml = full browser render; Zyte auto-selects residential IPs
+      // for anti-bot targets like AWS WAF.
+      body: JSON.stringify({ url, browserHtml: true }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Singulart fetch via Zyte failed: ${res.status} ${res.statusText} for ${url}${body ? ` — ${body.slice(0, 200)}` : ""}`,
+      );
+    }
+    const data = (await res.json()) as { browserHtml?: string };
+    if (!data.browserHtml) {
+      throw new Error(`Singulart fetch via Zyte returned no browserHtml for ${url}`);
+    }
+    return data.browserHtml;
+  }
+
+  // Fallback: direct fetch (WAF-blocked from datacenter IPs; ok from residential).
   const res = await fetch(url, {
     headers: {
       "User-Agent": BROWSER_UA,
