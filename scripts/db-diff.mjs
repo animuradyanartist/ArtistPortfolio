@@ -1,10 +1,16 @@
-// Read-only schema comparison of the DEV vs PROD databases.
+// READ-ONLY. Identifies the database that the current shell's DATABASE_URL
+// points at, and reports whether it is the "development / source" database
+// Replit Deploy diffs against production.
 //
-// Replit Deploy generates its "apply to production" migration by diffing the
-// DEVELOPMENT database (DEV_DATABASE_URL, neondb_dev) against PRODUCTION
-// (DATABASE_URL, neondb). Any table that exists in prod but NOT in dev is
-// proposed for DROP. This script shows that divergence so we can confirm the
-// cause before changing anything. It only runs SELECTs — it writes nothing.
+// Background: Replit's built-in PostgreSQL injects a DIFFERENT DATABASE_URL into
+// the WORKSPACE (development) than into the DEPLOYMENT (production). So the dev
+// database is not DEV_DATABASE_URL — it is whatever DATABASE_URL resolves to
+// here in the Shell. Replit's Publish step compares this workspace DB's schema
+// to the production DB and proposes to drop anything prod has that this one
+// lacks.
+//
+// This script writes NOTHING. It prints only host + db name (never the
+// password/token) and the NAMES of DB-related env vars (never their values).
 //
 // Run in the Replit Shell:  node scripts/db-diff.mjs
 import { Pool, neonConfig } from "@neondatabase/serverless";
@@ -12,86 +18,77 @@ import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
 
-const PROD = process.env.DATABASE_URL;
-const DEV = process.env.DEV_DATABASE_URL;
+// The three tables Replit Deploy proposed to DROP from production. They exist in
+// prod (created at runtime) and the deploy drops them because the source DB
+// lacks them. So: a DB MISSING any of these is the dev/source DB, never prod.
+const RUNTIME_TABLES = ["session", "path_settings", "app_migrations"];
 
-if (!PROD) {
-  console.error("DATABASE_URL is not set — cannot read production.");
-  process.exit(1);
-}
-if (!DEV) {
-  console.error(
-    "DEV_DATABASE_URL is not set. That means the workspace shares one DB with prod\n" +
-      "and Replit Deploy should NOT be diffing two databases. Re-check the deploy screen."
-  );
-  process.exit(1);
-}
-if (DEV === PROD) {
-  console.error("DEV_DATABASE_URL === DATABASE_URL — they are the same DB; no diff expected.");
+// 1) Which DB-related env vars exist? (names only — no values printed)
+const dbEnvNames = Object.keys(process.env)
+  .filter((k) => /(DATABASE|POSTGRES|^PG|NEON|REPLIT)/i.test(k))
+  .sort();
+console.log("DB-related env var NAMES present in this shell (values hidden):");
+console.log(dbEnvNames.length ? dbEnvNames.map((n) => "   " + n).join("\n") : "   (none)");
+console.log("");
+
+const url = process.env.DATABASE_URL;
+if (!url) {
+  console.error("DATABASE_URL is not set in this shell — cannot inspect. Stop here and tell me.");
   process.exit(1);
 }
 
-async function inspect(label, connectionString) {
-  const pool = new Pool({ connectionString });
+function identify(u) {
   try {
-    const { rows: tables } = await pool.query(
-      `SELECT table_name FROM information_schema.tables
-       WHERE table_schema = 'public' ORDER BY table_name`
-    );
-    const { rows: idx } = await pool.query(
-      `SELECT indexname FROM pg_indexes
-       WHERE schemaname = 'public' AND tablename = 'artworks' ORDER BY indexname`
-    );
-    const dbName = new URL(connectionString).pathname.slice(1);
-    return {
-      label,
-      dbName,
-      tables: tables.map((r) => r.table_name),
-      artworksIndexes: idx.map((r) => r.indexname),
-    };
-  } finally {
-    await pool.end();
+    const p = new URL(u);
+    return { host: p.hostname, db: p.pathname.slice(1) || "(unknown)" };
+  } catch {
+    return { host: "(unparseable)", db: "(unparseable)" };
   }
 }
+const id = identify(url);
 
-const prod = await inspect("PROD", PROD);
-const dev = await inspect("DEV ", DEV);
-
-const line = "─".repeat(64);
-console.log(line);
-console.log(`PROD database: ${prod.dbName}`);
-console.log(`DEV  database: ${dev.dbName}`);
-console.log(line);
-
-const prodSet = new Set(prod.tables);
-const devSet = new Set(dev.tables);
-
-const prodOnly = prod.tables.filter((t) => !devSet.has(t));
-const devOnly = dev.tables.filter((t) => !prodSet.has(t));
-
-console.log("\nTables in PROD but MISSING from DEV  → Replit Deploy will DROP these from prod:");
-console.log(prodOnly.length ? prodOnly.map((t) => "   ✗ " + t).join("\n") : "   (none)");
-
-console.log("\nTables in DEV but missing from PROD (would be CREATE-d on prod):");
-console.log(devOnly.length ? devOnly.map((t) => "   + " + t).join("\n") : "   (none)");
-
-console.log("\nartworks indexes:");
-console.log("   PROD:", prod.artworksIndexes.join(", ") || "(none)");
-console.log("   DEV :", dev.artworksIndexes.join(", ") || "(none)");
-
-const seo = "artworks_seo_slug_unique";
-const prodHasSeo = prod.artworksIndexes.includes(seo);
-const devHasSeo = dev.artworksIndexes.includes(seo);
-if (prodHasSeo !== devHasSeo) {
-  console.log(
-    `\n   ⚠ '${seo}' exists on ${prodHasSeo ? "PROD" : "DEV"} but not ${prodHasSeo ? "DEV" : "PROD"} → index migration.`
+const pool = new Pool({ connectionString: url });
+try {
+  const { rows: tRows } = await pool.query(
+    `SELECT table_name FROM information_schema.tables
+     WHERE table_schema='public' ORDER BY table_name`
   );
-}
+  const tables = new Set(tRows.map((r) => r.table_name));
+  const { rows: iRows } = await pool.query(
+    `SELECT indexname FROM pg_indexes
+     WHERE schemaname='public' AND tablename='artworks' ORDER BY indexname`
+  );
+  const { rows: cRows } = await pool.query(`SELECT count(*)::int AS n FROM artworks`).catch(() => [{ n: "?" }]);
 
-console.log("\n" + line);
-console.log(
-  prodOnly.length === 0 && prodHasSeo === devHasSeo
-    ? "✅ No prod-only tables and seo index matches — deploy diff should be empty."
-    : "→ Run  node scripts/align-dev-schema.mjs  to add the missing objects to DEV (prod untouched)."
-);
-console.log(line);
+  console.log("DATABASE_URL points at:");
+  console.log(`   host : ${id.host}`);
+  console.log(`   db   : ${id.db}`);
+  console.log(`   artworks rows: ${cRows[0].n}`);
+  console.log("");
+  console.log("Runtime tables (the ones the deploy wants to DROP from prod):");
+  for (const t of RUNTIME_TABLES) {
+    console.log(`   ${tables.has(t) ? "✓ present" : "✗ MISSING"}  ${t}`);
+  }
+  console.log("");
+  console.log("artworks indexes:");
+  console.log("   " + (iRows.map((r) => r.indexname).join(", ") || "(none)"));
+  console.log("");
+
+  const missing = RUNTIME_TABLES.filter((t) => !tables.has(t));
+  const line = "─".repeat(64);
+  console.log(line);
+  if (missing.length > 0) {
+    console.log(
+      `VERDICT: this is the DEVELOPMENT / source database (missing ${missing.join(", ")}).`
+    );
+    console.log("It is SAFE to align — production has these tables and is a different DB.");
+    console.log("Next: node scripts/align-dev-schema.mjs");
+  } else {
+    console.log("VERDICT: this DB already has all runtime tables.");
+    console.log("It is EITHER production OR an already-aligned dev DB. Do NOT align it.");
+    console.log("If the deploy still shows drops, the source DB is elsewhere — send me this output.");
+  }
+  console.log(line);
+} finally {
+  await pool.end();
+}
