@@ -457,15 +457,10 @@ export default function AdminPage() {
     onError: (error: Error) => handleAuthError(error, "Failed to delete artwork"),
   });
 
-  // Singulart import — Singulart now blocks server-side scraping (AWS WAF), so
-  // the admin saves their gallery page from their own browser and uploads the
-  // HTML file(s) here. We read each file as text and POST them to
-  // /api/admin/import-singulart, which parses + upserts them, then refetch.
+  // Singulart sync — POSTs to /api/admin/sync-singulart and refetches /api/artworks.
   const syncSingulartMutation = useMutation({
-    mutationFn: async (pages: string[]) => {
-      const res = await apiRequest("POST", "/api/admin/import-singulart", {
-        pages,
-      });
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/sync-singulart");
       return res.json() as Promise<{
         scrapedCount: number;
         inserted: number;
@@ -476,40 +471,20 @@ export default function AdminPage() {
     onSuccess: (result) => {
       if (result.error) {
         toast({
-          title: "Singulart import failed",
+          title: "Singulart sync failed",
           description: result.error,
           variant: "destructive",
         });
         return;
       }
       toast({
-        title: "Singulart import complete",
-        description: `${result.scrapedCount} found • ${result.inserted} added • ${result.updated} updated`,
+        title: "Singulart sync complete",
+        description: `${result.scrapedCount} scraped • ${result.inserted} added • ${result.updated} updated`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/artworks"] });
     },
-    onError: (error: Error) => handleAuthError(error, "Singulart import failed"),
+    onError: (error: Error) => handleAuthError(error, "Singulart sync failed"),
   });
-
-  // Read the chosen .html file(s) as text and kick off the import.
-  const handleSingulartFiles = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const files = Array.from(e.target.files ?? []);
-    // Reset the input so re-selecting the same file fires onChange again.
-    e.target.value = "";
-    if (files.length === 0) return;
-    try {
-      const pages = await Promise.all(files.map((f) => f.text()));
-      syncSingulartMutation.mutate(pages);
-    } catch {
-      toast({
-        title: "Singulart import failed",
-        description: "Could not read the selected file(s). Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const deletePrintMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/prints/${id}`),
@@ -1171,27 +1146,16 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    id="singulart-html-upload"
-                    type="file"
-                    accept=".html,.htm,text/html"
-                    multiple
-                    className="hidden"
-                    onChange={handleSingulartFiles}
-                  />
                   <Button
-                    onClick={() =>
-                      document.getElementById("singulart-html-upload")?.click()
-                    }
+                    onClick={() => syncSingulartMutation.mutate()}
                     disabled={syncSingulartMutation.isPending}
                     variant="outline"
-                    title="Open your Singulart gallery in your browser, save the page (⌘S / Ctrl+S), then upload the .html file here"
                     className="h-10 border-slate-300 text-slate-700 hover:bg-slate-50 font-medium rounded-xl transition-all duration-200"
                   >
                     <RefreshCw
                       className={`w-4 h-4 mr-2 ${syncSingulartMutation.isPending ? "animate-spin" : ""}`}
                     />
-                    {syncSingulartMutation.isPending ? "Importing…" : "Import from Singulart"}
+                    {syncSingulartMutation.isPending ? "Syncing…" : "Sync Singulart"}
                   </Button>
                   <Button
                     onClick={() => setLocation("/admin/create-artwork")}
