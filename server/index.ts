@@ -107,6 +107,21 @@ app.use((req, res, next) => {
     } catch (err) {
       console.error("[boot] Failed to ensure session table:", err);
     }
+    // DEV-ONLY: normalize seo_slug uniqueness to a plain UNIQUE INDEX. An earlier
+    // drizzle push created it as a CONSTRAINT in the development database, while
+    // production has a plain index — that mismatch makes Replit's dev→prod deploy
+    // diff propose DROP INDEX + ADD CONSTRAINT. Converting dev to a plain index
+    // makes the two schemas identical so the deploy generates no seo_slug change.
+    // Gated to non-production so it can NEVER touch the live database (which is
+    // already a plain index and needs no change).
+    if (process.env.NODE_ENV !== "production") {
+      try {
+        await pool.query(`ALTER TABLE artworks DROP CONSTRAINT IF EXISTS artworks_seo_slug_unique`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS artworks_seo_slug_unique ON artworks (seo_slug)`);
+      } catch (err) {
+        console.error("[boot] Failed to normalize seo_slug index:", err);
+      }
+    }
     // Ensure the schema-added artworks columns exist on the live/workspace
     // table so artwork queries never 500 on an un-migrated database — with no
     // manual db:push (ADD COLUMN IF NOT EXISTS is idempotent). `category` is
