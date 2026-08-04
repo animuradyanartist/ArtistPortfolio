@@ -304,6 +304,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Singulart import — parses gallery HTML the admin saved from their own
+  // browser and upserts it via the same logic as the live scrape. This is the
+  // supported path because Singulart now blocks server-side scraping (AWS WAF).
+  // Body: { pages: string[] }  (each string = one gallery page's HTML)
+  app.post("/api/admin/import-singulart", requireAdminAuth, async (req, res) => {
+    try {
+      const raw = req.body?.pages ?? req.body?.html;
+      const pages: string[] = Array.isArray(raw)
+        ? raw.filter((p) => typeof p === "string")
+        : typeof raw === "string"
+          ? [raw]
+          : [];
+
+      if (pages.length === 0) {
+        return res.status(400).json({
+          scrapedCount: 0,
+          inserted: 0,
+          updated: 0,
+          error: "No HTML provided. Upload your saved Singulart gallery page(s).",
+        });
+      }
+
+      const { runSingulartSyncFromHtml } = await import("./singulart-sync");
+      const result = await runSingulartSyncFromHtml(pages);
+      // A zero-artwork parse here means the wrong page was uploaded — give a
+      // friendlier hint than the scrape-oriented default message.
+      if (result.error && result.scrapedCount === 0) {
+        result.error =
+          "No artworks found in the uploaded file. Make sure you saved your " +
+          "Singulart artist gallery page (the grid of artworks), then try again.";
+      }
+      const status = result.error ? 400 : 200;
+      res.status(status).json(result);
+    } catch (error) {
+      console.error('Singulart import error:', error);
+      res.status(500).json({
+        scrapedCount: 0,
+        inserted: 0,
+        updated: 0,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
   // Prints routes
   app.get("/api/prints", async (req, res) => {
     try {

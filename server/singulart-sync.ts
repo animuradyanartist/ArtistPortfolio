@@ -1,12 +1,25 @@
 import { db } from "./db";
 import { artworks } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { scrapeAllArtworks, type ScrapedArtwork } from "./singulart-scraper";
+import {
+  scrapeAllArtworks,
+  parseSingulartPage,
+  type ScrapedArtwork,
+} from "./singulart-scraper";
 
 /**
  * Singulart → local artworks sync.
  *
- * - Scrape the artist's Singulart gallery (one network round-trip per call).
+ * Two entry points share the same upsert logic:
+ *   - `runSingulartSync()`         — scrapes the live gallery over the network.
+ *     NOTE: as of 2026 Singulart sits behind AWS WAF bot protection, so a
+ *     plain server-side fetch is served a JavaScript challenge page instead of
+ *     the gallery and this path returns zero artworks. Kept for the day the
+ *     block lifts / a headless path is added.
+ *   - `runSingulartSyncFromHtml()` — parses gallery HTML the admin uploaded
+ *     from their own browser (where the WAF challenge solves automatically).
+ *     This is the supported path from the admin tool today.
+ *
  * - For each scraped artwork (keyed by Singulart's stable numeric `id`):
  *     - INSERT if no local row exists with that singulartId.
  *     - UPDATE only sync-managed fields (title, slug, medium, dimensions,
@@ -134,4 +147,27 @@ export async function runSingulartSync(
       error: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+/**
+ * Import artworks from one or more gallery HTML pages that the admin saved from
+ * their own logged-in browser. Reuses the exact same parser and upsert path as
+ * the live scrape — the only difference is where the HTML comes from.
+ *
+ * Pass each paginated page's HTML (e.g. page 1 and `?page=2`) as separate
+ * strings; they're parsed and de-duplicated by Singulart id before upserting.
+ */
+export async function runSingulartSyncFromHtml(
+  pages: string[],
+): Promise<SyncResult> {
+  return runSingulartSync(async () => {
+    const seen = new Map<string, ScrapedArtwork>();
+    for (const html of pages) {
+      if (typeof html !== "string" || html.trim() === "") continue;
+      for (const artwork of parseSingulartPage(html)) {
+        seen.set(artwork.id, artwork);
+      }
+    }
+    return Array.from(seen.values());
+  });
 }
