@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -12,13 +12,7 @@ export const artworks = pgTable("artworks", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   slug: text("slug"),
-  // Production already has a unique index `artworks_seo_slug_unique` (created by
-  // an earlier `.unique()` that was dropped from this file). Re-declaring it —
-  // like `singulart_id` below — keeps the Drizzle diff empty so deploys don't
-  // propose `DROP INDEX artworks_seo_slug_unique`. Multiple NULLs are allowed in
-  // a Postgres unique index, and routes.ts stores empty seoSlug as NULL, so this
-  // never blocks inserts.
-  seoSlug: text("seo_slug").unique(),
+  seoSlug: text("seo_slug"),
   description: text("description").notNull(),
   medium: text("medium").notNull(),
   dimensions: text("dimensions").notNull(),
@@ -38,7 +32,16 @@ export const artworks = pgTable("artworks", {
   preferredPrintMaterial: text("preferred_print_material"),
   singulartId: text("singulart_id").unique(),
   source: text("source").notNull().default("manual"),
-});
+}, (t) => ({
+  // Production has a plain UNIQUE INDEX named `artworks_seo_slug_unique` (created
+  // outside Drizzle). Declaring it here as a uniqueIndex — NOT `.unique()` on the
+  // column, which Drizzle emits as a CONSTRAINT — matches prod's exact form and
+  // stops the post-merge `db:push` from dropping it out of the dev DB, keeping
+  // the dev↔prod schemas identical so deploys generate no seo_slug migration.
+  // Postgres allows multiple NULLs in a unique index and routes.ts stores blank
+  // seoSlug as NULL, so this never blocks inserts.
+  seoSlugUnique: uniqueIndex("artworks_seo_slug_unique").on(t.seoSlug),
+}));
 
 export const prints = pgTable("prints", {
   id: serial("id").primaryKey(),
