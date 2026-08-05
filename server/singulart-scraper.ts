@@ -180,6 +180,46 @@ export function parseSingulartPage(html: string): ScrapedArtwork[] {
   return results;
 }
 
+// Normalize any Singulart artwork-image size segment (base/fhd/small/…) to the
+// largest public one ("zoom") so the main image matches the cover stored today.
+function toZoomSize(url: string): string {
+  return url.replace(/\/(main|alts)\/[^/]+\//, "/$1/zoom/");
+}
+
+/**
+ * Extract EVERY image of a single artwork from its Singulart DETAIL page, in
+ * display order — the MAIN image first (kept as the cover), then the ALT
+ * (alternate / detail) shots. Same cheerio approach as parseSingulartPage.
+ *
+ * A detail page also renders "related artworks" carousels, so we scope strictly
+ * to THIS artwork by matching its Singulart id in the image filename
+ * (`<id>_…` for the main, `alt_<id>_…` for the alternates). Images that only
+ * differ by size segment are de-duplicated.
+ */
+export function parseArtworkImages(html: string, singulartId: string): string[] {
+  const $ = cheerio.load(html);
+  const idFile = new RegExp(`(?:^|alt_)${singulartId}_`);
+  const mains: string[] = [];
+  const alts: string[] = [];
+  const seen = new Set<string>();
+
+  $("img").each((_, el) => {
+    const raw = ($(el).attr("src") || $(el).attr("data-src") || "").trim();
+    if (!raw || !raw.includes("/cropped/")) return; // artwork image files only
+    const clean = raw.split("?")[0];
+    const file = clean.split("/").pop() || "";
+    if (!idFile.test(file)) return; // exclude other artworks' images
+    const abs = clean.startsWith("http") ? clean : `${BASE}${clean}`;
+    const zoom = toZoomSize(abs);
+    if (seen.has(zoom)) return; // dedupe across size variants
+    seen.add(zoom);
+    if (clean.includes("/alts/")) alts.push(zoom);
+    else if (clean.includes("/main/")) mains.push(zoom);
+  });
+
+  return [...mains, ...alts];
+}
+
 // Singulart returns 403 to bare bot UAs — a realistic browser UA + Accept headers is required.
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";

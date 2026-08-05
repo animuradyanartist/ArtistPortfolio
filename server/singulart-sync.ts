@@ -1,31 +1,43 @@
 import { db } from "./db";
 import { artworks } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { scrapeAllArtworks, type ScrapedArtwork } from "./singulart-scraper";
+import {
+  scrapeAllArtworks,
+  fetchSingulartPage,
+  parseArtworkImages,
+  type ScrapedArtwork,
+} from "./singulart-scraper";
 
 /**
- * Singulart → local artworks sync.
+ * Singulart → local artworks sync (INCREMENTAL images).
  *
- * - Scrape the artist's Singulart gallery (one network round-trip per call).
- * - For each scraped artwork (keyed by Singulart's stable numeric `id`):
- *     - INSERT if no local row exists with that singulartId.
- *     - UPDATE only sync-managed fields (title, slug, medium, dimensions,
- *       price, images, buyLink). Admin-owned fields (description, year,
- *       availability, featured, position, print fields) are preserved.
- * - We never delete locally — if a piece disappears from Singulart, the local
- *   row stays. Admin can manually delete from the existing admin UI.
+ * The gallery pages give the artwork LIST + one thumbnail each. The full
+ * per-artwork image set lives on each artwork's DETAIL page. Fetching every
+ * detail page on every sync is wasteful, so image fetching is incremental:
+ *   - New artwork          → fetch its detail page, store [MAIN, ...ALTs].
+ *   - Existing, >1 image    → preserve as-is; never re-fetch, never downgrade.
+ *   - Existing, ≤1 image    → fetch the detail page ONCE; if it yields more
+ *                             images, enrich (upgrade to the full ordered set).
  *
- * Safety:
- * - A scrape returning zero artworks is treated as an error (likely a markup
- *   change on Singulart's side). We abort without touching the DB.
- * - All exceptions are caught and surfaced via `SyncResult.error` so the
- *   endpoint can return a 5xx without crashing the server.
+ * Metadata (title, price, dimensions, slug, buyLink) is always refreshed from
+ * the gallery pages. Admin-owned fields (description, year, availability,
+ * featured, position, print fields) are preserved. Nothing is ever deleted.
+ * The MAIN image stays first, so images[0] remains the cover.
  */
+
+// Rough per-request price for Zyte's browser + anti-bot tier (USD). Used only to
+// estimate a sync's cost for the report — not billing-accurate.
+export const ZYTE_COST_PER_REQUEST = 0.016;
+const GALLERY_PAGE_REQUESTS = 2; // scrapeAllArtworks fetches page 1 + page 2
 
 export type SyncResult = {
   scrapedCount: number;
-  inserted: number;
-  updated: number;
+  inserted: number; // new artworks
+  updated: number; // existing artworks whose metadata was refreshed
+  detailPagesFetched: number; // detail pages fetched (new + enrichment attempts)
+  existingSkipped: number; // existing multi-image artworks left untouched
+  enriched: number; // existing artworks upgraded to a multi-image set
+  estimatedZyteCostUsd: number;
   error: string | null;
 };
 
@@ -55,83 +67,173 @@ function formatDimensions(w: number | null, h: number | null): string {
   return "";
 }
 
+/**
+ * Decide what to do about an artwork's images this sync (pure + testable):
+ *  - "insert"   — brand-new artwork: fetch detail, store its images.
+ *  - "preserve" — existing with >1 image: leave alone, do NOT fetch the detail.
+ *  - "enrich"   — existing with ≤1 image: fetch the detail page once and maybe
+ *                 upgrade it to the full set.
+ */
+export function decideImageAction(
+  isNew: boolean,
+  currentImageCount: number,
+): "insert" | "preserve" | "enrich" {
+  if (isNew) return "insert";
+  return currentImageCount > 1 ? "preserve" : "enrich";
+}
+
+/**
+ * Given the action + the fetched detail images (null if not fetched / failed),
+ * return the images array to WRITE, or null to leave the stored images
+ * untouched. Guarantees a multi-image array is never replaced by fewer images.
+ */
+export function resolveImages(
+  action: "insert" | "preserve" | "enrich",
+  currentImages: string[],
+  scrapedCover: string,
+  detailImages: string[] | null,
+): string[] | null {
+  if (action === "preserve") return null;
+  if (action === "insert") {
+    return detailImages && detailImages.length > 0 ? detailImages : [scrapedCover];
+  }
+  // enrich: only upgrade when the detail page genuinely adds images.
+  if (detailImages && detailImages.length > currentImages.length) return detailImages;
+  return null;
+}
+
+async function defaultFetchDetailImages(s: ScrapedArtwork): Promise<string[]> {
+  const html = await fetchSingulartPage(s.singulartUrl);
+  return parseArtworkImages(html, s.id);
+}
+
+/**
+ * Minimal persistence surface the sync needs, so the incremental logic can be
+ * tested end-to-end with an in-memory store (the default wraps Drizzle).
+ */
+export interface ArtworkStore {
+  findBySingulartId(id: string): Promise<{ images: string[] } | undefined>;
+  insertArtwork(row: typeof artworks.$inferInsert): Promise<void>;
+  updateBySingulartId(id: string, set: Partial<typeof artworks.$inferInsert>): Promise<void>;
+}
+
+const drizzleStore: ArtworkStore = {
+  async findBySingulartId(id) {
+    const rows = await db
+      .select()
+      .from(artworks)
+      .where(eq(artworks.singulartId, id))
+      .limit(1);
+    return rows[0];
+  },
+  async insertArtwork(row) {
+    await db.insert(artworks).values(row);
+  },
+  async updateBySingulartId(id, set) {
+    await db.update(artworks).set(set).where(eq(artworks.singulartId, id));
+  },
+};
+
 export async function runSingulartSync(
   scraper: () => Promise<ScrapedArtwork[]> = () =>
     scrapeAllArtworks(process.env.SINGULART_ARTIST_URL || DEFAULT_ARTIST_URL),
+  fetchDetailImages: (s: ScrapedArtwork) => Promise<string[]> = defaultFetchDetailImages,
+  store: ArtworkStore = drizzleStore,
 ): Promise<SyncResult> {
+  const base = {
+    scrapedCount: 0,
+    inserted: 0,
+    updated: 0,
+    detailPagesFetched: 0,
+    existingSkipped: 0,
+    enriched: 0,
+    estimatedZyteCostUsd: 0,
+  };
   try {
     const scraped = await scraper();
     if (scraped.length === 0) {
-      return {
-        scrapedCount: 0,
-        inserted: 0,
-        updated: 0,
-        error: "Scrape returned zero artworks — aborting",
-      };
+      return { ...base, error: "Scrape returned zero artworks — aborting" };
     }
 
     let inserted = 0;
     let updated = 0;
+    let detailPagesFetched = 0;
+    let existingSkipped = 0;
+    let enriched = 0;
     const currentYear = new Date().getFullYear();
 
     for (const s of scraped) {
       const dims = formatDimensions(s.widthCm, s.heightCm);
-      const mapped = {
+      // Sync-managed metadata, always refreshed from the gallery pages.
+      const metadata = {
         title: s.title,
         slug: s.slug,
-        description: "", // admin can edit
         medium: s.medium ?? "Oil on Canvas",
         dimensions: dims || "Unknown",
-        year: currentYear, // admin can edit
         price: s.priceUsd ?? 0,
-        images: [s.imageUrl],
-        type: deriveType(s.medium),
-        size: deriveSize(s.widthCm, s.heightCm),
-        availability: "available" as const,
         buyLink: s.singulartUrl,
-        singulartId: s.id,
-        source: "singulart" as const,
       };
 
-      const existing = await db
-        .select()
-        .from(artworks)
-        .where(eq(artworks.singulartId, s.id))
-        .limit(1);
+      const existing = await store.findBySingulartId(s.id);
+      const isNew = !existing;
+      const currentImages: string[] = existing?.images ?? [];
+      const action = decideImageAction(isNew, currentImages.length);
 
-      if (existing.length === 0) {
-        await db.insert(artworks).values(mapped);
+      // Only "insert" and "enrich" touch the detail page.
+      let detailImages: string[] | null = null;
+      if (action === "insert" || action === "enrich") {
+        try {
+          detailImages = await fetchDetailImages(s);
+          detailPagesFetched++;
+        } catch {
+          detailImages = null; // detail fetch failed — degrade gracefully
+        }
+      }
+      const imagesToWrite = resolveImages(action, currentImages, s.imageUrl, detailImages);
+
+      if (isNew) {
+        await store.insertArtwork({
+          ...metadata,
+          description: "", // admin can edit
+          year: currentYear, // admin can edit
+          images: imagesToWrite ?? [s.imageUrl],
+          type: deriveType(s.medium),
+          size: deriveSize(s.widthCm, s.heightCm),
+          availability: "available",
+          singulartId: s.id,
+          source: "singulart",
+        });
         inserted++;
       } else {
-        // Update only sync-managed fields. Admin owns the rest.
-        await db
-          .update(artworks)
-          .set({
-            title: mapped.title,
-            slug: mapped.slug,
-            medium: mapped.medium,
-            dimensions: mapped.dimensions,
-            price: mapped.price,
-            images: mapped.images,
-            buyLink: mapped.buyLink,
-          })
-          .where(eq(artworks.singulartId, s.id));
+        const set: Partial<typeof artworks.$inferInsert> = { ...metadata };
+        if (imagesToWrite) {
+          set.images = imagesToWrite;
+          if (action === "enrich") enriched++;
+        } else if (action === "preserve") {
+          existingSkipped++;
+        }
+        await store.updateBySingulartId(s.id, set);
         updated++;
       }
     }
 
-    return {
+    const estimatedZyteCostUsd = Number(
+      ((GALLERY_PAGE_REQUESTS + detailPagesFetched) * ZYTE_COST_PER_REQUEST).toFixed(3),
+    );
+
+    const result: SyncResult = {
       scrapedCount: scraped.length,
       inserted,
       updated,
+      detailPagesFetched,
+      existingSkipped,
+      enriched,
+      estimatedZyteCostUsd,
       error: null,
     };
+    console.log("[singulart-sync]", JSON.stringify(result));
+    return result;
   } catch (err) {
-    return {
-      scrapedCount: 0,
-      inserted: 0,
-      updated: 0,
-      error: err instanceof Error ? err.message : String(err),
-    };
+    return { ...base, error: err instanceof Error ? err.message : String(err) };
   }
 }
