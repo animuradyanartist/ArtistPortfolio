@@ -68,18 +68,29 @@ function formatDimensions(w: number | null, h: number | null): string {
 }
 
 /**
- * Decide what to do about an artwork's images this sync (pure + testable):
+ * Decide what to do about an artwork's images this sync (pure + testable).
+ * The `detail_images_checked` marker — NOT the image count — drives whether we
+ * touch the detail page, so genuinely single-image artworks are fetched once:
  *  - "insert"   — brand-new artwork: fetch detail, store its images.
- *  - "preserve" — existing with >1 image: leave alone, do NOT fetch the detail.
- *  - "enrich"   — existing with ≤1 image: fetch the detail page once and maybe
- *                 upgrade it to the full set.
+ *  - "preserve" — existing + already checked: leave alone, do NOT fetch.
+ *  - "enrich"   — existing + not yet checked: fetch the detail page once and
+ *                 upgrade to the full set if it adds images.
  */
 export function decideImageAction(
   isNew: boolean,
-  currentImageCount: number,
+  detailChecked: boolean,
 ): "insert" | "preserve" | "enrich" {
   if (isNew) return "insert";
-  return currentImageCount > 1 ? "preserve" : "enrich";
+  return detailChecked ? "preserve" : "enrich";
+}
+
+/**
+ * Whether a detail fetch counts as "checked". True only when the fetch resolved
+ * and yielded at least the main image — so a thrown/empty fetch leaves the
+ * marker unset and the artwork is retried next sync.
+ */
+export function detailCheckSucceeded(detailImages: string[] | null): boolean {
+  return !!detailImages && detailImages.length >= 1;
 }
 
 /**
@@ -112,7 +123,9 @@ async function defaultFetchDetailImages(s: ScrapedArtwork): Promise<string[]> {
  * tested end-to-end with an in-memory store (the default wraps Drizzle).
  */
 export interface ArtworkStore {
-  findBySingulartId(id: string): Promise<{ images: string[] } | undefined>;
+  findBySingulartId(
+    id: string,
+  ): Promise<{ images: string[]; detailImagesChecked?: boolean | null } | undefined>;
   insertArtwork(row: typeof artworks.$inferInsert): Promise<void>;
   updateBySingulartId(id: string, set: Partial<typeof artworks.$inferInsert>): Promise<void>;
 }
@@ -177,7 +190,7 @@ export async function runSingulartSync(
       const existing = await store.findBySingulartId(s.id);
       const isNew = !existing;
       const currentImages: string[] = existing?.images ?? [];
-      const action = decideImageAction(isNew, currentImages.length);
+      const action = decideImageAction(isNew, !!existing?.detailImagesChecked);
 
       // Only "insert" and "enrich" touch the detail page.
       let detailImages: string[] | null = null;
@@ -190,6 +203,10 @@ export async function runSingulartSync(
         }
       }
       const imagesToWrite = resolveImages(action, currentImages, s.imageUrl, detailImages);
+      // Mark checked only on a successful detail fetch — even when the artwork
+      // genuinely has just one image — so it's never fetched again. A failed
+      // fetch leaves the marker unset so it retries next sync.
+      const checked = detailCheckSucceeded(detailImages);
 
       if (isNew) {
         await store.insertArtwork({
@@ -197,6 +214,7 @@ export async function runSingulartSync(
           description: "", // admin can edit
           year: currentYear, // admin can edit
           images: imagesToWrite ?? [s.imageUrl],
+          detailImagesChecked: checked,
           type: deriveType(s.medium),
           size: deriveSize(s.widthCm, s.heightCm),
           availability: "available",
@@ -209,9 +227,9 @@ export async function runSingulartSync(
         if (imagesToWrite) {
           set.images = imagesToWrite;
           if (action === "enrich") enriched++;
-        } else if (action === "preserve") {
-          existingSkipped++;
         }
+        if (action === "preserve") existingSkipped++;
+        else if (checked) set.detailImagesChecked = true; // record the one-time check
         await store.updateBySingulartId(s.id, set);
         updated++;
       }

@@ -131,6 +131,10 @@ app.use((req, res, next) => {
     try {
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS category text`);
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS seo_slug text`);
+      // Incremental Singulart image sync: marks that an artwork's detail page has
+      // already been checked for its full image set (so it is fetched once, not
+      // every sync). Nullable + default false, so existing rows read as unchecked.
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS detail_images_checked boolean DEFAULT false`);
       // "Where the work lives" section content (JSON array of {image, caption}).
       await pool.query(`ALTER TABLE homepage_settings ADD COLUMN IF NOT EXISTS room_items text`);
       // Collector List signups (homepage "Join the Collector List" form).

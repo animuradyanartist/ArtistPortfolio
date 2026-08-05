@@ -32,6 +32,11 @@ export const artworks = pgTable("artworks", {
   preferredPrintMaterial: text("preferred_print_material"),
   singulartId: text("singulart_id").unique(),
   source: text("source").notNull().default("manual"),
+  // Marks that this artwork's Singulart DETAIL page has already been checked for
+  // its full image set, so incremental syncs skip it (even if it genuinely has
+  // only one image). Cleared manually to force a re-check. Added via boot
+  // self-heal (ADD COLUMN IF NOT EXISTS) in server/index.ts — no manual migration.
+  detailImagesChecked: boolean("detail_images_checked").default(false),
 }, (t) => ({
   // Production has a plain UNIQUE INDEX named `artworks_seo_slug_unique` (created
   // outside Drizzle). Declaring it here as a uniqueIndex — NOT `.unique()` on the

@@ -42,11 +42,11 @@ test("parseArtworkImages: single-image artwork returns just the main", () => {
   assert.deepEqual(imgs, ["https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/999_X.png"]);
 });
 
-test("decideImageAction", () => {
-  assert.equal(decideImageAction(true, 0), "insert");
-  assert.equal(decideImageAction(false, 3), "preserve");
-  assert.equal(decideImageAction(false, 1), "enrich");
-  assert.equal(decideImageAction(false, 0), "enrich");
+test("decideImageAction: driven by the marker, not the image count", () => {
+  assert.equal(decideImageAction(true, false), "insert"); // new
+  assert.equal(decideImageAction(true, true), "insert"); // new (marker irrelevant)
+  assert.equal(decideImageAction(false, true), "preserve"); // checked -> skip
+  assert.equal(decideImageAction(false, false), "enrich"); // not checked -> fetch once
 });
 
 test("resolveImages: insert stores detail set, falls back to the cover", () => {
@@ -78,7 +78,9 @@ function art(id: string): ScrapedArtwork {
     imageUrl: `cover-${id}.jpg`, singulartUrl: `https://www.singulart.com/en/artworks/${id}`,
   };
 }
-function fakeStore(seed: Array<{ singulartId: string; images: string[]; title?: string }>) {
+function fakeStore(
+  seed: Array<{ singulartId: string; images: string[]; title?: string; detailImagesChecked?: boolean }>,
+) {
   const map = new Map<string, any>(seed.map((r) => [r.singulartId, { ...r }]));
   const store: ArtworkStore = {
     async findBySingulartId(id) { return map.get(id); },
@@ -90,9 +92,9 @@ function fakeStore(seed: Array<{ singulartId: string; images: string[]; title?: 
 
 test("incremental end-to-end: new fetches, multi-image preserved, single-image enriched, no downgrade", async () => {
   const s = fakeStore([
-    { singulartId: "EXIST_MULTI", images: ["m", "a1", "a2"], title: "stale" },   // preserve, no fetch
-    { singulartId: "EXIST_SINGLE", images: ["old"], title: "stale" },            // enrich
-    { singulartId: "EXIST_SINGLE_NOALT", images: ["only"], title: "stale" },     // fetched, no gain
+    { singulartId: "EXIST_MULTI", images: ["m", "a1", "a2"], title: "stale", detailImagesChecked: true }, // checked -> preserve
+    { singulartId: "EXIST_SINGLE", images: ["old"], title: "stale" },        // unchecked -> enrich
+    { singulartId: "EXIST_SINGLE_NOALT", images: ["only"], title: "stale" }, // unchecked -> fetched, no gain, marked
   ]);
   const scraper = async () => [art("NEW1"), art("EXIST_MULTI"), art("EXIST_SINGLE"), art("EXIST_SINGLE_NOALT")];
   const detail: Record<string, string[]> = {
@@ -120,4 +122,60 @@ test("incremental end-to-end: new fetches, multi-image preserved, single-image e
   assert.deepEqual(s.get("EXIST_SINGLE").images, ["es-main", "es-a1", "es-a2"], "single enriched");
   assert.deepEqual(s.get("EXIST_SINGLE_NOALT").images, ["only"], "never downgraded to a single image");
   assert.equal(s.get("EXIST_MULTI").title, "T_EXIST_MULTI", "metadata refreshed even when images preserved");
+  assert.equal(s.get("NEW1").detailImagesChecked, true, "new artwork marked after detail fetch");
+  assert.equal(s.get("EXIST_SINGLE").detailImagesChecked, true, "marked after enrichment");
+  assert.equal(s.get("EXIST_SINGLE_NOALT").detailImagesChecked, true, "marked even though single image");
+});
+
+// ---- the four required marker tests ----
+test("marker #1: genuinely single-image artwork is fetched once only", async () => {
+  const s = fakeStore([{ singulartId: "SINGLE", images: ["cover"] }]);
+  const scraper = async () => [art("SINGLE")];
+  let calls = 0;
+  const fetchDetail = async () => { calls++; return ["only-main"]; }; // 1 image, always
+
+  await runSingulartSync(scraper, fetchDetail, s.store); // sync 1: fetch + mark
+  await runSingulartSync(scraper, fetchDetail, s.store); // sync 2: should skip
+
+  assert.equal(calls, 1, "detail page fetched exactly once across two syncs");
+  assert.equal(s.get("SINGLE").detailImagesChecked, true);
+});
+
+test("marker #2: failed detail fetch does NOT set the marker (retried next sync)", async () => {
+  const s = fakeStore([{ singulartId: "FAILY", images: ["cover"] }]);
+  const scraper = async () => [art("FAILY")];
+  const fetchDetail = async () => { throw new Error("Zyte 500"); };
+
+  const r = await runSingulartSync(scraper, fetchDetail, s.store);
+
+  assert.equal(r.error, null, "a per-artwork fetch failure does not abort the sync");
+  assert.notEqual(s.get("FAILY").detailImagesChecked, true, "marker left unset after a failed fetch");
+  assert.deepEqual(s.get("FAILY").images, ["cover"], "existing image preserved on failure");
+});
+
+test("marker #3: successful multi-image enrichment sets the marker", async () => {
+  const s = fakeStore([{ singulartId: "ENR", images: ["old"] }]);
+  const scraper = async () => [art("ENR")];
+  const fetchDetail = async () => ["main", "a1", "a2"];
+
+  const r = await runSingulartSync(scraper, fetchDetail, s.store);
+
+  assert.equal(r.enriched, 1);
+  assert.deepEqual(s.get("ENR").images, ["main", "a1", "a2"], "upgraded to full ordered set");
+  assert.equal(s.get("ENR").detailImagesChecked, true, "marker set after enrichment");
+});
+
+test("marker #4: existing already-checked artwork is skipped (no detail fetch)", async () => {
+  const s = fakeStore([{ singulartId: "DONE", images: ["m", "a1"], detailImagesChecked: true }]);
+  const scraper = async () => [art("DONE")];
+  let calls = 0;
+  const fetchDetail = async () => { calls++; return ["x"]; };
+
+  const r = await runSingulartSync(scraper, fetchDetail, s.store);
+
+  assert.equal(calls, 0, "checked artwork never fetches its detail page");
+  assert.equal(r.detailPagesFetched, 0);
+  assert.equal(r.existingSkipped, 1);
+  assert.deepEqual(s.get("DONE").images, ["m", "a1"], "images preserved");
+  assert.equal(s.get("DONE").title, "T_DONE", "metadata still refreshed");
 });
