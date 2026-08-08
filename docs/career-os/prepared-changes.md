@@ -11,3 +11,9 @@
 - **Type:** unserved_demand
 - **Action:** Add or extend a page that directly answers "what is Art", using that phrasing in the title and first heading.
 - **Why:** This is real language collectors use, and Search Console shows your site has no presence for it yet — demand you're invisible to.
+
+## Answer "what is Art paintings"
+- **Prepared:** 2026-08-08
+- **Type:** unserved_demand
+- **Action:** Add or extend a page that directly answers "what is Art paintings", using that phrasing in the title and first heading.
+- **Why:** This is real language collectors use, and Search Console shows your site has no presence for it yet — demand you're invisible to.
