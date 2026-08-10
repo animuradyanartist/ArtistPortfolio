@@ -13,7 +13,7 @@ const SAGE = "#9c9d95";
 
 export default function HomePage() {
   useEffect(() => {
-    document.title = "Ani Muradyan – Contemporary Artist";
+    document.title = "Ani Muradyan – Contemporary Oil Painter";
     updateCanonicalUrl("/");
     updateMetaDescription(
       "Ani Muradyan is an Armenian contemporary oil painter whose figurative works and landscapes create quiet moments of emotional clarity, distance, hope, and reflection."
@@ -150,9 +150,27 @@ export default function HomePage() {
                 className="font-extralight text-xl md:text-[2.75vw] animate-slideUp animation-delay-200"
                 style={{ fontFamily: "'Poppins', sans-serif" }}
               >
-                <span style={{ color: SAGE }}>Contempor</span>
-                <span className="text-white">ary Artist</span>
+                <span style={{ color: SAGE }}>Figurative &amp; Landscape</span>
+                <span className="text-white"> Oil Paintings</span>
               </p>
+              <div
+                className="mt-8 flex flex-wrap items-center justify-center gap-4 animate-slideUp animation-delay-200"
+              >
+                <Link
+                  href="/artworks"
+                  className="inline-block border border-white/80 px-8 py-3 text-sm uppercase tracking-[0.15em] text-white transition-colors hover:bg-white hover:text-[#0d1434]"
+                  style={{ fontFamily: "'Poppins', sans-serif" }}
+                >
+                  View the Originals
+                </Link>
+                <Link
+                  href="/contact"
+                  className="inline-block text-sm uppercase tracking-[0.15em] text-white/85 underline underline-offset-4 transition-colors hover:text-white"
+                  style={{ fontFamily: "'Poppins', sans-serif" }}
+                >
+                  Inquire
+                </Link>
+              </div>
             </div>
           </div>
         </div>
