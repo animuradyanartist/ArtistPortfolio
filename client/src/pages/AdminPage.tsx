@@ -2086,7 +2086,7 @@ export default function AdminPage() {
                 <div>
                   <h3 className="text-xl font-semibold text-slate-900">Collector List</h3>
                   <p className="text-sm text-slate-600">
-                    People who joined from the homepage “Join the Collector List” form.
+                    People who joined the collector list from across the site — the Source column shows where.
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700">
@@ -2108,6 +2108,7 @@ export default function AdminPage() {
                       <thead className="bg-slate-50 text-slate-500">
                         <tr>
                           <th className="px-4 py-3 font-medium">Email</th>
+                          <th className="px-4 py-3 font-medium">Source</th>
                           <th className="px-4 py-3 font-medium">Joined</th>
                         </tr>
                       </thead>
@@ -2118,6 +2119,13 @@ export default function AdminPage() {
                               <a href={`mailto:${c.email}`} className="hover:underline">
                                 {c.email}
                               </a>
+                            </td>
+                            <td className="px-4 py-3">
+                              {c.source ? (
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 capitalize">{c.source}</span>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-slate-500">
                               {new Date(c.createdAt).toLocaleDateString(undefined, {
@@ -2131,7 +2139,7 @@ export default function AdminPage() {
                       </tbody>
                     </table>
                   </div>
-                  <div className="mt-6">
+                  <div className="mt-6 flex flex-wrap gap-3">
                     <Button
                       type="button"
                       variant="outline"
@@ -2145,6 +2153,30 @@ export default function AdminPage() {
                       }}
                     >
                       Copy all emails
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Full export (email · source · joined) for import into an email tool,
+                        // with the source so signups can be segmented by where they converted.
+                        const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+                        const rows = [["email", "source", "joined"], ...collectors.map((c) => [
+                          c.email,
+                          c.source ?? "",
+                          new Date(c.createdAt).toISOString().slice(0, 10),
+                        ])];
+                        const csv = rows.map((r) => r.map((v) => esc(String(v))).join(",")).join("\n");
+                        const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "collectors.csv";
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      Download CSV
                     </Button>
                   </div>
                 </>

@@ -40,6 +40,9 @@ export default function CollectorSignup({ source, variant = "section", heading, 
       if (!res.ok) throw new Error("Request failed");
       setJoined(true);
       setEmail("");
+      // Make the signup measurable per surface — GA4 is live on the site (G-J1RN8P4KHY),
+      // so Career OS (which reads GA4) can compare homepage vs artwork conversion.
+      (window as unknown as { gtag?: (...a: unknown[]) => void }).gtag?.("event", "collector_signup", { signup_source: source });
       toast({
         title: "Welcome to the collector list",
         description: "You'll receive new paintings and studio updates before public release.",
@@ -77,6 +80,21 @@ export default function CollectorSignup({ source, variant = "section", heading, 
     </form>
   );
 
+  // Consent/expectation microcopy for marketing-email collection — sets what they'll
+  // receive and that they can leave. Actual unsubscribe is handled by the email tool
+  // Ani sends from (every send carries a one-click unsubscribe).
+  const consent = (
+    <p className="mx-auto mt-3 max-w-md text-[11px] leading-relaxed text-stone-400">
+      You'll only hear about new work and the occasional studio note — never spam. Unsubscribe any time.
+    </p>
+  );
+  const formWithConsent = (
+    <>
+      {form}
+      {consent}
+    </>
+  );
+
   const confirmation = (
     <p className="mx-auto max-w-md text-sm text-stone-600">
       You're on the list — you'll hear from Ani before the next release.
@@ -93,7 +111,7 @@ export default function CollectorSignup({ source, variant = "section", heading, 
         <p className="mx-auto max-w-md text-sm text-stone-600 mb-6">
           {description ?? "Every original is one of a kind. Join the collector list to see new work first — and be first to acquire it — before it's shown publicly."}
         </p>
-        {joined ? confirmation : form}
+        {joined ? confirmation : formWithConsent}
       </section>
     );
   }
