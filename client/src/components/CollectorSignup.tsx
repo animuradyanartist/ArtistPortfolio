@@ -86,12 +86,12 @@ export default function CollectorSignup({ source, variant = "section", heading, 
   if (variant === "compact") {
     return (
       <section className="border-t border-stone-200 mt-14 pt-12 text-center">
-        <Eyebrow>Private Previews</Eyebrow>
+        <Eyebrow>First Access</Eyebrow>
         <h3 className="font-playfair text-2xl md:text-3xl text-stone-900 mt-2 mb-3">
-          {heading ?? "Be first to see new originals"}
+          {heading ?? "First choice on new originals"}
         </h3>
         <p className="mx-auto max-w-md text-sm text-stone-600 mb-6">
-          {description ?? "Join the collector list to see new paintings and available works before they’re released publicly."}
+          {description ?? "Every original is one of a kind. Join the collector list to see new work first — and be first to acquire it — before it's shown publicly."}
         </p>
         {joined ? confirmation : form}
       </section>
@@ -105,7 +105,7 @@ export default function CollectorSignup({ source, variant = "section", heading, 
         {heading ?? "Join the Collector List"}
       </h2>
       <p className="mx-auto max-w-md text-sm text-stone-600 mb-8">
-        {description ?? "Receive new paintings, available works, studio updates, and private previews before public release."}
+        {description ?? "Each painting is a one-of-a-kind original — only one collector can own it. Join the list to see new work first and have the first chance to acquire it, before it's shown publicly. Plus the occasional note from the studio."}
       </p>
       {joined ? confirmation : form}
     </section>

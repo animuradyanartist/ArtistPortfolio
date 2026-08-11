@@ -334,8 +334,8 @@ export default function ArtworkDetailPage() {
         <CollectorSignup
           source="artwork"
           variant="compact"
-          heading="Drawn to this work?"
-          description="Join the collector list to see new originals and available works before they’re released publicly."
+          heading="First choice on new originals"
+          description="This painting is one of a kind — like every original. Join the collector list to see new work first, and be first to acquire it, before it's shown publicly."
         />
       </div>
     </div>
