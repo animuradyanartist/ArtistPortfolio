@@ -154,10 +154,12 @@ export const feedback = pgTable('feedback', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-// Collector List signups from the homepage "Join the Collector List" form.
+// Collector List signups, captured from multiple surfaces (homepage, artwork pages, …).
+// `source` records WHERE each signup converted, so acquisition is measurable per surface.
 export const collectors = pgTable('collectors', {
   id: serial('id').primaryKey(),
   email: text('email').notNull(),
+  source: text('source'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

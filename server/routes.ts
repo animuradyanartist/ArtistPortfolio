@@ -858,7 +858,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
         return res.status(400).json({ message: "A valid email is required" });
       }
-      const collector = await storage.addCollector(email);
+      // Where the signup converted (homepage / artwork / …) — for per-surface measurement.
+      const source = typeof req.body?.source === "string" ? req.body.source.slice(0, 40) : null;
+      const collector = await storage.addCollector(email, source);
       res.status(201).json({ ok: true, id: collector.id });
     } catch (error) {
       console.error("Error adding collector:", error);

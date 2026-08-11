@@ -23,7 +23,6 @@ import CreatePrintPage from "@/pages/CreatePrintPage";
 import EditPrintPage from "@/pages/EditPrintPage";
 import NotFound from "@/pages/not-found";
 import SeoArtworkPage from "@/pages/SeoArtworkPage";
-import CollectorPage from "@/pages/CollectorPage";
 
 function CanonicalManager() {
   const [location] = useLocation();
@@ -60,7 +59,6 @@ function Router() {
       <Route path="/admin/edit-artwork/:id" component={EditArtworkPage} />
       <Route path="/admin/create-print" component={CreatePrintPage} />
       <Route path="/admin/edit-print/:id" component={EditPrintPage} />
-      <Route path="/collect" component={CollectorPage} />
       <Route path="/:seoSlug" component={SeoArtworkPage} />
       <Route component={NotFound} />
     </Switch>

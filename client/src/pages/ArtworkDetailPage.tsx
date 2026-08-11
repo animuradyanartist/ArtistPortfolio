@@ -15,6 +15,7 @@ import {
 import { SHOW_PRICES } from "@/lib/featureFlags";
 import { Eyebrow, OutlineButton } from "@/components/editorial";
 import { artworkCategory } from "@/lib/artworkCategory";
+import CollectorSignup from "@/components/CollectorSignup";
 
 const CATEGORY_LABEL = { landscape: "Landscape", figurative: "Figurative" } as const;
 
@@ -327,6 +328,15 @@ export default function ArtworkDetailPage() {
             </div>
           </div>
         )}
+
+        {/* Highest-intent surface: a collector viewing a specific original. Contextual,
+            reused capture → the real owned list, tagged source="artwork" for measurement. */}
+        <CollectorSignup
+          source="artwork"
+          variant="compact"
+          heading="First choice on new originals"
+          description="This painting is one of a kind — like every original. Join the collector list to see new work first, and be first to acquire it, before it's shown publicly."
+        />
       </div>
     </div>
   );
