@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { Artwork, HomepageSettings, ArtistBio, Exhibition } from "@shared/schema";
 import backgroundImage from "@assets/1bg_1750936488071.png";
 import { updateCanonicalUrl, updateMetaDescription, artworkPath, generateArtworkAlt } from "@/lib/seo";
 import { SHOW_PRICES } from "@/lib/featureFlags";
-import { useToast } from "@/hooks/use-toast";
+import CollectorSignup from "@/components/CollectorSignup";
 import { Eyebrow, OutlineButton, ViewLink } from "@/components/editorial";
 
 const NAVY = "#0d1434";
@@ -19,10 +19,6 @@ export default function HomePage() {
       "Ani Muradyan is an Armenian contemporary oil painter whose figurative works and landscapes create quiet moments of emotional clarity, distance, hope, and reflection."
     );
   }, []);
-
-  const { toast } = useToast();
-  const [email, setEmail] = useState("");
-  const [joining, setJoining] = useState(false);
 
   const { data: homepageSettings } = useQuery<HomepageSettings>({
     queryKey: ["/api/homepage-settings"],
@@ -80,33 +76,6 @@ export default function HomePage() {
     }
     if (SHOW_PRICES && artwork.price) return `€${artwork.price.toLocaleString()}`;
     return "Inquire";
-  };
-
-  const joinCollectorList = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setJoining(true);
-    try {
-      const res = await fetch("/api/collectors", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-      if (!res.ok) throw new Error("Request failed");
-      toast({
-        title: "Welcome to the collector list",
-        description: "You'll receive new paintings and studio updates before public release.",
-      });
-      setEmail("");
-    } catch {
-      toast({
-        title: "Something went wrong",
-        description: "Please try again, or email animuradyan.artist@gmail.com directly.",
-        variant: "destructive",
-      });
-    } finally {
-      setJoining(false);
-    }
   };
 
   return (
@@ -424,38 +393,8 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── Collector list ───────────────────────────────────── */}
-      <section className="bg-[#ece7dc] py-20 md:py-28 px-6 text-center">
-        <Eyebrow>Private Previews</Eyebrow>
-        <h2 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">
-          Join the Collector List
-        </h2>
-        <p className="mx-auto max-w-md text-sm text-stone-600 mb-8">
-          Receive new paintings, available works, studio updates, and private previews before
-          public release.
-        </p>
-        <form
-          onSubmit={joinCollectorList}
-          className="mx-auto flex max-w-md flex-col sm:flex-row gap-3"
-        >
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Your email address"
-            className="flex-1 border border-stone-300 bg-white px-4 py-3 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-stone-500"
-          />
-          <button
-            type="submit"
-            disabled={joining}
-            className="px-6 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-50 disabled:opacity-60 transition-colors"
-            style={{ backgroundColor: "#26221c" }}
-          >
-            {joining ? "Joining…" : "Join the List"}
-          </button>
-        </form>
-      </section>
+      {/* ── Collector list (reusable, source-tagged) ─────────── */}
+      <CollectorSignup source="homepage" />
 
       {/* ── Closing CTA ──────────────────────────────────────── */}
       <section className="py-24 md:py-32 px-6 text-center">

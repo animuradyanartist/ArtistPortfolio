@@ -77,7 +77,7 @@ export interface IStorage {
   getAllFeedback(): Promise<Feedback[]>;
 
   // Collector List
-  addCollector(email: string): Promise<Collector>;
+  addCollector(email: string, source?: string | null): Promise<Collector>;
   getAllCollectors(): Promise<Collector[]>;
 
   // Contact messages
@@ -627,10 +627,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.feedbacks.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async addCollector(email: string): Promise<Collector> {
+  async addCollector(email: string, source?: string | null): Promise<Collector> {
     const existing = this.collectors.find((c) => c.email.toLowerCase() === email.toLowerCase());
     if (existing) return existing;
-    const collector: Collector = { id: this.currentCollectorId++, email, createdAt: new Date() };
+    const collector: Collector = { id: this.currentCollectorId++, email, source: source ?? null, createdAt: new Date() };
     this.collectors.push(collector);
     return collector;
   }
@@ -1034,10 +1034,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(feedback).orderBy(feedback.createdAt);
   }
 
-  async addCollector(email: string): Promise<Collector> {
+  async addCollector(email: string, source?: string | null): Promise<Collector> {
     const [existing] = await db.select().from(collectors).where(eq(collectors.email, email));
     if (existing) return existing;
-    const [created] = await db.insert(collectors).values({ email }).returning();
+    const [created] = await db.insert(collectors).values({ email, source: source ?? null }).returning();
     return created;
   }
 
