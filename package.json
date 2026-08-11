@@ -9,7 +9,8 @@
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "test": "vitest run",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "prepare": "git config pull.rebase true 2>/dev/null; git config rerere.enabled true 2>/dev/null; exit 0"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
