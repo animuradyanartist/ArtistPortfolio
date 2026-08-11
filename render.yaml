@@ -1,0 +1,39 @@
+# Render Blueprint — ArtistPortfolio deploys FROM GitHub `main`, not from a workspace.
+#
+# Why this exists: Replit deploys from the editor workspace, which makes the workspace a
+# SECOND writer to `main` (alongside GitHub PR merges) and is the root cause of the
+# recurring Git divergence. Render deploys straight from GitHub `main`, so `main` is the
+# single source of truth: merge a PR → Render auto-builds + deploys. No workspace, no
+# divergence, no shell — ever.
+#
+# One-time setup (owner): Render → New → Blueprint → connect animuradyanartist/ArtistPortfolio,
+# paste the secret values below (sync:false), then point animuradyan.com DNS at Render.
+# The database does NOT move — DATABASE_URL is the SAME Neon connection string in use today.
+services:
+  - type: web
+    name: artistportfolio
+    runtime: node
+    plan: starter          # avoids free-tier cold starts for a live portfolio (~$7/mo)
+    branch: main
+    autoDeploy: true       # every merge to main → build + deploy automatically
+    # Folds in the old .replit postMerge hook (db:push) so schema changes apply on deploy.
+    buildCommand: npm install && npm run db:push && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # The SAME Neon Postgres this site already uses — no data migration, no image move.
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SEED_ADMIN_USERNAME
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SINGULART_ARTIST_URL
+        sync: false
+      - key: ZYTE_API_KEY
+        sync: false
+      # PORT is provided by Render automatically; the server already reads process.env.PORT.
