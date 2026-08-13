@@ -137,6 +137,25 @@ app.use((req, res, next) => {
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS detail_images_checked boolean DEFAULT false`);
       // "Where the work lives" section content (JSON array of {image, caption}).
       await pool.query(`ALTER TABLE homepage_settings ADD COLUMN IF NOT EXISTS room_items text`);
+      // Blog posts. Created here rather than by a migration for the same reason as the
+      // rest of this block: the table must exist on a live database that nobody ran
+      // `db:push` against, or every /blog request 500s. Idempotent.
+      await pool.query(`CREATE TABLE IF NOT EXISTS blog_posts (
+        id serial PRIMARY KEY,
+        slug text NOT NULL,
+        title text NOT NULL,
+        excerpt text NOT NULL,
+        body text NOT NULL,
+        status text NOT NULL DEFAULT 'draft',
+        source_note text,
+        evidence text[],
+        cover_image text,
+        published_at timestamp,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS blog_posts_slug_unique ON blog_posts (slug)`);
+
       // Collector List signups (homepage "Join the Collector List" form).
       await pool.query(`CREATE TABLE IF NOT EXISTS collectors (
         id serial PRIMARY KEY,

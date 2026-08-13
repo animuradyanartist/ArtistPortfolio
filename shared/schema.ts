@@ -219,3 +219,48 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
 });
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
+
+/**
+ * BLOG POSTS — articles the Career OS drafts from real evidence, and Ani publishes.
+ *
+ * Stored in the database rather than as files in the repo, for one decisive reason: a
+ * file-backed post needs a commit and a deploy per article, which makes writing a
+ * release. Rows mean the agent can prepare a DRAFT through the authenticated API, Ani
+ * approves it, and it is live — the same shape the artworks CMS already has.
+ *
+ * `status` is the whole safety model. Nothing an agent writes is public until a human
+ * moves it to `published`; the public API only ever serves published rows.
+ */
+export const blogPosts = pgTable("blog_posts", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull(),
+  title: text("title").notNull(),
+  /** One-sentence summary — used for the index card, meta description and OG. */
+  excerpt: text("excerpt").notNull(),
+  /** Markdown. Rendered server-side into the prerendered HTML so it is indexable. */
+  body: text("body").notNull(),
+  /** draft | published — public routes serve `published` only. */
+  status: text("status").notNull().default("draft"),
+  /** Where the idea came from, in the owner's words: a real search query, an artwork,
+   *  an AI-visibility gap. Kept so a post can always answer "why was this written?". */
+  sourceNote: text("source_note"),
+  /** The evidence the article was grounded in — search queries, artwork ids, page URLs.
+   *  Never prose the model invented; the provenance the quality gate can inspect. */
+  evidence: text("evidence").array(),
+  /** Optional hero image (an absolute URL, or /img/artwork/<id>/0 for one of her works). */
+  coverImage: text("cover_image"),
+  /** Set when it actually went public — distinct from createdAt, which is when drafted. */
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  slugUnique: uniqueIndex("blog_posts_slug_unique").on(t.slug),
+}));
+
+export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
+export type BlogPost = typeof blogPosts.$inferSelect;
