@@ -23,6 +23,8 @@ import CreatePrintPage from "@/pages/CreatePrintPage";
 import EditPrintPage from "@/pages/EditPrintPage";
 import NotFound from "@/pages/not-found";
 import SeoArtworkPage from "@/pages/SeoArtworkPage";
+import BlogPage from "@/pages/BlogPage";
+import BlogPostPage from "@/pages/BlogPostPage";
 
 function CanonicalManager() {
   const [location] = useLocation();
@@ -59,6 +61,9 @@ function Router() {
       <Route path="/admin/edit-artwork/:id" component={EditArtworkPage} />
       <Route path="/admin/create-print" component={CreatePrintPage} />
       <Route path="/admin/edit-print/:id" component={EditPrintPage} />
+      <Route path="/blog" component={BlogPage} />
+      <Route path="/blog/:slug" component={BlogPostPage} />
+      {/* Keep the catch-all LAST: /:seoSlug would otherwise swallow /blog. */}
       <Route path="/:seoSlug" component={SeoArtworkPage} />
       <Route component={NotFound} />
     </Switch>

@@ -14,6 +14,7 @@ export default function Navigation() {
     { name: "The Path", href: "/path" },
     // { name: "About", href: "/about" }, // hidden for now — route still works at /about
     { name: "Exhibitions", href: "/exhibitions" },
+    { name: "Notes", href: "/blog" },
     { name: "Gallery", href: "/gallery" },
     { name: "Contact", href: "/contact" },
   ];
