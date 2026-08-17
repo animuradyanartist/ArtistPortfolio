@@ -49,10 +49,17 @@ Preferred communication style: Simple, everyday language.
 
 ### Publishing articles (the blog)
 - **`render.yaml` is NOT the live deploy path.** Production (animuradyan.com) is served by
-  the **Replit Autoscale deployment** — `server: Google Frontend`, and the recurring
-  "Published your App" commits on `main` are authored by Replit Agent. Render hosts only
-  the unrelated `career-os-worker`. **Merging to `main` does not deploy this site**; a
-  human pressing **Publish** in the Replit workspace does.
+  the **Replit Autoscale deployment** — `server: Google Frontend`. Render's dashboard holds
+  exactly one service, `career-os-worker`; no `artistportfolio` service was ever created,
+  so the blueprint describes a migration that never happened.
+- **Merging to `main` DOES reach production, automatically.** Measured 2026-08-17: commits
+  pushed between 05:40Z and 05:55Z were serving by 06:01Z, with no GitHub Action (there are
+  none) and no new "Published your App" commit — so the Replit deployment tracks the
+  connected repo rather than waiting for someone to press Publish. Allow ~5-20 minutes.
+- **Do not detect a deploy by HTTP status.** This is a client-rendered SPA with a catch-all:
+  every unknown path, `/api/*` included, answers **200 with the HTML shell**. A route that
+  does not exist looks identical to one that does. Test the BODY — JSON for an API, an
+  injected `blog-ssr` / `blog-post-ssr` block for a page.
 - **`BLOG_AGENT_TOKEN` must be set as a Replit Secret** for Career OS to prepare article
   drafts. Generate a long random value (≥32 chars); it is never chosen by hand elsewhere.
   Leaving it unset is SAFE and CLOSED — the agent routes then refuse everyone, they do not
