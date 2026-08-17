@@ -1,6 +1,7 @@
 import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feedback, contactSettings, galleryPhotos, type User, type InsertUser, type Artwork, type InsertArtwork, type Print, type InsertPrint, type Exhibition, type InsertExhibition, type HomepageSettings, type InsertHomepageSettings, type ArtistBio, type InsertArtistBio, type Feedback, type InsertFeedback, type ContactSettings, type InsertContactSettings, type GalleryPhoto, type InsertGalleryPhoto } from "@shared/schema";
 import { pathSettings, type PathSettings, type InsertPathSettings } from "@shared/pathSchema";
 import { collectors, type Collector, messages, type Message, type InsertMessage } from "@shared/schema";
+import { blogPosts, type BlogPost, type InsertBlogPost } from "@shared/schema";
 import { db, pool } from "./db";
 
 // Self-heal for schema-added artworks columns (`category`, `seo_slug`): if an
@@ -75,6 +76,13 @@ export interface IStorage {
   // Feedback
   createFeedback(feedback: InsertFeedback): Promise<Feedback>;
   getAllFeedback(): Promise<Feedback[]>;
+
+  // Blog. `includeDrafts` is the ONLY way an unpublished post is ever returned, so a
+  // public route physically cannot serve one by forgetting a filter.
+  getBlogPosts(opts?: { includeDrafts?: boolean }): Promise<BlogPost[]>;
+  getBlogPostBySlug(slug: string, opts?: { includeDrafts?: boolean }): Promise<BlogPost | undefined>;
+  createBlogPost(post: InsertBlogPost): Promise<BlogPost>;
+  updateBlogPost(id: number, patch: Partial<InsertBlogPost>): Promise<BlogPost | undefined>;
 
   // Collector List
   addCollector(email: string, source?: string | null): Promise<Collector>;
@@ -627,6 +635,47 @@ export class MemStorage implements IStorage {
     return Array.from(this.feedbacks.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
+  private blogPosts: BlogPost[] = [];
+  private currentBlogPostId = 1;
+
+  async getBlogPosts(opts: { includeDrafts?: boolean } = {}): Promise<BlogPost[]> {
+    return this.blogPosts
+      .filter((p) => opts.includeDrafts || p.status === "published")
+      .sort((a, b) => (b.publishedAt ?? b.createdAt!).getTime() - (a.publishedAt ?? a.createdAt!).getTime());
+  }
+
+  async getBlogPostBySlug(slug: string, opts: { includeDrafts?: boolean } = {}): Promise<BlogPost | undefined> {
+    const post = this.blogPosts.find((p) => p.slug === slug);
+    if (!post) return undefined;
+    return opts.includeDrafts || post.status === "published" ? post : undefined;
+  }
+
+  async createBlogPost(post: InsertBlogPost): Promise<BlogPost> {
+    const now = new Date();
+    const row: BlogPost = {
+      id: this.currentBlogPostId++,
+      slug: post.slug, title: post.title, excerpt: post.excerpt, body: post.body,
+      status: post.status ?? "draft",
+      sourceNote: post.sourceNote ?? null,
+      evidence: post.evidence ?? null,
+      coverImage: post.coverImage ?? null,
+      publishedAt: post.publishedAt ?? null,
+      createdAt: now, updatedAt: now,
+    };
+    this.blogPosts.push(row);
+    return row;
+  }
+
+  async updateBlogPost(id: number, patch: Partial<InsertBlogPost>): Promise<BlogPost | undefined> {
+    const i = this.blogPosts.findIndex((p) => p.id === id);
+    if (i === -1) return undefined;
+    const next = { ...this.blogPosts[i], ...patch, updatedAt: new Date() } as BlogPost;
+    // Publishing stamps its own moment once, so "when did this go live" stays true.
+    if (patch.status === "published" && !next.publishedAt) next.publishedAt = new Date();
+    this.blogPosts[i] = next;
+    return next;
+  }
+
   async addCollector(email: string, source?: string | null): Promise<Collector> {
     const existing = this.collectors.find((c) => c.email.toLowerCase() === email.toLowerCase());
     if (existing) return existing;
@@ -1033,6 +1082,39 @@ export class DatabaseStorage implements IStorage {
   async getAllFeedback(): Promise<Feedback[]> {
     return await db.select().from(feedback).orderBy(feedback.createdAt);
   }
+
+  async getBlogPosts(opts: { includeDrafts?: boolean } = {}): Promise<BlogPost[]> {
+    const rows = opts.includeDrafts
+      ? await db.select().from(blogPosts)
+      : await db.select().from(blogPosts).where(eq(blogPosts.status, "published"));
+    return rows.sort((a, b) => {
+      const at = (a.publishedAt ?? a.createdAt)?.getTime() ?? 0;
+      const bt = (b.publishedAt ?? b.createdAt)?.getTime() ?? 0;
+      return bt - at;
+    });
+  }
+
+  async getBlogPostBySlug(slug: string, opts: { includeDrafts?: boolean } = {}): Promise<BlogPost | undefined> {
+    const [row] = await db.select().from(blogPosts).where(eq(blogPosts.slug, slug));
+    if (!row) return undefined;
+    return opts.includeDrafts || row.status === "published" ? row : undefined;
+  }
+
+  async createBlogPost(post: InsertBlogPost): Promise<BlogPost> {
+    const [row] = await db.insert(blogPosts).values(post).returning();
+    return row;
+  }
+
+  async updateBlogPost(id: number, patch: Partial<InsertBlogPost>): Promise<BlogPost | undefined> {
+    // Stamp the publish moment exactly once — re-saving a live post must not move it.
+    const current = (await db.select().from(blogPosts).where(eq(blogPosts.id, id)))[0];
+    if (!current) return undefined;
+    const values: Record<string, unknown> = { ...patch, updatedAt: new Date() };
+    if (patch.status === "published" && !current.publishedAt) values.publishedAt = new Date();
+    const [row] = await db.update(blogPosts).set(values).where(eq(blogPosts.id, id)).returning();
+    return row;
+  }
+
 
   async addCollector(email: string, source?: string | null): Promise<Collector> {
     const [existing] = await db.select().from(collectors).where(eq(collectors.email, email));

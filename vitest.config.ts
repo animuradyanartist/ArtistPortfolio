@@ -14,6 +14,11 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["shared/**/*.test.ts"],
+    include: ["shared/**/*.test.ts", "server/**/*.test.ts"],
+    // The two singulart suites are written against `node:test`, not Vitest, so Vitest
+    // finds no suite in them and fails the run. They are excluded here rather than
+    // rewritten — they still run under `node --test` — and the header comment above was
+    // already promising that server tests execute, which until now they never did.
+    exclude: ["**/node_modules/**", "**/.git/**", "server/singulart-*.test.ts"],
   },
 });

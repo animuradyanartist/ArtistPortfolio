@@ -14,6 +14,9 @@ export default function Navigation() {
     { name: "The Path", href: "/path" },
     // { name: "About", href: "/about" }, // hidden for now — route still works at /about
     { name: "Exhibitions", href: "/exhibitions" },
+    // { name: "Notes", href: "/blog" }, // hidden until the first article is published —
+    // route still works at /blog. A nav link to "No articles published yet" advertises an
+    // empty room; link it in the same commit as the first real piece of writing.
     { name: "Gallery", href: "/gallery" },
     { name: "Contact", href: "/contact" },
   ];

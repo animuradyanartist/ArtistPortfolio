@@ -5,11 +5,63 @@ import path from "path";
 import fs from "fs";
 import sharp from "sharp";
 import { storage } from "./storage";
-import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, prints } from "@shared/schema";
+import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, insertBlogPostSchema, prints } from "@shared/schema";
 import { artworkCanonicalUrl, toSlug } from "@shared/canonical";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
+
+/**
+ * Render an article body to crawlable HTML.
+ *
+ * A deliberately small Markdown subset — headings, paragraphs, lists, links, bold — and
+ * everything is ESCAPED FIRST, then a fixed set of patterns is re-introduced. That order
+ * matters: it means no author, human or agent, can inject markup through a post body, and
+ * it avoids taking a Markdown dependency into the server bundle for six constructs.
+ *
+ * The output is plain semantic HTML with inline styles, matching how /artworks injects its
+ * prerendered section, so an article is real text to a first-wave crawler rather than an
+ * empty shell waiting on JavaScript.
+ */
+function renderArticleHtml(
+  post: { title: string; excerpt: string; body: string; publishedAt: Date | null; createdAt: Date | null },
+  esc: (t: string) => string,
+): string {
+  const blocks = String(post.body ?? "").split(/\n{2,}/).map((raw) => {
+    const block = raw.trim();
+    if (!block) return "";
+    const inline = (t: string) =>
+      esc(t)
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|\/[^)\s]*)\)/g, '<a href="$2" style="color:#1d4ed8;text-decoration:underline">$1</a>');
+
+    const h = /^(#{2,3})\s+(.*)$/.exec(block);
+    if (h) {
+      const level = h[1].length; // ## → h2, ### → h3. h1 is the article title, once.
+      const size = level === 2 ? "1.6rem" : "1.25rem";
+      return `<h${level} style="font-size:${size};font-weight:700;color:#0f172a;margin:2rem 0 0.75rem">${inline(h[2])}</h${level}>`;
+    }
+    if (/^([-*])\s+/.test(block)) {
+      const items = block.split(/\n/).map((l) => l.replace(/^([-*])\s+/, "").trim()).filter(Boolean);
+      return `<ul style="list-style:disc;padding-left:1.5rem;color:#334155;margin-bottom:1rem">${
+        items.map((i) => `<li style="margin-bottom:0.35rem">${inline(i)}</li>`).join("")}</ul>`;
+    }
+    return `<p style="font-size:1.05rem;line-height:1.75;color:#334155;margin-bottom:1rem">${inline(block.replace(/\n/g, " "))}</p>`;
+  }).join("");
+
+  const published = post.publishedAt ?? post.createdAt;
+  const dateLine = published
+    ? `<p style="color:#64748b;font-size:0.9rem;margin-bottom:1.5rem"><time datetime="${published.toISOString()}">${published.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</time> \u00b7 Ani Muradyan</p>`
+    : "";
+
+  return `<article id="blog-post-ssr" style="padding:3rem 1.5rem;max-width:720px;margin:0 auto;font-family:system-ui,sans-serif">` +
+    `<h1 style="font-size:2.4rem;font-weight:700;color:#0f172a;margin-bottom:0.5rem">${esc(post.title)}</h1>` +
+    dateLine +
+    `<p style="font-size:1.15rem;color:#475569;margin-bottom:2rem">${esc(post.excerpt)}</p>` +
+    blocks +
+    `<p style="margin-top:2.5rem"><a href="/blog" style="color:#1d4ed8;text-decoration:underline">\u2190 All writing</a> \u00b7 <a href="/artworks" style="color:#1d4ed8;text-decoration:underline">See the paintings</a></p>` +
+    `</article>`;
+}
 import {
   registerImageRoutes,
   refifyImages,
@@ -1003,6 +1055,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Blog ──────────────────────────────────────────────────────────────────
+  //
+  // Two audiences, one store. The PUBLIC routes never pass `includeDrafts`, so an
+  // unpublished post cannot leak by omission; the admin routes require the same session
+  // auth as the artworks CMS. The Career OS writes here as an authenticated client — it
+  // creates DRAFTS, and only Ani moves one to `published`.
+
+  app.get("/api/blog", async (_req, res) => {
+    try {
+      res.json(await storage.getBlogPosts());
+    } catch (error) {
+      console.error("Error fetching blog posts:", error);
+      res.status(500).json({ message: "Failed to fetch blog posts" });
+    }
+  });
+
+  app.get("/api/blog/:slug", async (req, res) => {
+    try {
+      const post = await storage.getBlogPostBySlug(req.params.slug);
+      if (!post) return res.status(404).json({ message: "Post not found" });
+      res.json(post);
+    } catch (error) {
+      console.error("Error fetching blog post:", error);
+      res.status(500).json({ message: "Failed to fetch blog post" });
+    }
+  });
+
+  /** Admin view — the only route that returns drafts. */
+  app.get("/api/admin/blog", requireAdminAuth, async (_req, res) => {
+    try {
+      res.json(await storage.getBlogPosts({ includeDrafts: true }));
+    } catch (error) {
+      console.error("Error fetching blog drafts:", error);
+      res.status(500).json({ message: "Failed to fetch blog drafts" });
+    }
+  });
+
+  app.post("/api/admin/blog", requireAdminAuth, async (req, res) => {
+    try {
+      const parsed = insertBlogPostSchema.parse({
+        ...req.body,
+        // A post arrives as a draft whatever the caller says. Publishing is a separate,
+        // deliberate act — an agent must never be able to go live in one call.
+        status: "draft",
+        slug: toSlug(String(req.body?.slug || req.body?.title || "")),
+      });
+      if (!parsed.slug) return res.status(400).json({ message: "A title or slug is required" });
+      const existing = await storage.getBlogPostBySlug(parsed.slug, { includeDrafts: true });
+      if (existing) return res.status(409).json({ message: "A post with that slug already exists", id: existing.id });
+      res.status(201).json(await storage.createBlogPost(parsed));
+    } catch (error) {
+      console.error("Error creating blog post:", error);
+      res.status(400).json({ message: "Invalid blog post", detail: error instanceof Error ? error.message : undefined });
+    }
+  });
+
+  /**
+   * Edit a post's CONTENT. It cannot change `status`, and that separation is the point.
+   *
+   * `insertBlogPostSchema.partial()` includes `status`, so this route used to be able to
+   * publish in a single call — which defeated the rule stated on the create route above,
+   * that an agent must never go live in one call. Forcing drafts on POST is worthless if
+   * the very next PATCH can flip the same row public.
+   *
+   * Writing and publishing are now different verbs on different routes. Today both sit
+   * behind the same admin session, so this is not yet a privilege boundary — it is the
+   * SEAM that lets one exist. When Career OS is eventually given a credential to draft
+   * articles, that credential can be granted here and withheld from /publish, and the
+   * safety model becomes something the server enforces rather than something a comment
+   * promises.
+   */
+  app.patch("/api/admin/blog/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+      const patch = insertBlogPostSchema.partial().omit({ status: true, publishedAt: true }).parse(req.body);
+      // Say so rather than ignoring it silently: a caller that thought it published
+      // something must not walk away believing it did.
+      if ("status" in (req.body ?? {})) {
+        return res.status(400).json({ message: "Use POST /api/admin/blog/:id/publish to change whether a post is live" });
+      }
+      const updated = await storage.updateBlogPost(id, patch);
+      if (!updated) return res.status(404).json({ message: "Post not found" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating blog post:", error);
+      res.status(400).json({ message: "Invalid update", detail: error instanceof Error ? error.message : undefined });
+    }
+  });
+
+  /** Take a post live, or pull it back. The one act that changes what the public sees. */
+  app.post("/api/admin/blog/:id/publish", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+      // Default is to publish; `{ "live": false }` reverts a post to a draft.
+      const live = req.body?.live !== false;
+      const updated = await storage.updateBlogPost(id, { status: live ? "published" : "draft" });
+      if (!updated) return res.status(404).json({ message: "Post not found" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error publishing blog post:", error);
+      res.status(400).json({ message: "Could not change publication state" });
+    }
+  });
+
   // Slug helper: toSlug is imported from @shared/canonical (single source).
 
   // SEO Routes
@@ -1048,6 +1206,26 @@ Crawl-delay: 1
 
       let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
       xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+      // Blog index + every PUBLISHED article. Drafts are never listed — the sitemap is a
+      // public declaration, and declaring an unpublished URL invites a 404 from Google.
+      try {
+        const posts = await storage.getBlogPosts();
+        // Only declare the index once it has something in it. A sitemap is a public
+        // statement that a URL is worth crawling, and /blog with no posts is a page that
+        // says "No articles published yet" — submitting that spends crawl budget to prove
+        // there is nothing there.
+        if (posts.length > 0) {
+          xml += `  <url>\n    <loc>${SEO_BASE_URL}/blog</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
+        }
+        for (const post of posts) {
+          const lastmod = (post.updatedAt ?? post.publishedAt ?? post.createdAt);
+          xml += `  <url>\n    <loc>${SEO_BASE_URL}/blog/${post.slug}</loc>\n` +
+            (lastmod ? `    <lastmod>${lastmod.toISOString().slice(0, 10)}</lastmod>\n` : '') +
+            `    <changefreq>monthly</changefreq>\n    <priority>0.6</priority>\n  </url>\n`;
+        }
+      } catch (e) {
+        console.error('Error adding blog posts to sitemap:', e);
+      }
 
       staticPages.forEach(page => {
         xml += '  <url>\n';
@@ -1183,7 +1361,7 @@ Crawl-delay: 1
     // /artworks/<id>, or a bare SEO slug /<seoSlug>). Mirrors the API's
     // resolution order and prefers cheap indexed lookups.
     const RESERVED_PATHS = new Set([
-      '', 'artworks', 'about', 'path', 'exhibitions', 'gallery', 'contact',
+      '', 'artworks', 'about', 'path', 'exhibitions', 'gallery', 'contact', 'blog',
       'admin', 'prints', 'img', 'sitemap.xml', 'image-sitemap.xml', 'robots.txt', 'favicon.ico',
     ]);
     const resolveArtworkForPath = async (pathname: string) => {
@@ -1287,9 +1465,69 @@ Crawl-delay: 1
           html = html.replace('</head>', `  <link rel="canonical" href="${canonicalUrl}">\n  </head>`);
         }
 
-        // /artworks: preload data so React renders immediately (no loading state),
-        // AND inject static HTML so Google's first-wave crawl sees real content.
-        if (req.path === '/artworks') {
+        // BLOG: the whole point of the blog is search, and this site renders on the
+        // client — a crawl of "/" sees 39 characters and no <h1>. An article that exists
+        // only inside the React bundle is an SEO page with no SEO, so the text, the
+        // headings and the Article JSON-LD are injected here, exactly as /artworks does.
+        if (req.path === '/blog' || req.path.startsWith('/blog/')) {
+          try {
+            const esc = (t: string) => String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            const slug = req.path === '/blog' ? null : decodeURIComponent(req.path.slice('/blog/'.length).split('?')[0].split('#')[0]);
+
+            if (!slug) {
+              const posts = await storage.getBlogPosts();
+              const items = posts.map((post) =>
+                `<li style="margin-bottom:1rem"><a href="/blog/${esc(post.slug)}" style="color:#1d4ed8;text-decoration:underline;font-weight:600">${esc(post.title)}</a>` +
+                `<div style="color:#475569">${esc(post.excerpt)}</div></li>`).join('');
+              const ssr =
+                `<section id="blog-ssr" style="padding:3rem 1.5rem;max-width:820px;margin:0 auto;font-family:system-ui,sans-serif">` +
+                `<h1 style="font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem">Writing by Ani Muradyan</h1>` +
+                `<p style="font-size:1.1rem;color:#475569;margin-bottom:1.5rem">Notes on oil painting, process and the work \u2014 by Armenian contemporary artist Ani Muradyan.</p>` +
+                (items ? `<ul style="list-style:none;padding:0">${items}</ul>` : `<p style="color:#475569">No articles published yet.</p>`) +
+                `</section>`;
+              html = html.replace(/<title>[^<]*<\/title>/i, `<title>Writing by Ani Muradyan \u2014 Notes on Oil Painting &amp; Process</title>`);
+              html = html.replace('<div id="root">', ssr + '<div id="root">');
+            } else {
+              const post = await storage.getBlogPostBySlug(slug);
+              if (post) {
+                const url = `${SEO_BASE_URL}/blog/${post.slug}`;
+                const setMeta = (h: string, sel: string, val: string) => {
+                  const re = new RegExp(`(<meta\\s+${sel}\\s+content=")[^"]*(">)`, 'i');
+                  return re.test(h) ? h.replace(re, `$1${esc(val)}$2`) : h;
+                };
+                html = html.replace(/<title>[^<]*<\/title>/i, `<title>${esc(post.title)} \u2014 Ani Muradyan</title>`);
+                html = setMeta(html, 'name="description"', post.excerpt);
+                html = setMeta(html, 'property="og:title"', post.title);
+                html = setMeta(html, 'property="og:description"', post.excerpt);
+                html = setMeta(html, 'property="og:type"', 'article');
+                html = setMeta(html, 'property="og:url"', url);
+                html = setMeta(html, 'name="twitter:title"', post.title);
+                html = setMeta(html, 'name="twitter:description"', post.excerpt);
+                if (post.coverImage) {
+                  html = setMeta(html, 'property="og:image"', post.coverImage);
+                  html = setMeta(html, 'name="twitter:image"', post.coverImage);
+                }
+                html = html.replace(/<link rel="canonical"[^>]*>/i, `<link rel="canonical" href="${esc(url)}">`);
+
+                const jsonld = {
+                  '@context': 'https://schema.org', '@type': 'Article',
+                  headline: post.title, description: post.excerpt,
+                  author: { '@type': 'Person', name: 'Ani Muradyan', url: SEO_BASE_URL },
+                  publisher: { '@type': 'Person', name: 'Ani Muradyan' },
+                  datePublished: (post.publishedAt ?? post.createdAt)?.toISOString?.() ?? undefined,
+                  dateModified: post.updatedAt?.toISOString?.() ?? undefined,
+                  mainEntityOfPage: url,
+                  ...(post.coverImage ? { image: post.coverImage } : {}),
+                };
+                html = html.replace('</head>',
+                  `  <script type="application/ld+json">${JSON.stringify(jsonld).replace(/<\/script>/gi, '<\\/script>')}</script>\n</head>`);
+                html = html.replace('<div id="root">', renderArticleHtml(post, esc) + '<div id="root">');
+              }
+            }
+          } catch (e) {
+            console.error('[SSR] /blog prerender failed:', e);
+          }
+        } else if (req.path === '/artworks') {
           try {
             const artworks = await storage.getAllArtworks();
             const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
