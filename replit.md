@@ -47,6 +47,27 @@ Preferred communication style: Simple, everyday language.
 ### Deployment Strategy
 - Configured for Replit deployment.
 
+### THE DEVELOPMENT DATABASE DEFINES PRODUCTION'S SCHEMA — read before any migration
+- This app has **two** databases (Replit → Database → All Databases): **Development** and
+  **Production**. The workspace's `DATABASE_URL` points at Development; the deployment's
+  points at Production.
+- **On publish, Replit reconciles production's schema to match development's.** A table or
+  column that exists ONLY in production is not treated as extra — it is **DROPPED**.
+- **This destroyed a published article on 2026-08-17.** `blog_posts` existed in production
+  and did not exist in development, because the blog code arrived by GitHub merge and the
+  workspace app was never started afterwards. Publishing dropped the table; the boot DDL
+  recreated it empty; the row was gone and the id sequence restarted at 1. Nothing logged
+  an error — `/blog` simply served empty, which looks identical to "no articles yet".
+- `drizzle.config.ts`'s `tablesFilter` does NOT protect against this. That setting only
+  affects `drizzle-kit push`, which is not what runs here.
+- **The rule: after any schema change, start the app in the workspace once BEFORE
+  publishing.** The boot DDL is idempotent and runs in both environments, so starting it in
+  development is what keeps the two schemas equal. Alternatively apply the same DDL by hand
+  in Database → Development → SQL console.
+- A boot canary in `server/index.ts` remembers the highest row count `blog_posts` has ever
+  held and logs `[boot][DATA LOSS]` if the table is ever found empty afterwards. It cannot
+  prevent the loss; it stops it being silent.
+
 ### Publishing articles (the blog)
 - **`render.yaml` is NOT the live deploy path.** Production (animuradyan.com) is served by
   the **Replit Autoscale deployment** — `server: Google Frontend`. Render's dashboard holds

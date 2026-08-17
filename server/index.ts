@@ -163,6 +163,57 @@ app.use((req, res, next) => {
       await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS measurement_horizon_days integer`);
       await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS cover_image_alt text`);
 
+      // ── DATA-LOSS CANARY for blog_posts ──────────────────────────────────
+      //
+      // On 2026-08-17 a published article vanished. Root cause, from the Replit
+      // database panel: the DEVELOPMENT database had no `blog_posts` table at all while
+      // production did, and Replit's dev→prod schema sync at publish resolves that
+      // difference by DROPPING the table production has and dev does not. The boot DDL
+      // above then recreates it empty, which is why the row disappeared and the id
+      // sequence restarted at 1 — and why nothing anywhere reported an error.
+      //
+      // The structural rule this implies is the important part: **the DEVELOPMENT
+      // database is the source of truth for production's SCHEMA.** Any table or column
+      // that exists only in production is not "extra", it is scheduled for deletion. The
+      // boot DDL is what keeps them equal, so it must have RUN against development —
+      // i.e. the app must have started in the workspace — before a publish.
+      //
+      // This canary cannot prevent that. It makes it LOUD. The count is remembered
+      // across boots, so a table that had rows and now has none announces itself instead
+      // of failing into an empty /blog that looks like "no articles yet".
+      try {
+        // Created here too: this block runs BEFORE the app_migrations bootstrap below, and
+        // the canary must not depend on statement order inside a file someone will edit.
+        await pool.query(
+          `CREATE TABLE IF NOT EXISTS app_migrations (key text PRIMARY KEY, applied_at timestamp NOT NULL DEFAULT now())`,
+        );
+        const { rows: countRows } = await pool.query(`SELECT count(*)::int AS n FROM blog_posts`);
+        const current: number = countRows[0]?.n ?? 0;
+        const { rows: seenRows } = await pool.query(
+          `SELECT key FROM app_migrations WHERE key LIKE 'blog_posts_high_water:%' ORDER BY key DESC LIMIT 1`,
+        );
+        const previous = Number(String(seenRows[0]?.key ?? "").split(":")[1] ?? "0") || 0;
+
+        if (previous > 0 && current === 0) {
+          console.error(
+            `[boot][DATA LOSS] blog_posts is EMPTY but previously held ${previous} row(s). ` +
+            `The dev→prod schema sync almost certainly dropped and recreated it. ` +
+            `Check that the DEVELOPMENT database has blog_posts with the same columns ` +
+            `before the next publish — see the comment in server/index.ts.`,
+          );
+        }
+        // Only ever ratchet UP. A legitimate deletion by the owner lowers the live count
+        // but must not lower the water mark, or the next real loss would look normal.
+        if (current > previous) {
+          await pool.query(
+            `INSERT INTO app_migrations (key) VALUES ($1) ON CONFLICT (key) DO NOTHING`,
+            [`blog_posts_high_water:${String(current).padStart(6, "0")}`],
+          );
+        }
+      } catch (err) {
+        console.error("[boot] blog_posts canary failed (non-fatal):", err);
+      }
+
       // Collector List signups (homepage "Join the Collector List" form).
       await pool.query(`CREATE TABLE IF NOT EXISTS collectors (
         id serial PRIMARY KEY,
