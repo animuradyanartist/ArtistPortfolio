@@ -46,6 +46,21 @@ Preferred communication style: Simple, everyday language.
 
 ### Deployment Strategy
 - Configured for Replit deployment.
+
+### Publishing articles (the blog)
+- **`render.yaml` is NOT the live deploy path.** Production (animuradyan.com) is served by
+  the **Replit Autoscale deployment** — `server: Google Frontend`, and the recurring
+  "Published your App" commits on `main` are authored by Replit Agent. Render hosts only
+  the unrelated `career-os-worker`. **Merging to `main` does not deploy this site**; a
+  human pressing **Publish** in the Replit workspace does.
+- **`BLOG_AGENT_TOKEN` must be set as a Replit Secret** for Career OS to prepare article
+  drafts. Generate a long random value (≥32 chars); it is never chosen by hand elsewhere.
+  Leaving it unset is SAFE and CLOSED — the agent routes then refuse everyone, they do not
+  fall open. Nothing else breaks without it.
+- The permission model, in one line: that token opens **create draft** and **revise its own
+  unpublished draft**, and there is **no agent publish route in the codebase at all**.
+  Publishing, unpublishing and deleting live behind the admin session only, and the owner's
+  Publish button in Admin → Articles is the only thing that changes what the public sees.
 - `npm run dev` starts both frontend and backend.
 - `npm run build` compiles for production.
 - Environment variables: `NODE_ENV`, `DATABASE_URL`, `PORT`.
