@@ -155,6 +155,12 @@ app.use((req, res, next) => {
         updated_at timestamp DEFAULT now()
       )`);
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS blog_posts_slug_unique ON blog_posts (slug)`);
+      // Who drafted it, and the contract that makes a publication measurable later.
+      // Added separately so a database created by the first version still gains them.
+      await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS origin text NOT NULL DEFAULT 'manual'`);
+      await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS decision_ref text`);
+      await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS expected_outcome text`);
+      await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS measurement_horizon_days integer`);
 
       // Collector List signups (homepage "Join the Collector List" form).
       await pool.query(`CREATE TABLE IF NOT EXISTS collectors (

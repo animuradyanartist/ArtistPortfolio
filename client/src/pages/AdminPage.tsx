@@ -14,6 +14,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema, insertContactSettingsSchema, insertGalleryPhotoSchema } from "@shared/schema";
 import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings, GalleryPhoto, Collector, Message } from "@shared/schema";
 import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
+import AdminArticles from "@/components/AdminArticles";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 // Editable painting slots on the storytelling "/path" page. Each stores an
@@ -30,7 +31,7 @@ const PATH_IMAGE_SLOTS = [
 export default function AdminPage() {
   const [, setLocation] = useLocation();
   const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<'homepage' | 'path' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact' | 'collectors' | 'messages'>('homepage');
+  const [activeTab, setActiveTab] = useState<'homepage' | 'path' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact' | 'collectors' | 'messages' | 'articles'>('homepage');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
@@ -785,7 +786,7 @@ export default function AdminPage() {
         {/* Modern Tabs */}
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-2 mb-8">
           <div className="flex space-x-1">
-            {(['homepage', 'path', 'artworks', 'prints', 'exhibitions', 'gallery', 'artist', 'contact', 'collectors', 'messages'] as const).map((tab) => (
+            {(['homepage', 'path', 'artworks', 'articles', 'prints', 'exhibitions', 'gallery', 'artist', 'contact', 'collectors', 'messages'] as const).map((tab) => (
               <Button
                 key={tab}
                 variant="ghost"
@@ -801,6 +802,10 @@ export default function AdminPage() {
             ))}
           </div>
         </div>
+
+        {/* Articles — the whole owner side of publishing. Career OS can only ever put a
+            draft here; this tab is the only path from a draft to a public page. */}
+        {activeTab === 'articles' && <AdminArticles />}
 
         {/* Homepage Tab */}
         {activeTab === 'homepage' && (

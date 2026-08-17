@@ -10,6 +10,7 @@ import { artworkCanonicalUrl, toSlug } from "@shared/canonical";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
+import { requireBlogAgent, agentFields, agentMayEdit, blogAgentConfigured } from "./blogAgent";
 
 /**
  * Render an article body to crawlable HTML.
@@ -1142,6 +1143,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating blog post:", error);
       res.status(400).json({ message: "Invalid update", detail: error instanceof Error ? error.message : undefined });
+    }
+  });
+
+  /**
+   * Delete a post for good. Admin only, and never reachable by the agent — an agent that
+   * can destroy the owner's writing is a worse problem than one that can publish it.
+   */
+  app.delete("/api/admin/blog/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+      const ok = await storage.deleteBlogPost(id);
+      if (!ok) return res.status(404).json({ message: "Post not found" });
+      res.json({ deleted: true, id });
+    } catch (error) {
+      console.error("Error deleting blog post:", error);
+      res.status(500).json({ message: "Could not delete post" });
+    }
+  });
+
+  // ── The agent's scoped path ───────────────────────────────────────────────
+  //
+  // Two routes, one credential, no way to go live. `requireBlogAgent` accepts a token that
+  // the publish and delete routes above do not — the boundary is which door the key opens,
+  // not what the caller was asked to do. There is no agent publish route to disable.
+
+  app.post("/api/agent/blog", requireBlogAgent, async (req, res) => {
+    try {
+      const fields = agentFields(req.body);
+      const slug = toSlug(String((fields.slug as string) || (fields.title as string) || ""));
+      if (!slug) return res.status(400).json({ message: "A title or slug is required" });
+      if (!fields.title || !fields.excerpt || !fields.body) {
+        return res.status(400).json({ message: "title, excerpt and body are required" });
+      }
+      const existing = await storage.getBlogPostBySlug(slug, { includeDrafts: true });
+      if (existing) return res.status(409).json({ message: "A post with that slug already exists", id: existing.id });
+      const parsed = insertBlogPostSchema.parse({
+        ...fields,
+        slug,
+        // Not negotiable, and not read from the request: the agent's every post is a draft
+        // that Ani has not seen yet.
+        status: "draft",
+        origin: "career_os",
+      });
+      const created = await storage.createBlogPost(parsed);
+      res.status(201).json({ id: created.id, slug: created.slug, status: created.status, reviewUrl: `${SEO_BASE_URL}/admin` });
+    } catch (error) {
+      console.error("Error creating agent draft:", error);
+      res.status(400).json({ message: "Invalid draft", detail: error instanceof Error ? error.message : undefined });
+    }
+  });
+
+  app.patch("/api/agent/blog/:id", requireBlogAgent, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+      const current = await storage.getBlogPostById(id);
+      const may = agentMayEdit(current);
+      if (!may.ok) return res.status(current ? 403 : 404).json({ message: may.reason });
+      const patch = insertBlogPostSchema.partial().omit({ status: true, publishedAt: true, origin: true })
+        .parse(agentFields(req.body));
+      const updated = await storage.updateBlogPost(id, patch);
+      res.json({ id: updated!.id, slug: updated!.slug, status: updated!.status });
+    } catch (error) {
+      console.error("Error updating agent draft:", error);
+      res.status(400).json({ message: "Invalid update", detail: error instanceof Error ? error.message : undefined });
+    }
+  });
+
+  /**
+   * THE MEASUREMENT CONTRACT, readable by whoever published it.
+   *
+   * A published article is only an intervention if something can later ask "did it work?".
+   * This returns, for every live post, the final URL, when it went live, the decision that
+   * produced it, what that decision expected to move, and how long to wait before judging.
+   * Public because none of it is secret — it is the same information the article itself
+   * declares — and read-only.
+   */
+  app.get("/api/blog-measurement", async (_req, res) => {
+    try {
+      const posts = await storage.getBlogPosts();
+      res.json(posts.map((p) => ({
+        id: p.id,
+        url: `${SEO_BASE_URL}/blog/${p.slug}`,
+        slug: p.slug,
+        title: p.title,
+        publishedAt: p.publishedAt,
+        origin: p.origin,
+        decisionRef: p.decisionRef,
+        expectedOutcome: p.expectedOutcome,
+        measurementHorizonDays: p.measurementHorizonDays,
+        // When the horizon closes — computed here so every reader agrees on the date.
+        measurableFrom: p.publishedAt && p.measurementHorizonDays
+          ? new Date(p.publishedAt.getTime() + p.measurementHorizonDays * 86400000).toISOString()
+          : null,
+      })));
+    } catch (error) {
+      console.error("Error building measurement contract:", error);
+      res.status(500).json({ message: "Failed to build measurement contract" });
     }
   });
 

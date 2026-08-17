@@ -81,8 +81,10 @@ export interface IStorage {
   // public route physically cannot serve one by forgetting a filter.
   getBlogPosts(opts?: { includeDrafts?: boolean }): Promise<BlogPost[]>;
   getBlogPostBySlug(slug: string, opts?: { includeDrafts?: boolean }): Promise<BlogPost | undefined>;
+  getBlogPostById(id: number): Promise<BlogPost | undefined>;
   createBlogPost(post: InsertBlogPost): Promise<BlogPost>;
   updateBlogPost(id: number, patch: Partial<InsertBlogPost>): Promise<BlogPost | undefined>;
+  deleteBlogPost(id: number): Promise<boolean>;
 
   // Collector List
   addCollector(email: string, source?: string | null): Promise<Collector>;
@@ -650,6 +652,16 @@ export class MemStorage implements IStorage {
     return opts.includeDrafts || post.status === "published" ? post : undefined;
   }
 
+  async getBlogPostById(id: number): Promise<BlogPost | undefined> {
+    return this.blogPosts.find((p) => p.id === id);
+  }
+
+  async deleteBlogPost(id: number): Promise<boolean> {
+    const before = this.blogPosts.length;
+    this.blogPosts = this.blogPosts.filter((p) => p.id !== id);
+    return this.blogPosts.length < before;
+  }
+
   async createBlogPost(post: InsertBlogPost): Promise<BlogPost> {
     const now = new Date();
     const row: BlogPost = {
@@ -660,6 +672,10 @@ export class MemStorage implements IStorage {
       evidence: post.evidence ?? null,
       coverImage: post.coverImage ?? null,
       publishedAt: post.publishedAt ?? null,
+      origin: post.origin ?? "manual",
+      decisionRef: post.decisionRef ?? null,
+      expectedOutcome: post.expectedOutcome ?? null,
+      measurementHorizonDays: post.measurementHorizonDays ?? null,
       createdAt: now, updatedAt: now,
     };
     this.blogPosts.push(row);
@@ -1098,6 +1114,16 @@ export class DatabaseStorage implements IStorage {
     const [row] = await db.select().from(blogPosts).where(eq(blogPosts.slug, slug));
     if (!row) return undefined;
     return opts.includeDrafts || row.status === "published" ? row : undefined;
+  }
+
+  async getBlogPostById(id: number): Promise<BlogPost | undefined> {
+    const [row] = await db.select().from(blogPosts).where(eq(blogPosts.id, id));
+    return row;
+  }
+
+  async deleteBlogPost(id: number): Promise<boolean> {
+    const rows = await db.delete(blogPosts).where(eq(blogPosts.id, id)).returning();
+    return rows.length > 0;
   }
 
   async createBlogPost(post: InsertBlogPost): Promise<BlogPost> {

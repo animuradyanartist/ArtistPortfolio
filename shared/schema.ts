@@ -249,8 +249,23 @@ export const blogPosts = pgTable("blog_posts", {
   evidence: text("evidence").array(),
   /** Optional hero image (an absolute URL, or /img/artwork/<id>/0 for one of her works). */
   coverImage: text("cover_image"),
-  /** Set when it actually went public — distinct from createdAt, which is when drafted. */
+  /** Set when it actually went public — distinct from createdAt, which is when drafted.
+   *  Stamped exactly once: a moving publication date silently moves the window every
+   *  "did this work?" question is asked over. */
   publishedAt: timestamp("published_at"),
+  /** WHO drafted this: "manual" (Ani, in the admin) or "career_os" (the agent). Shown in
+   *  the admin list so she always knows what she is looking at, and used server-side to
+   *  stop the agent editing anything but its own drafts. */
+  origin: text("origin").notNull().default("manual"),
+  /** THE MEASUREMENT CONTRACT — filled when an agent drafts from a real decision, so a
+   *  published article can later be connected to the reasoning that produced it. Without
+   *  these, an article is a thing that appeared, and no outcome can be attributed to it.
+   *  `decisionRef` is the Career OS action/recommendation id. */
+  decisionRef: text("decision_ref"),
+  /** What publishing this is expected to move, chosen BEFORE it goes live, never after. */
+  expectedOutcome: text("expected_outcome"),
+  /** How long to wait before judging it, in days. 28 matches the GSC reporting window. */
+  measurementHorizonDays: integer("measurement_horizon_days"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (t) => ({
