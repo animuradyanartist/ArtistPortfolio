@@ -52,10 +52,16 @@ Preferred communication style: Simple, everyday language.
   the **Replit Autoscale deployment** — `server: Google Frontend`. Render's dashboard holds
   exactly one service, `career-os-worker`; no `artistportfolio` service was ever created,
   so the blueprint describes a migration that never happened.
-- **Merging to `main` DOES reach production, automatically.** Measured 2026-08-17: commits
-  pushed between 05:40Z and 05:55Z were serving by 06:01Z, with no GitHub Action (there are
-  none) and no new "Published your App" commit — so the Replit deployment tracks the
-  connected repo rather than waiting for someone to press Publish. Allow ~5-20 minutes.
+- **Merging to `main` does NOT deploy. A human pressing Publish does.** Settled from the
+  Publishing panel, which is authoritative: production reads "Ani published N minutes ago",
+  and EVERY entry in the deploy history is "Ani published". There is no GitHub Action and no
+  repo-tracking deploy. I got this wrong in both directions on 2026-08-17 — first assuming
+  Render, then assuming auto-deploy because a deploy happened to land while I was pushing.
+  It landed because Ani pressed Publish. Check the Publishing panel before believing either.
+- **A new Secret does not reach production until the next Publish.** Autoscale serves the
+  build that was published; adding `BLOG_AGENT_TOKEN` afterwards leaves the running
+  deployment without it, and `requireBlogAgent` then refuses every caller — correctly, and
+  indistinguishably from a wrong token, because it fails closed on purpose.
 - **Do not detect a deploy by HTTP status.** This is a client-rendered SPA with a catch-all:
   every unknown path, `/api/*` included, answers **200 with the HTML shell**. A route that
   does not exist looks identical to one that does. Test the BODY — JSON for an API, an
