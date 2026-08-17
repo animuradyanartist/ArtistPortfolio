@@ -1111,17 +1111,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * Edit a post's CONTENT. It cannot change `status`, and that separation is the point.
+   *
+   * `insertBlogPostSchema.partial()` includes `status`, so this route used to be able to
+   * publish in a single call — which defeated the rule stated on the create route above,
+   * that an agent must never go live in one call. Forcing drafts on POST is worthless if
+   * the very next PATCH can flip the same row public.
+   *
+   * Writing and publishing are now different verbs on different routes. Today both sit
+   * behind the same admin session, so this is not yet a privilege boundary — it is the
+   * SEAM that lets one exist. When Career OS is eventually given a credential to draft
+   * articles, that credential can be granted here and withheld from /publish, and the
+   * safety model becomes something the server enforces rather than something a comment
+   * promises.
+   */
   app.patch("/api/admin/blog/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
-      const patch = insertBlogPostSchema.partial().parse(req.body);
+      const patch = insertBlogPostSchema.partial().omit({ status: true, publishedAt: true }).parse(req.body);
+      // Say so rather than ignoring it silently: a caller that thought it published
+      // something must not walk away believing it did.
+      if ("status" in (req.body ?? {})) {
+        return res.status(400).json({ message: "Use POST /api/admin/blog/:id/publish to change whether a post is live" });
+      }
       const updated = await storage.updateBlogPost(id, patch);
       if (!updated) return res.status(404).json({ message: "Post not found" });
       res.json(updated);
     } catch (error) {
       console.error("Error updating blog post:", error);
       res.status(400).json({ message: "Invalid update", detail: error instanceof Error ? error.message : undefined });
+    }
+  });
+
+  /** Take a post live, or pull it back. The one act that changes what the public sees. */
+  app.post("/api/admin/blog/:id/publish", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+      // Default is to publish; `{ "live": false }` reverts a post to a draft.
+      const live = req.body?.live !== false;
+      const updated = await storage.updateBlogPost(id, { status: live ? "published" : "draft" });
+      if (!updated) return res.status(404).json({ message: "Post not found" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error publishing blog post:", error);
+      res.status(400).json({ message: "Could not change publication state" });
     }
   });
 
@@ -1174,7 +1210,13 @@ Crawl-delay: 1
       // public declaration, and declaring an unpublished URL invites a 404 from Google.
       try {
         const posts = await storage.getBlogPosts();
-        xml += `  <url>\n    <loc>${SEO_BASE_URL}/blog</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
+        // Only declare the index once it has something in it. A sitemap is a public
+        // statement that a URL is worth crawling, and /blog with no posts is a page that
+        // says "No articles published yet" — submitting that spends crawl budget to prove
+        // there is nothing there.
+        if (posts.length > 0) {
+          xml += `  <url>\n    <loc>${SEO_BASE_URL}/blog</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
+        }
         for (const post of posts) {
           const lastmod = (post.updatedAt ?? post.publishedAt ?? post.createdAt);
           xml += `  <url>\n    <loc>${SEO_BASE_URL}/blog/${post.slug}</loc>\n` +

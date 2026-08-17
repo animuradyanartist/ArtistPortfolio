@@ -53,4 +53,43 @@ describe("drafts cannot leak", () => {
     const list = await storage.getBlogPosts();
     expect(list.map((p) => p.slug)).toEqual(["older", "newer"]);
   });
+
+  /**
+   * THE WRITE BOUNDARY, not just the read boundary.
+   *
+   * Every test above proves a draft cannot be READ by the public. None of them proved a
+   * draft could not be PUBLISHED by whoever is holding the pen — and the content route
+   * accepted `status`, so one PATCH took a post live. Forcing drafts on create is
+   * worthless if the next call can flip the same row public.
+   *
+   * These pin the seam: editing content and going live are different verbs, so a
+   * credential can one day be granted the first and refused the second.
+   */
+  it("editing content leaves publication state alone", async () => {
+    const post = await storage.createBlogPost(draft({ slug: "seam", title: "Seam" }));
+    const edited = await storage.updateBlogPost(post.id, { title: "Edited" });
+    expect(edited!.title).toBe("Edited");
+    expect(edited!.status).toBe("draft");
+    expect(await storage.getBlogPosts()).toHaveLength(0);
+  });
+
+  it("publishing is what makes it public, and unpublishing takes it back", async () => {
+    const post = await storage.createBlogPost(draft({ slug: "toggle", title: "Toggle" }));
+    await storage.updateBlogPost(post.id, { status: "published" });
+    expect(await storage.getBlogPosts()).toHaveLength(1);
+
+    await storage.updateBlogPost(post.id, { status: "draft" });
+    expect(await storage.getBlogPosts()).toHaveLength(0);
+    expect(await storage.getBlogPostBySlug("toggle")).toBeUndefined();
+  });
+
+  it("a re-published post keeps its original publication moment", async () => {
+    const post = await storage.createBlogPost(draft({ slug: "again", title: "Again" }));
+    const first = (await storage.updateBlogPost(post.id, { status: "published" }))!.publishedAt!.getTime();
+    await storage.updateBlogPost(post.id, { status: "draft" });
+    const back = await storage.updateBlogPost(post.id, { status: "published" });
+    // Measurement depends on this: a moving publication date silently moves the window
+    // every "did it work?" question is asked over.
+    expect(back!.publishedAt!.getTime()).toBe(first);
+  });
 });
