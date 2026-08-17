@@ -161,6 +161,7 @@ app.use((req, res, next) => {
       await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS decision_ref text`);
       await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS expected_outcome text`);
       await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS measurement_horizon_days integer`);
+      await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS cover_image_alt text`);
 
       // Collector List signups (homepage "Join the Collector List" form).
       await pool.query(`CREATE TABLE IF NOT EXISTS collectors (

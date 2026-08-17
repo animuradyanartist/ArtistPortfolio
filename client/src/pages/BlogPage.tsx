@@ -46,13 +46,23 @@ export default function BlogPage() {
             {posts.map((post) => (
               <li key={post.id} className="border-b border-stone-300/60 pb-8 last:border-0">
                 <Link href={`/blog/${post.slug}`}>
-                  <a className="block group">
+                  <a className="block group sm:flex sm:gap-6">
+                    {post.coverImage && (
+                      <img
+                        src={post.coverImage}
+                        alt={post.coverImageAlt ?? ""}
+                        loading="lazy"
+                        className="w-full sm:w-40 h-48 sm:h-28 object-cover rounded-md mb-4 sm:mb-0 shrink-0"
+                      />
+                    )}
+                    <div>
                     <p className="text-stone-500 text-sm mb-2">{dateOf(post)}</p>
                     <h2 className="font-playfair text-2xl md:text-3xl text-stone-900 mb-2 group-hover:text-stone-600 transition-colors">
                       {post.title}
                     </h2>
                     <p className="text-stone-600 leading-relaxed">{post.excerpt}</p>
                     <span className="inline-block mt-3 text-sm text-stone-700 underline underline-offset-4">Read</span>
+                    </div>
                   </a>
                 </Link>
               </li>

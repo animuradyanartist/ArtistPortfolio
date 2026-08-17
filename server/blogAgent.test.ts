@@ -15,6 +15,13 @@ describe("what the agent may say", () => {
     expect(Object.keys(out).sort()).toEqual(["body", "decisionRef", "evidence", "excerpt", "expectedOutcome", "measurementHorizonDays", "slug", "title"]);
   });
 
+  it("may choose a cover image and describe it — neither grants any publishing power", () => {
+    const out = agentFields({ coverImage: "/img/artwork/12/0", coverImageAlt: "A blue seascape", status: "published" });
+    expect(out).toEqual({ coverImage: "/img/artwork/12/0", coverImageAlt: "A blue seascape" });
+    // The image fields ride along; `status` is still dropped on the same call.
+    expect(out).not.toHaveProperty("status");
+  });
+
   it("drops status — the agent cannot even express going live", () => {
     const out = agentFields({ title: "T", status: "published" });
     expect(out).not.toHaveProperty("status");

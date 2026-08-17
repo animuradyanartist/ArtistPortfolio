@@ -671,6 +671,7 @@ export class MemStorage implements IStorage {
       sourceNote: post.sourceNote ?? null,
       evidence: post.evidence ?? null,
       coverImage: post.coverImage ?? null,
+      coverImageAlt: post.coverImageAlt ?? null,
       publishedAt: post.publishedAt ?? null,
       origin: post.origin ?? "manual",
       decisionRef: post.decisionRef ?? null,

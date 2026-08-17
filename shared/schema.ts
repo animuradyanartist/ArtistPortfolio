@@ -247,8 +247,14 @@ export const blogPosts = pgTable("blog_posts", {
   /** The evidence the article was grounded in — search queries, artwork ids, page URLs.
    *  Never prose the model invented; the provenance the quality gate can inspect. */
   evidence: text("evidence").array(),
-  /** Optional hero image (an absolute URL, or /img/artwork/<id>/0 for one of her works). */
+  /** Optional hero image. Either an upload path from the site's existing image pipeline
+   *  ("/uploads/x.webp", via POST /api/upload) or a reference to one of her own paintings
+   *  ("/img/artwork/<id>/0"). No separate media system: both forms are already served. */
   coverImage: text("cover_image"),
+  /** What the image shows, for people who cannot see it. Stored beside the image rather
+   *  than derived from the title, because "the article's title" is rarely a description of
+   *  the picture — and an empty alt is better than a wrong one. */
+  coverImageAlt: text("cover_image_alt"),
   /** Set when it actually went public — distinct from createdAt, which is when drafted.
    *  Stamped exactly once: a moving publication date silently moves the window every
    *  "did this work?" question is asked over. */

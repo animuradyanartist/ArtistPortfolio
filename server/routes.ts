@@ -25,7 +25,11 @@ import { requireBlogAgent, agentFields, agentMayEdit, blogAgentConfigured } from
  * empty shell waiting on JavaScript.
  */
 function renderArticleHtml(
-  post: { title: string; excerpt: string; body: string; publishedAt: Date | null; createdAt: Date | null },
+  post: {
+    title: string; excerpt: string; body: string;
+    publishedAt: Date | null; createdAt: Date | null;
+    coverImage?: string | null; coverImageAlt?: string | null;
+  },
   esc: (t: string) => string,
 ): string {
   const blocks = String(post.body ?? "").split(/\n{2,}/).map((raw) => {
@@ -55,7 +59,16 @@ function renderArticleHtml(
     ? `<p style="color:#64748b;font-size:0.9rem;margin-bottom:1.5rem"><time datetime="${published.toISOString()}">${published.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</time> \u00b7 Ani Muradyan</p>`
     : "";
 
+  // The image is part of the crawlable article, not decoration bolted on by JavaScript.
+  // `alt` is written by whoever chose the picture; when they left it blank the attribute is
+  // EMPTY rather than filled with the title — an empty alt tells a screen reader "skip
+  // this", a wrong one wastes the listener's time.
+  const cover = post.coverImage
+    ? `<img src="${esc(post.coverImage)}" alt="${esc(post.coverImageAlt ?? "")}" style="width:100%;height:auto;border-radius:12px;margin-bottom:2rem" />`
+    : "";
+
   return `<article id="blog-post-ssr" style="padding:3rem 1.5rem;max-width:720px;margin:0 auto;font-family:system-ui,sans-serif">` +
+    cover +
     `<h1 style="font-size:2.4rem;font-weight:700;color:#0f172a;margin-bottom:0.5rem">${esc(post.title)}</h1>` +
     dateLine +
     `<p style="font-size:1.15rem;color:#475569;margin-bottom:2rem">${esc(post.excerpt)}</p>` +
@@ -1576,9 +1589,14 @@ Crawl-delay: 1
 
             if (!slug) {
               const posts = await storage.getBlogPosts();
-              const items = posts.map((post) =>
-                `<li style="margin-bottom:1rem"><a href="/blog/${esc(post.slug)}" style="color:#1d4ed8;text-decoration:underline;font-weight:600">${esc(post.title)}</a>` +
-                `<div style="color:#475569">${esc(post.excerpt)}</div></li>`).join('');
+              const items = posts.map((post) => {
+                const thumb = post.coverImage
+                  ? `<img src="${esc(post.coverImage)}" alt="${esc(post.coverImageAlt ?? '')}" style="width:120px;height:90px;object-fit:cover;border-radius:8px;flex-shrink:0" />`
+                  : '';
+                return `<li style="margin-bottom:1.5rem;display:flex;gap:1rem;align-items:flex-start">${thumb}` +
+                  `<div><a href="/blog/${esc(post.slug)}" style="color:#1d4ed8;text-decoration:underline;font-weight:600">${esc(post.title)}</a>` +
+                  `<div style="color:#475569">${esc(post.excerpt)}</div></div></li>`;
+              }).join('');
               const ssr =
                 `<section id="blog-ssr" style="padding:3rem 1.5rem;max-width:820px;margin:0 auto;font-family:system-ui,sans-serif">` +
                 `<h1 style="font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem">Writing by Ani Muradyan</h1>` +
@@ -1604,8 +1622,16 @@ Crawl-delay: 1
                 html = setMeta(html, 'name="twitter:title"', post.title);
                 html = setMeta(html, 'name="twitter:description"', post.excerpt);
                 if (post.coverImage) {
-                  html = setMeta(html, 'property="og:image"', post.coverImage);
-                  html = setMeta(html, 'name="twitter:image"', post.coverImage);
+                  // ABSOLUTE, always. Facebook, X, LinkedIn and iMessage all fetch og:image
+                  // from their own servers with no page context, so a relative "/uploads/x"
+                  // resolves against nothing and the card silently renders blank — the kind
+                  // of failure nobody sees until an article is already being shared.
+                  const absImage = /^https?:\/\//i.test(post.coverImage)
+                    ? post.coverImage
+                    : `${SEO_BASE_URL}${post.coverImage.startsWith('/') ? '' : '/'}${post.coverImage}`;
+                  html = setMeta(html, 'property="og:image"', absImage);
+                  html = setMeta(html, 'name="twitter:image"', absImage);
+                  html = setMeta(html, 'property="og:image:alt"', post.coverImageAlt ?? post.title);
                 }
                 html = html.replace(/<link rel="canonical"[^>]*>/i, `<link rel="canonical" href="${esc(url)}">`);
 
@@ -1617,7 +1643,11 @@ Crawl-delay: 1
                   datePublished: (post.publishedAt ?? post.createdAt)?.toISOString?.() ?? undefined,
                   dateModified: post.updatedAt?.toISOString?.() ?? undefined,
                   mainEntityOfPage: url,
-                  ...(post.coverImage ? { image: post.coverImage } : {}),
+                  ...(post.coverImage ? {
+                    image: /^https?:\/\//i.test(post.coverImage)
+                      ? post.coverImage
+                      : `${SEO_BASE_URL}${post.coverImage.startsWith('/') ? '' : '/'}${post.coverImage}`,
+                  } : {}),
                 };
                 html = html.replace('</head>',
                   `  <script type="application/ld+json">${JSON.stringify(jsonld).replace(/<\/script>/gi, '<\\/script>')}</script>\n</head>`);

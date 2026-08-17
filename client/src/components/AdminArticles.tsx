@@ -20,8 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { BlogPost } from "@shared/schema";
-import { Plus, Edit, Trash, Eye, Globe, Undo2, Bot, User } from "lucide-react";
+import type { BlogPost, Artwork } from "@shared/schema";
+import { Plus, Edit, Trash, Eye, Globe, Undo2, Bot, User, Upload, X, ImageIcon } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -35,9 +35,10 @@ interface Draft {
   body: string;
   sourceNote: string;
   coverImage: string;
+  coverImageAlt: string;
 }
 
-const EMPTY: Draft = { title: "", slug: "", excerpt: "", body: "", sourceNote: "", coverImage: "" };
+const EMPTY: Draft = { title: "", slug: "", excerpt: "", body: "", sourceNote: "", coverImage: "", coverImageAlt: "" };
 
 /** "A Note on Oil" → "a-note-on-oil". Mirrors the server's own slug rule. */
 function toSlug(s: string): string {
@@ -67,7 +68,11 @@ export default function AdminArticles() {
 
   const save = useMutation({
     mutationFn: async (d: Draft) => {
-      const payload = { title: d.title, slug: toSlug(d.slug || d.title), excerpt: d.excerpt, body: d.body, sourceNote: d.sourceNote || null, coverImage: d.coverImage || null };
+      const payload = {
+        title: d.title, slug: toSlug(d.slug || d.title), excerpt: d.excerpt, body: d.body,
+        sourceNote: d.sourceNote || null,
+        coverImage: d.coverImage || null, coverImageAlt: d.coverImageAlt || null,
+      };
       if (d.id) return apiRequest("PATCH", `/api/admin/blog/${d.id}`, payload);
       return apiRequest("POST", "/api/admin/blog", payload);
     },
@@ -91,6 +96,25 @@ export default function AdminArticles() {
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/admin/blog/${id}`),
     onSuccess: () => { refresh(); setConfirmDelete(null); toast({ title: "Deleted" }); },
     onError: (e: Error) => fail(e, "Could not delete"),
+  });
+
+  // Her own paintings, so a cover can be one of them without uploading anything. The list
+  // is already served for the Artworks tab; this reuses it rather than adding a picker API.
+  const { data: artworks = [] } = useQuery<Artwork[]>({ queryKey: ["/api/artworks"] });
+  const [showPicker, setShowPicker] = useState(false);
+
+  // The site's EXISTING upload endpoint — sharp converts to WebP and returns a path under
+  // /uploads. No new storage, no media library, same pipeline the artworks use.
+  const uploadCover = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("image", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      if (!res.ok) throw new Error("Upload failed");
+      return (await res.json()) as { imagePath: string };
+    },
+    onSuccess: (d) => { setEditing((e) => (e ? { ...e, coverImage: d.imagePath } : e)); toast({ title: "Image added" }); },
+    onError: (e: Error) => fail(e, "Could not upload the image"),
   });
 
   const awaitingReview = posts.filter((p) => p.status === "draft" && p.origin === "career_os");
@@ -125,6 +149,54 @@ export default function AdminArticles() {
             <p className="text-xs text-slate-500 mt-1">Blank line between paragraphs · ## heading · - list · **bold** · [link](url)</p>
           </div>
           <div>
+            <label className="text-sm font-medium text-slate-700">Cover image <span className="text-slate-400 font-normal">(optional)</span></label>
+            {d.coverImage ? (
+              <div className="mt-2 space-y-2">
+                {/* The same preview the reader will get — if it looks wrong here it is wrong. */}
+                <div className="relative inline-block">
+                  <img src={d.coverImage} alt={d.coverImageAlt || "Cover preview"} className="max-h-48 rounded-lg border border-slate-200" />
+                  <Button size="sm" variant="ghost" className="absolute top-1 right-1 bg-white/90 hover:bg-white"
+                    onClick={() => set({ coverImage: "", coverImageAlt: "" })} title="Remove image">
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Describe the image</label>
+                  <Input value={d.coverImageAlt} onChange={(e) => set({ coverImageAlt: e.target.value })}
+                    placeholder="e.g. A blue seascape at dusk, oil on canvas" />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Read aloud to people who cannot see it, and used by search engines. Leave blank if the image is purely decorative.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2 flex gap-2 flex-wrap">
+                <label>
+                  <input type="file" accept="image/*" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCover.mutate(f); }} />
+                  <Button asChild variant="outline" size="sm" disabled={uploadCover.isPending}>
+                    <span className="cursor-pointer"><Upload className="w-4 h-4 mr-1" /> {uploadCover.isPending ? "Uploading…" : "Upload an image"}</span>
+                  </Button>
+                </label>
+                <Button variant="outline" size="sm" onClick={() => setShowPicker(!showPicker)}>
+                  <ImageIcon className="w-4 h-4 mr-1" /> Use one of my paintings
+                </Button>
+              </div>
+            )}
+            {showPicker && !d.coverImage && (
+              <div className="mt-3 grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-64 overflow-y-auto p-2 border border-slate-200 rounded-lg">
+                {artworks.map((a) => (
+                  <button key={a.id} type="button" title={a.title}
+                    onClick={() => { set({ coverImage: `/img/artwork/${a.id}/0`, coverImageAlt: `${a.title}${a.medium ? `, ${a.medium}` : ""}` }); setShowPicker(false); }}
+                    className="aspect-square rounded-md overflow-hidden border border-slate-200 hover:border-blue-500">
+                    <img src={`/img/artwork/${a.id}/0`} alt={a.title} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
             <label className="text-sm font-medium text-slate-700">Why this was written <span className="text-slate-400 font-normal">(optional, private)</span></label>
             <Input value={d.sourceNote} onChange={(e) => set({ sourceNote: e.target.value })} placeholder="e.g. people search this and nothing of mine answers it" />
           </div>
@@ -154,6 +226,9 @@ export default function AdminArticles() {
         </CardHeader>
         <CardContent>
           <article className="max-w-2xl mx-auto py-6">
+            {preview.coverImage && (
+              <img src={preview.coverImage} alt={preview.coverImageAlt ?? ""} className="w-full rounded-xl mb-6" />
+            )}
             <h1 className="text-4xl font-bold text-slate-900 mb-2">{preview.title}</h1>
             <p className="text-slate-500 text-sm mb-6">{when(preview.publishedAt ?? preview.createdAt)} · Ani Muradyan</p>
             <p className="text-lg text-slate-600 mb-8">{preview.excerpt}</p>
@@ -208,7 +283,10 @@ export default function AdminArticles() {
             <div className="divide-y divide-slate-100">
               {posts.map((p) => (
                 <div key={p.id} className="py-4 flex items-start justify-between gap-4">
-                  <div className="min-w-0">
+                  {p.coverImage && (
+                    <img src={p.coverImage} alt="" className="w-16 h-12 object-cover rounded shrink-0 border border-slate-200" />
+                  )}
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-slate-900 truncate">{p.title}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${p.status === "published" ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-600"}`}>
@@ -228,7 +306,7 @@ export default function AdminArticles() {
                   <div className="flex items-center gap-1 shrink-0">
                     <Button size="sm" variant="ghost" onClick={() => setPreview(p)} title="Preview"><Eye className="w-4 h-4" /></Button>
                     <Button size="sm" variant="ghost" title="Edit"
-                      onClick={() => setEditing({ id: p.id, title: p.title, slug: p.slug, excerpt: p.excerpt, body: p.body, sourceNote: p.sourceNote ?? "", coverImage: p.coverImage ?? "" })}>
+                      onClick={() => setEditing({ id: p.id, title: p.title, slug: p.slug, excerpt: p.excerpt, body: p.body, sourceNote: p.sourceNote ?? "", coverImage: p.coverImage ?? "", coverImageAlt: p.coverImageAlt ?? "" })}>
                       <Edit className="w-4 h-4" />
                     </Button>
                     {p.status === "published" ? (

@@ -64,7 +64,7 @@ export const requireBlogAgent: RequestHandler = (req, res, next) => {
  * live even as a wish.
  */
 const AGENT_WRITABLE = [
-  "title", "slug", "excerpt", "body", "coverImage",
+  "title", "slug", "excerpt", "body", "coverImage", "coverImageAlt",
   "sourceNote", "evidence", "decisionRef", "expectedOutcome", "measurementHorizonDays",
 ] as const;
 

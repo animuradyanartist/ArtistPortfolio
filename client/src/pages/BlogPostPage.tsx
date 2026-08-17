@@ -81,6 +81,15 @@ export default function BlogPostPage() {
           </>
         ) : (
           <>
+            {post.coverImage && (
+              /* alt is left EMPTY when she wrote none — an empty alt tells a screen reader
+                 to skip a decorative image; a title repeated as alt just wastes its time. */
+              <img
+                src={post.coverImage}
+                alt={post.coverImageAlt ?? ""}
+                className="w-full rounded-lg mb-8"
+              />
+            )}
             <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-3">{post.title}</h1>
             {published && (
               <p className="text-stone-500 text-sm mb-8">
