@@ -11,6 +11,7 @@ import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
 import { requireBlogAgent, agentFields, agentMayEdit, blogAgentConfigured } from "./blogAgent";
+import { buildInfo } from "./buildInfo";
 
 /**
  * Render an article body to crawlable HTML.
@@ -191,6 +192,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         artworks: artworks.length,
         totalImages,
         invalidImages: invalidImages.length,
+        // WHICH CODE IS ANSWERING. Everything else here is true of any running build, so
+        // without this a deploy can only be attested to, not observed. See buildInfo.ts.
+        build: buildInfo,
         timestamp: new Date().toISOString()
       });
     } catch (error) {
