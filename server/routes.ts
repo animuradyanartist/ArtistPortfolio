@@ -11,6 +11,7 @@ import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
 import { requireBlogAgent, agentFields, agentMayEdit, blogAgentConfigured } from "./blogAgent";
+import { PATH_NARRATIVE } from "@shared/pathNarrative";
 import { buildInfo } from "./buildInfo";
 
 /**
@@ -1586,6 +1587,38 @@ Crawl-delay: 1
         // client — a crawl of "/" sees 39 characters and no <h1>. An article that exists
         // only inside the React bundle is an SEO page with no SEO, so the text, the
         // headings and the Article JSON-LD are injected here, exactly as /artworks does.
+        // PATH: her strongest first-party writing, and it was reaching nobody.
+        //
+        // /path is client-rendered, so a crawl of it returns the same 39-character shell
+        // described above — roughly 1,500 words about the periods of her practice,
+        // invisible to search engines and to anything else reading the site. The text is
+        // rendered here from `shared/pathNarrative.ts`, the same source the React page is
+        // checked against, so crawlers are served her words rather than a summary written
+        // for them.
+        if (req.path === '/path') {
+          try {
+            const esc = (t: string) => String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            const chapters = PATH_NARRATIVE.chapters.map((c, i) =>
+              `<section><h2>${esc(c.title)}</h2><p><em>${esc(c.arc)}</em></p>` +
+              c.sections.map((sec) =>
+                `<h3>${esc(sec.heading)}</h3>` + sec.paragraphs.map((t) => `<p>${esc(t)}</p>`).join('')
+              ).join('') +
+              `</section>`
+            ).join('');
+            const ssr =
+              `<article id="path-ssr" style="padding:3rem 1.5rem;max-width:760px;margin:0 auto;font-family:system-ui,sans-serif">` +
+              `<h1>Painting Path — Ani Muradyan</h1>` +
+              PATH_NARRATIVE.intro.map((t) => `<p>${esc(t)}</p>`).join('') +
+              chapters +
+              PATH_NARRATIVE.closing.map((t) => `<p>${esc(t)}</p>`).join('') +
+              `<p><a href="/artworks">See the paintings</a></p>` +
+              `</article>`;
+            html = html.replace('<div id="root"></div>', `<div id="root">${ssr}</div>`);
+          } catch (e) {
+            console.error('[SSR] /path prerender failed:', e);
+          }
+        }
+
         if (req.path === '/blog' || req.path.startsWith('/blog/')) {
           try {
             const esc = (t: string) => String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
