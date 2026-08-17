@@ -181,6 +181,11 @@ export default function AdminArticles() {
                 <Button variant="outline" size="sm" onClick={() => setShowPicker(!showPicker)}>
                   <ImageIcon className="w-4 h-4 mr-1" /> Use one of my paintings
                 </Button>
+                <p className="text-xs text-slate-500 w-full mt-1">
+                  Either works on the page. An uploaded image is the safer choice for the preview
+                  card on Facebook, X and WhatsApp — a painting is served from Singulart via a
+                  redirect, and some of those crawlers will not follow one.
+                </p>
               </div>
             )}
             {showPicker && !d.coverImage && (
