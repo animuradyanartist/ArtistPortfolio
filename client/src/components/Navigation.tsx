@@ -1,25 +1,23 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { BlogPost } from "@shared/schema";
+import { siteNavigation } from "@shared/siteNavigation";
 
 export default function Navigation() {
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navigation = [
-    { name: "Home", href: "/" },
-    { name: "Originals", href: "/artworks" },
-    // { name: "Prints", href: "/prints" },
-    { name: "The Path", href: "/path" },
-    // { name: "About", href: "/about" }, // hidden for now — route still works at /about
-    { name: "Exhibitions", href: "/exhibitions" },
-    // { name: "Notes", href: "/blog" }, // hidden until the first article is published —
-    // route still works at /blog. A nav link to "No articles published yet" advertises an
-    // empty room; link it in the same commit as the first real piece of writing.
-    { name: "Gallery", href: "/gallery" },
-    { name: "Contact", href: "/contact" },
-  ];
+  // ARTICLES APPEARS ONLY WHEN THERE IS SOMETHING TO READ (§1).
+  //
+  // /api/blog returns published posts only, so the count is the condition — no separate
+  // flag to set, and unpublishing the last article removes the link on its own. The query
+  // shares BlogPage's cache key and the client sets staleTime: Infinity, so this costs one
+  // request per session rather than one per page.
+  const { data: publishedPosts } = useQuery<BlogPost[]>({ queryKey: ["/api/blog"] });
+  const navigation = siteNavigation(publishedPosts?.length);
 
   const isActive = (href: string) => {
     if (href === "/" && location === "/") return true;
