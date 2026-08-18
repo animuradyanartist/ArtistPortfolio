@@ -6,9 +6,11 @@ import fs from "fs";
 import sharp from "sharp";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, insertBlogPostSchema, prints } from "@shared/schema";
-import { artworkCanonicalUrl, toSlug } from "@shared/canonical";
+import { artworkCanonicalUrl, artworkCanonicalPath, toSlug } from "@shared/canonical";
+import { ARTWORKS_TITLE } from "@shared/pageMeta";
 import {
   ARTWORK_PRICE_CURRENCY,
+  artworkImageUrl,
   artworkJsonLd,
   artworkNarrative,
   artworkOffer,
@@ -1641,6 +1643,9 @@ Crawl-delay: 1
                 artMedium: medium,
                 artform: "Painting",
                 url: artworkCanonicalUrl(SEO_BASE_URL, a),
+                // The work's own primary image — the same one the detail page and the image
+                // sitemap declare, so all three agree on what the painting looks like.
+                image: artworkImageUrl(a, SEO_BASE_URL),
               };
               // Only claim an offer when the work is genuinely purchasable and priced —
               // an offer on a sold painting is a promise the site cannot keep. Built by the
@@ -1688,7 +1693,8 @@ Crawl-delay: 1
         // meta description already use.
         const PAGE_META: Record<string, { title: string; description?: string }> = {
           "/artworks": {
-            title: "Original Oil Paintings for Sale \u2014 Ani Muradyan",
+            // Shared with the React page so the served and rendered titles cannot drift.
+            title: ARTWORKS_TITLE,
           },
           "/path": {
             title: "The Path \u2014 Three Chapters of a Painting Practice | Ani Muradyan",
@@ -1847,14 +1853,25 @@ Crawl-delay: 1
             const listItems = artworks
               .filter(a => a.title && a.title.toLowerCase().trim() !== 'untitled')
               .map(a => {
-                const href = a.seoSlug ? `/${a.seoSlug.trim()}` : `/artworks/${a.slug || toSlug(a.title)}`;
+                // The URL the page itself calls canonical. This used the `slug` column —
+                // the marketplace slug carrying Singulart's id — so all 53 links pointed at
+                // duplicates the artwork pages disown, sending every internal signal to a
+                // URL Google is told to ignore.
+                const href = artworkCanonicalPath(a);
                 const meta = [a.medium, a.year ? String(a.year) : null].filter(Boolean).join(', ');
-                return `<li style="margin-bottom:0.5rem"><a href="${esc(href)}" style="color:#1d4ed8;text-decoration:underline">${esc(a.title)}</a>${meta ? ' – ' + esc(meta) : ''}</li>`;
+                // State price and availability here too. The ItemList already declares 35
+                // offers with prices; a crawler that reads the structured data and finds
+                // nothing matching in the visible copy is being shown two different pages.
+                const offer = artworkOffer(a, SEO_BASE_URL);
+                const status = offer
+                  ? `${ARTWORK_PRICE_CURRENCY} ${Number(a.price).toLocaleString('en-US')} – available`
+                  : a.availability === 'sold' ? 'in a private collection' : 'not currently available';
+                return `<li style="margin-bottom:0.5rem"><a href="${esc(href)}" style="color:#1d4ed8;text-decoration:underline">${esc(a.title)}</a>${meta ? ' – ' + esc(meta) : ''} – ${esc(status)}</li>`;
               }).join('');
 
             const ssrSection =
               `<section id="artworks-ssr" style="padding:3rem 1.5rem;max-width:1200px;margin:0 auto;font-family:system-ui,sans-serif">` +
-              `<h1 style="font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem">Original Artworks by Ani Muradyan</h1>` +
+              `<h1 style="font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem">Original Oil Paintings</h1>` +
               `<p style="font-size:1.1rem;color:#475569;margin-bottom:1.5rem">Browse ${artworks.length} original oil paintings and abstract realism works by Armenian contemporary artist Ani Muradyan.</p>` +
               `<ul style="list-style:disc;padding-left:1.5rem;color:#334155">${listItems}</ul>` +
               `</section>`;

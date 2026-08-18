@@ -1,4 +1,4 @@
-import { toSlug } from '@shared/canonical';
+import { toSlug, artworkCanonicalPath } from '@shared/canonical';
 
 // Slug logic lives in @shared/canonical (single source of truth); re-exported
 // here so existing `@/lib/seo` importers keep working unchanged.
@@ -56,8 +56,16 @@ export function removeJsonLd(id: string) {
  * and shares always resolve to the exact piece. The API resolves this by
  * the trailing -id (see server/routes.ts).
  */
-export function artworkPath(artwork: { id: number; title: string }): string {
-  return `/artworks/${toSlug(artwork.title)}-${artwork.id}`;
+/**
+ * The canonical path for an artwork detail page.
+ *
+ * Delegates to @shared/canonical — the same function the server's canonical tag, the 301
+ * redirect and both sitemaps use. It previously re-implemented the id-suffixed form and
+ * ignored `seoSlug` entirely, so the moment any artwork gained a seoSlug the links on this
+ * page would have pointed somewhere the page itself disowns.
+ */
+export function artworkPath(artwork: { id: number; title: string; seoSlug?: string | null }): string {
+  return artworkCanonicalPath(artwork);
 }
 
 export function generateArtworkAlt(title: string, medium?: string): string {
