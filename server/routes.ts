@@ -1587,6 +1587,117 @@ Crawl-delay: 1
         // client — a crawl of "/" sees 39 characters and no <h1>. An article that exists
         // only inside the React bundle is an SEO page with no SEO, so the text, the
         // headings and the Article JSON-LD are injected here, exactly as /artworks does.
+        // /artworks ITEM LIST — replace fabricated structured data with the real thing.
+        //
+        // index.html ships a STATIC ItemList on every page claiming `numberOfItems: 10`
+        // and listing a single invented entry called "Abstract Realism Painting" whose url
+        // points at the index rather than a work. She has 54 paintings and none is called
+        // that. Inaccurate schema is worse than absent schema: it is a machine-readable
+        // claim about the site that is false, and it was being made on every page.
+        //
+        // This builds the list from the same rows the page renders, and carries `offers`
+        // using the price and availability the artwork DETAIL pages already publish — so a
+        // crawler can see which of the 54 are actually for sale. No new data, no new copy.
+        if (req.path === "/artworks") {
+          try {
+            const all = await storage.getAllArtworks();
+            const items = all.slice(0, 60).map((a, i) => {
+              const medium = a.medium || "Oil on canvas";
+              const item: Record<string, unknown> = {
+                "@type": "VisualArtwork",
+                name: a.title,
+                artist: { "@type": "Person", name: "Ani Muradyan" },
+                artMedium: medium,
+                artform: "Painting",
+                url: artworkCanonicalUrl(SEO_BASE_URL, a),
+              };
+              // Only claim an offer when the work is genuinely purchasable and priced —
+              // an offer on a sold painting is a promise the site cannot keep.
+              if (a.availability === "available" && typeof a.price === "number" && a.price > 0) {
+                item.offers = {
+                  "@type": "Offer",
+                  price: a.price,
+                  priceCurrency: "USD",
+                  availability: "https://schema.org/InStock",
+                  url: artworkCanonicalUrl(SEO_BASE_URL, a),
+                };
+              }
+              return { "@type": "ListItem", position: i + 1, item };
+            });
+            const list = {
+              "@context": "https://schema.org",
+              "@type": "ItemList",
+              name: "Original Oil Paintings by Ani Muradyan",
+              description:
+                "Original figurative and landscape oil paintings by Armenian contemporary artist Ani Muradyan.",
+              url: `${SEO_BASE_URL}/artworks`,
+              numberOfItems: all.length,
+              itemListElement: items,
+            };
+            // Drop the static block first so the page carries ONE ItemList, not two.
+            html = html.replace(
+              /<script type="application\/ld\+json">\s*\{[^<]*?"@type":\s*"ItemList"[\s\S]*?<\/script>/i,
+              "",
+            );
+            html = html.replace(
+              "</head>",
+              `  <script type="application/ld+json">${JSON.stringify(list).replace(/</g, "\\u003c")}</script>\n</head>`,
+            );
+          } catch (e) {
+            console.error("[SSR] /artworks ItemList failed:", e);
+          }
+        }
+
+        // TOP-LEVEL PAGE TITLES — every page shipped the same one.
+        //
+        // "/", "/artworks", "/path", "/exhibitions" and "/contact" all served
+        // "Ani Muradyan – Contemporary Oil Painter". The single most valuable on-page
+        // element was spent five times over on the one query she already ranks first for,
+        // while /artworks — the page carrying 39 works that are actually for sale — said
+        // nothing about originals being available. The artwork DETAIL pages already do
+        // this correctly; only the top-level ones were missed.
+        //
+        // Titles state what the page genuinely is. No keyword stuffing, no repositioning:
+        // "original oil paintings" is what /artworks lists, in the words her own H1 and
+        // meta description already use.
+        const PAGE_META: Record<string, { title: string; description?: string }> = {
+          "/artworks": {
+            title: "Original Oil Paintings for Sale \u2014 Ani Muradyan",
+          },
+          "/path": {
+            title: "The Path \u2014 Three Chapters of a Painting Practice | Ani Muradyan",
+            description:
+              "The story behind the work, in the artist's own words: inner weight, open space and transformation, told in three chapters \u2014 by Armenian contemporary painter Ani Muradyan.",
+          },
+          "/exhibitions": {
+            title: "Exhibitions \u2014 Ani Muradyan",
+            description: "Where the work has been shown. Exhibitions and showings by Armenian contemporary oil painter Ani Muradyan.",
+          },
+          "/gallery": {
+            title: "Studio & Gallery Photographs \u2014 Ani Muradyan",
+          },
+          "/contact": {
+            title: "Contact & Commissions \u2014 Ani Muradyan",
+            description: "Enquire about an original painting, a commission, or an exhibition. Contact Armenian contemporary oil painter Ani Muradyan.",
+          },
+        };
+        const pageMeta = PAGE_META[req.path.replace(/\/+$/, "") || "/"];
+        if (pageMeta) {
+          const escA = (t: string) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+          const put = (h: string, sel: string, val: string) => {
+            const re = new RegExp(`(<meta\\s+${sel}\\s+content=")[^"]*(">)`, "i");
+            return re.test(h) ? h.replace(re, `$1${escA(val)}$2`) : h;
+          };
+          html = html.replace(/<title>[^<]*<\/title>/i, `<title>${escA(pageMeta.title)}</title>`);
+          html = put(html, 'name="title"', pageMeta.title);
+          html = put(html, 'property="og:title"', pageMeta.title);
+          html = put(html, 'name="twitter:title"', pageMeta.title);
+          if (pageMeta.description) {
+            html = put(html, 'name="description"', pageMeta.description);
+            html = put(html, 'property="og:description"', pageMeta.description);
+          }
+        }
+
         // PATH: her strongest first-party writing, and it was reaching nobody.
         //
         // /path is client-rendered, so a crawl of it returns the same 39-character shell

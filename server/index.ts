@@ -135,6 +135,16 @@ app.use((req, res, next) => {
       // already been checked for its full image set (so it is fetched once, not
       // every sync). Nullable + default false, so existing rows read as unchecked.
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS detail_images_checked boolean DEFAULT false`);
+      // Source material for grounding, kept apart from the public `description` so an
+      // ingest can never silently rewrite what her site says. See shared/schema.ts.
+      //
+      // REMEMBER THE 2026-08-17 RULE: the DEVELOPMENT database is the source of truth for
+      // production's SCHEMA. These run in both environments, but only if the app has been
+      // STARTED in the workspace before a publish — a column that exists only in
+      // production is scheduled for deletion by the dev→prod sync.
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS source_description text`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS source_description_provider text`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS derived_categories text[]`);
       // "Where the work lives" section content (JSON array of {image, caption}).
       await pool.query(`ALTER TABLE homepage_settings ADD COLUMN IF NOT EXISTS room_items text`);
       // Blog posts. Created here rather than by a migration for the same reason as the

@@ -34,9 +34,47 @@ export type ScrapedArtwork = {
   medium: string | null;
   imageUrl: string;
   singulartUrl: string;
+  /**
+   * The description she wrote for the Singulart listing, from the page's JSON-LD.
+   *
+   * SOURCE MATERIAL, NOT PUBLIC COPY. It is ingested so the site and Career OS can ground
+   * claims about a work in something she actually wrote, and so categories can be derived
+   * from stated fact. It never overwrites the public `description` — that is hers to
+   * publish, and silently replacing it would change what her site says without her.
+   */
+  description: string | null;
 };
 
 const BASE = "https://www.singulart.com";
+
+/**
+ * Descriptions live in the page's JSON-LD rather than the card markup — Singulart emits an
+ * ItemList of Product nodes carrying name, url and the full description. That is a far more
+ * stable contract than a CSS class, and it is the only place the listing text appears.
+ */
+function descriptionsFromJsonLd(html: string): Map<string, string> {
+  const out = new Map<string, string>();
+  // Indexed loop rather than matchAll: this file compiles under the project's older
+  // iteration target, where spreading a RegExp iterator is a type error.
+  const re = /<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    let parsed: unknown;
+    try { parsed = JSON.parse((m[1] ?? "").trim()); } catch { continue; }
+    const graph = (parsed as { "@graph"?: unknown[] })?.["@graph"];
+    for (const node of Array.isArray(graph) ? graph : [parsed]) {
+      const list = (node as { itemListElement?: unknown[] })?.itemListElement;
+      if (!Array.isArray(list)) continue;
+      for (const entry of list) {
+        const item = (entry as { item?: { name?: unknown; description?: unknown } })?.item;
+        const name = typeof item?.name === "string" ? item.name.trim() : "";
+        const desc = typeof item?.description === "string" ? item.description.trim() : "";
+        if (name && desc) out.set(name.toLowerCase(), desc);
+      }
+    }
+  }
+  return out;
+}
 
 const CARD_SELECTOR = ".artworks-grid article.artwork-item";
 const LINK_SELECTOR = "a.artwork-item__link";
@@ -61,6 +99,7 @@ export function toHighResImage(url: string): string {
 }
 
 export function parseSingulartPage(html: string): ScrapedArtwork[] {
+  const descriptions = descriptionsFromJsonLd(html);
   const $ = cheerio.load(html);
   const results: ScrapedArtwork[] = [];
 
@@ -174,6 +213,7 @@ export function parseSingulartPage(html: string): ScrapedArtwork[] {
       medium,
       imageUrl,
       singulartUrl,
+      description: descriptions.get(title.trim().toLowerCase()) ?? null,
     });
   });
 

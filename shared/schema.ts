@@ -37,6 +37,22 @@ export const artworks = pgTable("artworks", {
   // only one image). Cleared manually to force a re-check. Added via boot
   // self-heal (ADD COLUMN IF NOT EXISTS) in server/index.ts — no manual migration.
   detailImagesChecked: boolean("detail_images_checked").default(false),
+  /**
+   * The description she wrote for the work on its marketplace listing, ingested as SOURCE
+   * MATERIAL. Deliberately separate from `description`, which is the public copy on this
+   * site: overwriting that would change what her site says without her deciding to. This
+   * field exists so a claim about a work — including a derived category — can be traced to
+   * a sentence she actually wrote.
+   */
+  sourceDescription: text("source_description"),
+  /** Where `sourceDescription` came from, e.g. "singulart". Provenance, not decoration. */
+  sourceDescriptionProvider: text("source_description_provider"),
+  /**
+   * Categories the source description EXPLICITLY states — never inferred from a title or
+   * from what the picture might show. Empty is the correct and common answer; a wrong tag
+   * silently changes which works an article may cite as evidence.
+   */
+  derivedCategories: text("derived_categories").array(),
 }, (t) => ({
   // Production has a plain UNIQUE INDEX named `artworks_seo_slug_unique` (created
   // outside Drizzle). Declaring it here as a uniqueIndex — NOT `.unique()` on the

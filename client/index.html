@@ -87,35 +87,11 @@
       "knowsAbout": ["Oil Painting", "Figurative Painting", "Landscape Painting", "Contemporary Art", "Fine Art", "Visual Art"]
     }
     </script>
-    
-    <!-- Structured Data - VisualArtwork ItemList -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "ItemList",
-      "name": "Original Oil Paintings by Ani Muradyan",
-      "description": "A curated collection of original figurative and landscape oil paintings by Armenian contemporary artist Ani Muradyan",
-      "url": "https://animuradyan.com/artworks",
-      "numberOfItems": 10,
-      "itemListElement": [
-        {
-          "@type": "ListItem",
-          "position": 1,
-          "item": {
-            "@type": "VisualArtwork",
-            "name": "Abstract Realism Painting",
-            "artist": {
-              "@type": "Person",
-              "name": "Ani Muradyan"
-            },
-            "artMedium": "Oil on canvas",
-            "artform": "Painting",
-            "url": "https://animuradyan.com/artworks"
-          }
-        }
-      ]
-    }
-    </script>
+    <!-- The artworks ItemList is rendered SERVER-SIDE on /artworks (see server/routes.ts).
+         A static one lived here and was false: it claimed 10 items when there are 54, and
+         its single entry, "Abstract Realism Painting", is not a work she has ever made. It
+         also shipped on every page, so a fabricated claim about the collection was being
+         made on the contact page. Inaccurate structured data is worse than none. -->
     
     <!-- Microsoft Clarity Analytics -->
     <script type="text/javascript">

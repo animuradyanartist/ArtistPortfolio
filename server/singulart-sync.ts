@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { categoryNames } from "./artworkCategories";
 import { artworks } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import {
@@ -208,9 +209,22 @@ export async function runSingulartSync(
       // fetch leaves the marker unset so it retries next sync.
       const checked = detailCheckSucceeded(detailImages);
 
+      // SOURCE MATERIAL, written on both paths and never into `description`.
+      //
+      // The public description stays hers to write; this records what she already wrote on
+      // the listing, plus the categories that text explicitly states. Refreshed each sync
+      // so an edited listing propagates, which is safe precisely because nothing public
+      // depends on it.
+      const sourceFields = {
+        sourceDescription: s.description ?? null,
+        sourceDescriptionProvider: s.description ? "singulart" : null,
+        derivedCategories: s.description ? categoryNames(s.description) : null,
+      };
+
       if (isNew) {
         await store.insertArtwork({
           ...metadata,
+          ...sourceFields,
           description: "", // admin can edit
           year: currentYear, // admin can edit
           images: imagesToWrite ?? [s.imageUrl],
@@ -223,7 +237,7 @@ export async function runSingulartSync(
         });
         inserted++;
       } else {
-        const set: Partial<typeof artworks.$inferInsert> = { ...metadata };
+        const set: Partial<typeof artworks.$inferInsert> = { ...metadata, ...sourceFields };
         if (imagesToWrite) {
           set.images = imagesToWrite;
           if (action === "enrich") enriched++;
