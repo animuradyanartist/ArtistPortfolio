@@ -7,6 +7,13 @@ import sharp from "sharp";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, insertBlogPostSchema, prints } from "@shared/schema";
 import { artworkCanonicalUrl, toSlug } from "@shared/canonical";
+import {
+  ARTWORK_PRICE_CURRENCY,
+  artworkJsonLd,
+  artworkNarrative,
+  artworkOffer,
+  renderArtworkHtml,
+} from "@shared/artworkSsr";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
@@ -1289,6 +1296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.send(`User-agent: *
 Allow: /
 Allow: /about
+Allow: /path
 Allow: /artworks
 Allow: /artworks/*
 Allow: /prints
@@ -1307,16 +1315,37 @@ Crawl-delay: 1
 `);
   });
 
+  /**
+   * XML escaping for sitemap text. The image sitemap interpolated artwork titles and
+   * captions raw: one ampersand in a title produces a document Google rejects outright,
+   * taking all 154 image declarations with it.
+   */
+  const escXml = (v: unknown) =>
+    String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+
   app.get("/sitemap.xml", async (req, res) => {
     try {
       const artworks = await storage.getAllArtworks();
       const today = new Date().toISOString().split('T')[0];
 
-      // Static public pages — /prints is excluded (client redirects it to /),
-      // /about is hidden for now (route still works, just not promoted/linked)
+      // Static public pages — /prints is excluded (the client redirects it to /).
+      //
+      // /about and /path were both missing, and both were earning without help. /about is
+      // the second strongest page on the site — 90 impressions at position 10.8 over 90
+      // days, more than /artworks — and it had never been submitted. /path carries roughly
+      // 1,500 words of her own writing and is now server-rendered, so it is real text to a
+      // crawler rather than an empty shell. Leaving a page that already ranks out of the
+      // sitemap withholds the one signal that costs nothing to give.
       const staticPages = [
         { url: '/', priority: '1.0', changefreq: 'weekly' },
         { url: '/artworks', priority: '0.9', changefreq: 'weekly' },
+        { url: '/about', priority: '0.8', changefreq: 'monthly' },
+        { url: '/path', priority: '0.8', changefreq: 'monthly' },
         { url: '/exhibitions', priority: '0.8', changefreq: 'monthly' },
         { url: '/gallery', priority: '0.8', changefreq: 'monthly' },
         { url: '/contact', priority: '0.7', changefreq: 'monthly' }
@@ -1361,21 +1390,25 @@ Crawl-delay: 1
         const titleTrimmed = artwork.title?.trim() ?? '';
         if (!titleTrimmed || titleTrimmed.toLowerCase() === 'untitled') return;
 
-        // Canonical: prefer seoSlug path; fall back to /artworks/slug
-        let canonicalPath: string;
-        if (artwork.seoSlug?.trim()) {
-          canonicalPath = `/${artwork.seoSlug.trim()}`;
-        } else {
-          const slug = artwork.slug || toSlug(artwork.title);
-          canonicalPath = `/artworks/${slug}`;
-        }
-
-        const canonicalUrl = `${SEO_BASE_URL}${canonicalPath}`;
+        // THE URL IN THE SITEMAP MUST BE THE URL THE PAGE CALLS CANONICAL.
+        //
+        // It was not, for all 53 works. This fell back to the `slug` column — the
+        // marketplace slug carrying Singulart's id ("/artworks/ani-muradyan-path-to-
+        // tranquility-2096103") — while the page's own <link rel="canonical">, the 301 and
+        // the client all point at "/artworks/path-to-tranquility-78". Both URLs answer 200,
+        // so Google was invited to crawl a URL that then told it "the real one is
+        // elsewhere", and the real one appeared in no sitemap at all. A sitemap of
+        // non-canonical duplicates is close to the worst thing to submit: it spends crawl
+        // budget arguing with itself, and no artwork page has ever received an impression.
+        //
+        // artworkCanonicalPath IS that single source of truth — the same function the
+        // canonical tag, the redirect and the client already use.
+        const canonicalUrl = artworkCanonicalUrl(SEO_BASE_URL, artwork);
         if (seenUrls.has(canonicalUrl)) return; // guard against accidental duplication
         seenUrls.add(canonicalUrl);
 
         xml += '  <url>\n';
-        xml += `    <loc>${canonicalUrl}</loc>\n`;
+        xml += `    <loc>${escXml(canonicalUrl)}</loc>\n`;
         xml += `    <lastmod>${today}</lastmod>\n`;
         xml += '    <changefreq>monthly</changefreq>\n';
         xml += '    <priority>0.8</priority>\n';
@@ -1404,14 +1437,21 @@ Crawl-delay: 1
       artworks.forEach(artwork => {
         if (!artwork.images || artwork.images.length === 0) return;
         xml += '  <url>\n';
-        xml += `    <loc>${SEO_BASE_URL}/artworks/${artwork.id}</loc>\n`;
+        // Same canonical rule as sitemap.xml: images must hang off the page Google is
+        // meant to index. This declared "/artworks/{id}" — a third live URL for the same
+        // painting, and another one the page itself disowns via its canonical tag.
+        xml += `    <loc>${escXml(artworkCanonicalUrl(SEO_BASE_URL, artwork))}</loc>\n`;
         artwork.images.forEach((imgSrc: string) => {
           if (imgSrc.startsWith('data:')) return;
           const imgUrl = imgSrc.startsWith('http') ? imgSrc : `${SEO_BASE_URL}${imgSrc}`;
           xml += '    <image:image>\n';
-          xml += `      <image:loc>${imgUrl}</image:loc>\n`;
-          xml += `      <image:title>Abstract realism portrait painting – ${artwork.title} – Ani Muradyan</image:title>\n`;
-          xml += `      <image:caption>Abstract portrait oil painting by Armenian contemporary artist Ani Muradyan – ${artwork.title}. ${artwork.medium || 'Oil on canvas'}, ${artwork.year || ''}.</image:caption>\n`;
+          xml += `      <image:loc>${escXml(imgUrl)}</image:loc>\n`;
+          // Every image previously claimed to be an "abstract realism PORTRAIT painting",
+          // including the landscapes. A caption is a machine-readable statement about the
+          // picture; describing a landscape as a portrait is simply false, and it was said
+          // 154 times. These now state the work's own medium and her own description.
+          xml += `      <image:title>${escXml(`${artwork.title} — ${artwork.medium || 'Oil on canvas'} painting by Ani Muradyan`)}</image:title>\n`;
+          xml += `      <image:caption>${escXml(artworkNarrative(artwork))}</image:caption>\n`;
           xml += '    </image:image>\n';
         });
         xml += '  </url>\n';
@@ -1424,9 +1464,11 @@ Crawl-delay: 1
           if (!photo.image || photo.image.startsWith('data:')) return;
           const imgUrl = photo.image.startsWith('http') ? photo.image : `${SEO_BASE_URL}${photo.image}`;
           xml += '    <image:image>\n';
-          xml += `      <image:loc>${imgUrl}</image:loc>\n`;
-          xml += `      <image:title>Abstract realism portrait painting – ${photo.title || 'Exhibition photo'} – Ani Muradyan</image:title>\n`;
-          xml += `      <image:caption>Exhibition photo by Ani Muradyan – ${photo.exhibitionName || ''}${photo.location ? ', ' + photo.location : ''}${photo.year ? ' (' + photo.year + ')' : ''}.</image:caption>\n`;
+          xml += `      <image:loc>${escXml(imgUrl)}</image:loc>\n`;
+          // A studio/exhibition photograph is not a painting, and was being announced as
+          // one ("Abstract realism portrait painting"). It states what it is.
+          xml += `      <image:title>${escXml(`${photo.title || 'Exhibition photo'} — Ani Muradyan`)}</image:title>\n`;
+          xml += `      <image:caption>${escXml(`Exhibition photo by Ani Muradyan${photo.exhibitionName ? ` – ${photo.exhibitionName}` : ''}${photo.location ? `, ${photo.location}` : ''}${photo.year ? ` (${photo.year})` : ''}.`)}</image:caption>\n`;
           xml += '    </image:image>\n';
         });
         xml += '  </url>\n';
@@ -1515,9 +1557,12 @@ Crawl-delay: 1
           ? 'This original work is in a private collection.'
           : 'Original painting available — inquire to acquire.';
       const title = `${a.title} — Original ${medium} Painting by Ani Muradyan`;
+      // Her published description when she wrote one, otherwise the stated facts of the
+      // row — the same sentence the crawlable body and the JSON-LD use, so the three
+      // never describe the same painting differently.
       const desc = (a.description && a.description.trim())
-        ? a.description.trim().replace(/\s+/g, ' ').slice(0, 300)
-        : `${a.title}, an original ${medium} painting${bits ? ` (${bits})` : ''} by Armenian contemporary artist Ani Muradyan. ${availLine}`;
+        ? artworkNarrative(a).slice(0, 300)
+        : `${artworkNarrative(a)} ${availLine}`;
       const raw = Array.isArray(a.images) ? a.images[0] : undefined;
       const image = raw && /^https?:\/\//i.test(raw) ? raw : `${SEO_BASE_URL}/img/artwork/${a.id}/0`;
       // Canonical URL: prefer /{seoSlug} (matches sitemap.xml + client canonical),
@@ -1543,25 +1588,11 @@ Crawl-delay: 1
       html = setMeta(html, 'name="twitter:url"', url);
       html = html.replace(/<link rel="canonical"[^>]*>/i, `<link rel="canonical" href="${escAttr(url)}">`);
 
-      const jsonld: Record<string, any> = {
-        '@context': 'https://schema.org',
-        '@type': 'VisualArtwork',
-        name: a.title,
-        image,
-        url,
-        artform: 'Painting',
-        artMedium: medium,
-        artworkSurface: 'Canvas',
-        creator: { '@type': 'Person', name: 'Ani Muradyan', url: SEO_BASE_URL },
-      };
-      if (a.year) jsonld.dateCreated = String(a.year);
-      if (a.price && a.availability === 'available') {
-        jsonld.offers = {
-          '@type': 'Offer', price: a.price, priceCurrency: 'EUR',
-          availability: 'https://schema.org/InStock', url,
-        };
-      }
-      const jsonStr = JSON.stringify(jsonld).replace(/</g, '\\u003c');
+      // Structured data comes from the shared builder, which is also what /artworks reads.
+      // The currency lived in two places and disagreed — EUR here, USD on the sales page,
+      // for the same 35 works — so one of the site's two machine-readable prices was
+      // always wrong. There is now one definition and no way to state a second.
+      const jsonStr = JSON.stringify(artworkJsonLd(a, SEO_BASE_URL)).replace(/</g, '\\u003c');
       html = html.replace('</head>', `  <script type="application/ld+json">${jsonStr}</script>\n</head>`);
       return html;
     };
@@ -1612,16 +1643,11 @@ Crawl-delay: 1
                 url: artworkCanonicalUrl(SEO_BASE_URL, a),
               };
               // Only claim an offer when the work is genuinely purchasable and priced —
-              // an offer on a sold painting is a promise the site cannot keep.
-              if (a.availability === "available" && typeof a.price === "number" && a.price > 0) {
-                item.offers = {
-                  "@type": "Offer",
-                  price: a.price,
-                  priceCurrency: "USD",
-                  availability: "https://schema.org/InStock",
-                  url: artworkCanonicalUrl(SEO_BASE_URL, a),
-                };
-              }
+              // an offer on a sold painting is a promise the site cannot keep. Built by the
+              // same helper the detail page uses, so the two pages cannot name different
+              // currencies for one painting again.
+              const offer = artworkOffer(a, SEO_BASE_URL);
+              if (offer) item.offers = offer;
               return { "@type": "ListItem", position: i + 1, item };
             });
             const list = {
@@ -1840,9 +1866,21 @@ Crawl-delay: 1
         } else {
           // Artwork detail pages: rewrite title/description/OG/Twitter tags +
           // add VisualArtwork JSON-LD so shared links and crawlers see the piece.
+          //
+          // The tags alone were never enough. A crawl of an artwork page returned 65
+          // characters, no <h1> and no <img>, because the painting itself only appeared
+          // after JavaScript ran — and across every period on record not one of these 53
+          // pages had earned a single impression. The body is now prerendered from the
+          // same row the tags are built from, exactly as /path, /blog and /artworks do.
           try {
             const artwork = await resolveArtworkForPath(req.path);
-            if (artwork) html = injectArtworkMeta(html, artwork);
+            if (artwork) {
+              html = injectArtworkMeta(html, artwork);
+              html = html.replace(
+                '<div id="root"></div>',
+                `<div id="root">${renderArtworkHtml(artwork, SEO_BASE_URL)}</div>`,
+              );
+            }
           } catch (e) {
             console.error('[SSR] artwork meta injection failed:', e);
           }
