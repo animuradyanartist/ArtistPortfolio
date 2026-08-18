@@ -42,6 +42,13 @@ export type SyncResult = {
   descriptionsUpdated: number;
   /** Left alone: a person's words are in that field. Reported, never resolved. */
   descriptionConflicts: Array<{ title: string; reason: string }>;
+  /**
+   * Works whose Singulart DETAIL page could not be fetched this run, so they keep whatever
+   * images they had. They are NOT marked checked, so the next sync retries them — the
+   * failure is self-healing, but it must be visible rather than inferred from a thumbnail
+   * that never appeared.
+   */
+  detailFetchFailures: Array<{ title: string; reason: string }>;
   detailPagesFetched: number; // detail pages fetched (new + enrichment attempts)
   existingSkipped: number; // existing multi-image artworks left untouched
   enriched: number; // existing artworks upgraded to a multi-image set
@@ -176,6 +183,7 @@ export async function runSingulartSync(
     descriptionsAdopted: 0,
     descriptionsUpdated: 0,
     descriptionConflicts: [],
+    detailFetchFailures: [],
     detailPagesFetched: 0,
     existingSkipped: 0,
     enriched: 0,
@@ -192,6 +200,7 @@ export async function runSingulartSync(
   let descriptionsAdopted = 0;
   let descriptionsUpdated = 0;
   const descriptionConflicts: Array<{ title: string; reason: string }> = [];
+  const detailFetchFailures: Array<{ title: string; reason: string }> = [];
     let detailPagesFetched = 0;
     let existingSkipped = 0;
     let enriched = 0;
@@ -220,8 +229,19 @@ export async function runSingulartSync(
         try {
           detailImages = await fetchDetailImages(s);
           detailPagesFetched++;
-        } catch {
-          detailImages = null; // detail fetch failed — degrade gracefully
+        } catch (err) {
+          // DEGRADE GRACEFULLY, BUT SAY SO.
+          //
+          // `detailImagesChecked` is deliberately left unset here so the work is retried
+          // on the next run — that part was already right, and it is why a failure is
+          // self-healing. What was missing is that nobody was told: the run reported a
+          // healthy-looking summary while one artwork silently kept a single image, and
+          // the only way to notice was to look at the website and count pictures.
+          detailImages = null;
+          detailFetchFailures.push({
+            title: s.title,
+            reason: err instanceof Error ? err.message.slice(0, 160) : "unknown error",
+          });
         }
       }
       const imagesToWrite = resolveImages(action, currentImages, s.imageUrl, detailImages);
@@ -294,6 +314,7 @@ export async function runSingulartSync(
       descriptionsAdopted,
       descriptionsUpdated,
       descriptionConflicts,
+      detailFetchFailures,
       detailPagesFetched,
       existingSkipped,
       enriched,
