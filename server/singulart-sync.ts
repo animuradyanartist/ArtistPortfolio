@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { categoryNames } from "./artworkCategories";
+import { decideDescription } from "./descriptionMerge";
 import { artworks } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import {
@@ -35,6 +36,12 @@ export type SyncResult = {
   scrapedCount: number;
   inserted: number; // new artworks
   updated: number; // existing artworks whose metadata was refreshed
+  /** Public descriptions filled from the listing because the site had none. */
+  descriptionsAdopted: number;
+  /** Listing text changed and the site was showing the previously synced copy. */
+  descriptionsUpdated: number;
+  /** Left alone: a person's words are in that field. Reported, never resolved. */
+  descriptionConflicts: Array<{ title: string; reason: string }>;
   detailPagesFetched: number; // detail pages fetched (new + enrichment attempts)
   existingSkipped: number; // existing multi-image artworks left untouched
   enriched: number; // existing artworks upgraded to a multi-image set
@@ -124,9 +131,17 @@ async function defaultFetchDetailImages(s: ScrapedArtwork): Promise<string[]> {
  * tested end-to-end with an in-memory store (the default wraps Drizzle).
  */
 export interface ArtworkStore {
-  findBySingulartId(
-    id: string,
-  ): Promise<{ images: string[]; detailImagesChecked?: boolean | null } | undefined>;
+  findBySingulartId(id: string): Promise<
+    | {
+        images: string[];
+        detailImagesChecked?: boolean | null;
+        /** The site's current public text — the thing the merge rule must not trample. */
+        description?: string | null;
+        /** What the previous sync stored, which is how "her words" are told from "our copy". */
+        sourceDescription?: string | null;
+      }
+    | undefined
+  >;
   insertArtwork(row: typeof artworks.$inferInsert): Promise<void>;
   updateBySingulartId(id: string, set: Partial<typeof artworks.$inferInsert>): Promise<void>;
 }
@@ -158,6 +173,9 @@ export async function runSingulartSync(
     scrapedCount: 0,
     inserted: 0,
     updated: 0,
+    descriptionsAdopted: 0,
+    descriptionsUpdated: 0,
+    descriptionConflicts: [],
     detailPagesFetched: 0,
     existingSkipped: 0,
     enriched: 0,
@@ -171,6 +189,9 @@ export async function runSingulartSync(
 
     let inserted = 0;
     let updated = 0;
+  let descriptionsAdopted = 0;
+  let descriptionsUpdated = 0;
+  const descriptionConflicts: Array<{ title: string; reason: string }> = [];
     let detailPagesFetched = 0;
     let existingSkipped = 0;
     let enriched = 0;
@@ -225,7 +246,10 @@ export async function runSingulartSync(
         await store.insertArtwork({
           ...metadata,
           ...sourceFields,
-          description: "", // admin can edit
+          // A brand-new work has no local text to protect, so the listing description is
+          // adopted directly. Still hers to edit afterwards — the merge rule below will
+          // then treat any change as a conflict and stop overwriting it.
+          description: s.description ?? "",
           year: currentYear, // admin can edit
           images: imagesToWrite ?? [s.imageUrl],
           detailImagesChecked: checked,
@@ -238,6 +262,16 @@ export async function runSingulartSync(
         inserted++;
       } else {
         const set: Partial<typeof artworks.$inferInsert> = { ...metadata, ...sourceFields };
+        // WHOSE TEXT WINS. Never resolve a conflict in the machine's favour: an artist's
+        // sentence about her own painting must not vanish in a nightly job.
+        const decision = decideDescription(existing?.description, s.description, existing?.sourceDescription);
+        if (decision.description !== null) {
+          set.description = decision.description;
+          if (decision.action === "adopted") descriptionsAdopted++;
+          else descriptionsUpdated++;
+        } else if (decision.action === "conflict") {
+          descriptionConflicts.push({ title: s.title, reason: decision.note ?? "conflict" });
+        }
         if (imagesToWrite) {
           set.images = imagesToWrite;
           if (action === "enrich") enriched++;
@@ -257,6 +291,9 @@ export async function runSingulartSync(
       scrapedCount: scraped.length,
       inserted,
       updated,
+      descriptionsAdopted,
+      descriptionsUpdated,
+      descriptionConflicts,
       detailPagesFetched,
       existingSkipped,
       enriched,
