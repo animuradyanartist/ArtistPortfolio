@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { Artwork } from "@shared/schema";
 import { updateCanonicalUrl, updateMetaDescription, artworkPath, generateArtworkAlt } from "@/lib/seo";
-import { SHOW_PRICES } from "@/lib/featureFlags";
+import { ARTWORK_PRICE_CURRENCY } from "@shared/artworkSsr";
+import { ARTWORKS_TITLE } from "@shared/pageMeta";
 import { Eyebrow } from "@/components/editorial";
 import { artworkCategory, type ArtworkCategory } from "@/lib/artworkCategory";
 
@@ -30,7 +31,7 @@ const AVAILABILITY_FILTERS: { value: AvailabilityFilter; label: string }[] = [
 
 export default function ArtworksPage() {
   useEffect(() => {
-    document.title = "Original Paintings by Ani Muradyan | Oil Paintings for Sale";
+    document.title = ARTWORKS_TITLE;
     updateCanonicalUrl("/artworks");
     updateMetaDescription(
       "Browse original oil paintings by Armenian contemporary artist Ani Muradyan — figurative works and landscapes, available and collected."
@@ -56,19 +57,30 @@ export default function ArtworksPage() {
   const hasConfirmedData = status === "success" && !isPlaceholderData && !isLoading;
   const showEmptyState = hasConfirmedData && filteredArtworks.length === 0;
 
-  // Keep the SEO SSR block visible until the real React grid is populated
+  // Keep the prerendered block until the real React grid is populated, then REMOVE it.
+  // Hiding it with display:none left a second <h1> in the DOM for anything reading the
+  // rendered page; removing it means the page has exactly one heading either way — the
+  // prerendered one before hydration, this one after.
   useEffect(() => {
     const ssrSection = document.getElementById("artworks-ssr");
     if (!ssrSection) return;
-    const hasRealGrid = hasConfirmedData && artworks.length > 0;
-    ssrSection.style.display = hasRealGrid ? "none" : "";
+    if (hasConfirmedData && artworks.length > 0) ssrSection.remove();
+    else ssrSection.style.display = "";
   }, [hasConfirmedData, artworks.length]);
 
+  // What the card states about buying this work.
+  //
+  // The price shown here is the price the page's ItemList already publishes to Google as an
+  // Offer, in the currency the source data is denominated in — the card said `€` while the
+  // structured data said USD, for the same number. Only works that are genuinely available
+  // AND priced show a figure, matching exactly which rows carry an Offer.
   const priceLabel = (artwork: Artwork) => {
     if (artwork.availability !== "available") {
       return artwork.availability === "reserved" ? "Reserved" : "Sold";
     }
-    if (SHOW_PRICES && artwork.price) return `€${artwork.price.toLocaleString()}`;
+    if (artwork.price > 0) {
+      return `${ARTWORK_PRICE_CURRENCY} ${artwork.price.toLocaleString("en-US")}`;
+    }
     return "Available";
   };
 
@@ -77,7 +89,7 @@ export default function ArtworksPage() {
       {/* ── Header ─────────────────────────────────────────── */}
       <section className="px-6 pt-20 md:pt-28 pb-10 text-center">
         <Eyebrow>The Collection</Eyebrow>
-        <h1 className="font-playfair text-5xl md:text-6xl text-stone-900 mb-5">Originals</h1>
+        <h1 className="font-playfair text-5xl md:text-6xl text-stone-900 mb-5">Original Oil Paintings</h1>
         <p className="mx-auto max-w-xl text-sm md:text-base text-stone-600">
           Original oil paintings on canvas — figurative works and landscapes, each made to hold a
           quiet moment. Available pieces can be inquired about directly.
