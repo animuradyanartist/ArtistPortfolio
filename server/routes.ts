@@ -18,6 +18,7 @@ import {
   renderArtworkHtml,
   artworkSitemapImageLocs,
 } from "@shared/artworkSsr";
+import { isKnownAddressFor, knownAddresses } from "@shared/artworkAddress";
 import { measurePrimaryImage } from "./imageDimensions";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
@@ -1545,23 +1546,40 @@ Crawl-delay: 1
     }
   });
 
-  // 301 redirect: /artworks/:slug → canonical URL when artwork has a seoSlug
-  // This eliminates duplicate artwork URLs for search engines
+  /**
+   * ONE ARTWORK, ONE URL — enforced with a 301 rather than argued with a canonical tag.
+   *
+   * This redirect existed and never fired. It was gated on `artwork.seoSlug`, and seoSlug is
+   * null for all 54 works, so every legacy address answered 200 instead. The page then said
+   * "the real one is elsewhere" in a canonical tag, which is a hint Google may honour late or
+   * not at all — and 55 of those legacy URLs are sitting in Search Console as
+   * "Discovered – currently not indexed, last crawled: N/A".
+   *
+   * They were discovered because the sitemap used to emit them. It no longer does. But
+   * discovery is permanent: Google keeps a queue, and the cheapest way to empty it is to
+   * answer those URLs with a redirect instead of a page.
+   *
+   * The mapping is provably unambiguous — 54 of 54 works have a distinct `slug`, and no
+   * legacy slug's trailing number collides with a real artwork id (marketplace ids are seven
+   * digits; artwork ids run 9–79). So this can never send one painting's URL to another
+   * painting.
+   */
+  const artworkForSlug = async (slug: string) => {
+    const all = await storage.getAllArtworks();
+    return all.find((a) => isKnownAddressFor(a, slug)) ?? null;
+  };
+
   app.get("/artworks/:slug", async (req, res, next) => {
     const { slug } = req.params;
-    if (/^\d+$/.test(slug)) return next(); // numeric IDs — no redirect needed
+    if (/^\d+$/.test(slug)) return next(); // bare numeric id is handled by the SSR path
     try {
-      const allArtworks = await storage.getAllArtworks();
-      const artwork = allArtworks.find(
-        a => (a.slug || toSlug(a.title)) === slug || toSlug(a.title) === slug
-      );
-      if (!artwork?.seoSlug) return next();
+      const artwork = await artworkForSlug(slug);
+      if (!artwork) return next();
 
-      const canonicalPath = `/${artwork.seoSlug.trim()}`;
-      const currentPath = `/artworks/${slug}`;
-      if (currentPath !== canonicalPath) {
-        return res.redirect(301, canonicalPath);
-      }
+      const canonicalPath = artworkCanonicalPath({
+        id: artwork.id, title: artwork.title, seoSlug: artwork.seoSlug ?? null,
+      });
+      if (`/artworks/${slug}` !== canonicalPath) return res.redirect(301, canonicalPath);
       next();
     } catch {
       next();
@@ -1598,10 +1616,21 @@ Crawl-delay: 1
       if (/^\d+$/.test(param)) return (await storage.getArtwork(parseInt(param))) || null;
       const bySeo = await storage.getArtworkBySeoSlug(param);
       if (bySeo) return bySeo;
+
+      // THE TRAILING ID MUST AGREE WITH THE REST OF THE ADDRESS.
+      //
+      // This used to accept any prefix at all: `-40` on the end was enough, so
+      // /artworks/total-nonsense-40 and even /completely-made-up-40 served Blue Drift, in
+      // full, with VisualArtwork markup and a canonical tag. That is an unbounded family of
+      // near-duplicate URLs for every painting — exactly the low-value space a crawler
+      // discovers, queues, and then declines to spend budget on.
+      //
+      // The id still does the lookup, because that is what makes legacy and shortened
+      // addresses work. It just has to be an address that actually belongs to that work.
       const trailing = param.match(/-(\d+)$/);
       if (trailing) {
         const byId = await storage.getArtwork(parseInt(trailing[1]));
-        if (byId) return byId;
+        if (byId && isKnownAddressFor(byId, param)) return byId;
       }
       const all = await storage.getAllArtworks();
       return all.find((a) => a.slug === param || toSlug(a.title) === param) || null;
