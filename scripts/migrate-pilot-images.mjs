@@ -24,17 +24,67 @@
 import { readFileSync, writeFileSync, openSync, fsyncSync, closeSync, existsSync } from "node:fs";
 import crypto from "node:crypto";
 import pg from "pg";
+import { COHORT, EXPECTED_ARTWORKS, EXPECTED_IMAGES, resolveCohort } from "./pilotCohort.mjs";
 
-const COHORT = [
-  { id: 78, idx: [0, 1, 2] },
-  { id: 69, idx: [0] },
-  { id: 63, idx: [0] },
-  { id: 40, idx: [0, 1, 2] },
-  { id: 79, idx: [0] },
-];
 const ROLLBACK = new URL("./pilot-rollback.json", import.meta.url).pathname;
 const DRY = process.argv.includes("--dry");
 const ROLLING_BACK = process.argv.includes("--rollback");
+const DIAGNOSE = process.argv.includes("--diagnose");
+const SITE = process.env.PILOT_SITE_URL || "https://animuradyan.com";
+
+/**
+ * REFUSE TO WRITE INTO A DATABASE THAT IS NOT THE ONE SERVING THE SITE.
+ *
+ * The first dry run resolved eight of nine images and reported `SKIP artwork 79: not found`,
+ * while production's own server was simultaneously emitting /artworks/no-measure-for-distance-79
+ * and /img/artwork/79/0 — both built from that row. A database that is missing a row the live
+ * site is serving is not the live database.
+ *
+ * That mismatch is the whole reason this check exists, and it matters far more than the one
+ * missing image. Without it the run would have "succeeded": eight images migrated into some
+ * other database, production unchanged, and 30/60/90 measurements scheduled against an
+ * intervention that never happened. A loud refusal is the only safe outcome.
+ *
+ * The comparison is against the live API rather than a hardcoded count, so it stays true as
+ * the library grows.
+ */
+async function assertLiveDatabase(client) {
+  const live = await (await fetch(`${SITE}/api/artworks`)).json();
+  const liveIds = new Set(live.map((a) => a.id));
+  const { rows } = await client.query("select id from artworks");
+  const dbIds = new Set(rows.map((r) => Number(r.id)));
+
+  const missing = [...liveIds].filter((id) => !dbIds.has(id)).sort((a, b) => a - b);
+  const extra = [...dbIds].filter((id) => !liveIds.has(id)).sort((a, b) => a - b);
+
+  const report = {
+    site: SITE,
+    liveCount: liveIds.size,
+    dbCount: dbIds.size,
+    liveMaxId: Math.max(...liveIds),
+    dbMaxId: dbIds.size ? Math.max(...dbIds) : null,
+    missingFromDb: missing,
+    extraInDb: extra,
+    matches: missing.length === 0 && extra.length === 0,
+  };
+  return report;
+}
+
+function printDiagnosis(r) {
+  console.log(`\nsite            : ${r.site}`);
+  console.log(`live artworks   : ${r.liveCount}  (max id ${r.liveMaxId})`);
+  console.log(`connected db    : ${r.dbCount}  (max id ${r.dbMaxId})`);
+  console.log(`missing from db : ${r.missingFromDb.length ? r.missingFromDb.join(", ") : "none"}`);
+  console.log(`extra in db     : ${r.extraInDb.length ? r.extraInDb.join(", ") : "none"}`);
+  console.log(`verdict         : ${r.matches ? "this IS the database serving the site" : "MISMATCH — this is not the live database"}`);
+  if (!r.matches) {
+    console.log(`
+The connected database disagrees with what the site is serving, so migrating here would
+change nothing a visitor or Googlebot can see. Check which DATABASE_URL this shell has
+against the one the deployment runs with — in Replit these can differ — and re-run against
+the database that actually backs the published site.`);
+  }
+}
 
 const mime = (buf) =>
   buf[0] === 0x89 && buf[1] === 0x50 ? "image/png"
@@ -57,6 +107,17 @@ async function main() {
   }
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
+
+  // Preflight before anything, including a dry run: a dry run against the wrong database
+  // reports a plan that would not do what it says.
+  const liveness = await assertLiveDatabase(client);
+  printDiagnosis(liveness);
+  if (DIAGNOSE) { await client.end(); return; }
+  if (!liveness.matches) {
+    console.error("\nAborting: refusing to touch a database that is not serving the site.");
+    await client.end();
+    process.exit(3);
+  }
 
   if (ROLLING_BACK) {
     if (!existsSync(ROLLBACK)) { console.error("No rollback file — nothing to restore."); process.exit(2); }
@@ -104,6 +165,21 @@ async function main() {
   }
 
   console.log(`\n${writes.length} image(s) ready, ${(writes.reduce((n, w) => n + w.bytes, 0) / 1048576).toFixed(2)} MB`);
+
+  // THE COHORT IS FROZEN, SO A SHORT RUN IS A FAILURE, not a smaller pilot. The first dry
+  // run resolved eight of nine and reported it as a total — a number that looks like success
+  // if you are not counting. Migrating a partial cohort would also break the comparison the
+  // experiment is built on.
+  const artworksReady = new Set(writes.map((w) => w.id)).size;
+  if (writes.length !== EXPECTED_IMAGES || artworksReady !== EXPECTED_ARTWORKS) {
+    console.error(
+      `\nAborting: the frozen cohort is ${EXPECTED_ARTWORKS} artworks / ${EXPECTED_IMAGES} images, ` +
+      `but only ${artworksReady} artworks / ${writes.length} images resolved. ` +
+      `Fix the cause above rather than migrating a partial cohort.`,
+    );
+    await client.end();
+    process.exit(4);
+  }
   if (DRY) { console.log("DRY RUN — nothing written."); await client.end(); return; }
   if (!writes.length) { console.log("Nothing to do."); await client.end(); return; }
 
