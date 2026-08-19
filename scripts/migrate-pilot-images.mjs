@@ -49,13 +49,19 @@ const SITE = process.env.PILOT_SITE_URL || "https://animuradyan.com";
  * the library grows.
  */
 async function assertLiveDatabase(client) {
-  const live = await (await fetch(`${SITE}/api/artworks`)).json();
+  const live = await (await fetch(`${SITE}/api/artworks`)).json().catch(() => []);
   const liveIds = new Set(live.map((a) => a.id));
   const { rows } = await client.query("select id from artworks");
   const dbIds = new Set(rows.map((r) => Number(r.id)));
 
   const missing = [...liveIds].filter((id) => !dbIds.has(id)).sort((a, b) => a - b);
   const extra = [...dbIds].filter((id) => !liveIds.has(id)).sort((a, b) => a - b);
+  // An empty live set proves nothing either way and must never read as agreement — the site
+  // being down is not evidence that this is the right database.
+  if (liveIds.size === 0) {
+    return { site: SITE, liveCount: 0, dbCount: dbIds.size, liveMaxId: null, dbMaxId: null,
+      missingFromDb: [], extraInDb: [], matches: false };
+  }
 
   const report = {
     site: SITE,
