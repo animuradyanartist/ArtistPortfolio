@@ -1,5 +1,8 @@
 // AUTO-GENERATED — scraped data embedded on the Mac (residential IP),
-// run on Replit where DATABASE_URL points at the live production DB.
+// RUN ON REPLIT — but do not assume DATABASE_URL is production. The workspace and the
+// deployment receive DIFFERENT databases under that same name; the pilot image migration
+// found this by reporting a row missing that the live site was serving. Verify with
+// scripts/lib/productionLiveness.mjs before writing anything that matters.
 // Safe to delete after the sync runs successfully.
 import { runSingulartSync } from "./singulart-sync";
 import type { ScrapedArtwork } from "./singulart-scraper";

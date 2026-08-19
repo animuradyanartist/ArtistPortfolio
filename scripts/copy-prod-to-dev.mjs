@@ -1,3 +1,9 @@
+// PREFLIGHT ADDED 2026-08-19. This script's name asserts that DATABASE_URL is production.
+// That assertion is not safe on Replit: the workspace and the deployment receive different
+// databases under the same variable name, and the pilot image migration proved it the hard
+// way. Copying the workspace copy into "dev" and calling it a production snapshot would be
+// wrong quietly, which is the worst way to be wrong.
+import { assertProductionOrExit } from "./lib/productionLiveness.mjs";
 /**
  * One-time script: copy content tables from neondb (production) to neondb_dev (test).
  * Skips: users, session, feedback (intentionally separate per environment).
@@ -14,6 +20,7 @@ neonConfig.webSocketConstructor = ws;
 
 const PROD_URL = process.env.DATABASE_URL;
 if (!PROD_URL) throw new Error('DATABASE_URL not set');
+
 
 let DEV_URL = process.env.DEV_DATABASE_URL;
 if (!DEV_URL) {
