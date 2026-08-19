@@ -16,7 +16,9 @@ import {
   artworkNarrative,
   artworkOffer,
   renderArtworkHtml,
+  artworkSitemapImageLocs,
 } from "@shared/artworkSsr";
+import { measurePrimaryImage } from "./imageDimensions";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
@@ -1493,9 +1495,16 @@ Crawl-delay: 1
         // meant to index. This declared "/artworks/{id}" — a third live URL for the same
         // painting, and another one the page itself disowns via its canonical tag.
         xml += `    <loc>${escXml(artworkCanonicalUrl(SEO_BASE_URL, artwork))}</loc>\n`;
-        artwork.images.forEach((imgSrc: string) => {
-          if (imgSrc.startsWith('data:')) return;
-          const imgUrl = imgSrc.startsWith('http') ? imgSrc : `${SEO_BASE_URL}${imgSrc}`;
+        // FIRST-PARTY IMAGES ARE NOT SKIPPED ANY MORE.
+        //
+        // A `data:` entry used to be dropped, on the reasonable-sounding grounds that a
+        // base64 blob is not a URL. But the site already serves those bytes at a real,
+        // crawlable address, so dropping them declared nothing for every self-hosted work:
+        // 38 images across 14 artworks, announced to Google Images nowhere at all.
+        //
+        // The rule itself lives in shared/artworkSsr so the sitemap and the page cannot
+        // disagree about which images an artwork has.
+        artworkSitemapImageLocs(artwork.id, artwork.images, SEO_BASE_URL).forEach((imgUrl: string) => {
           xml += '    <image:image>\n';
           xml += `      <image:loc>${escXml(imgUrl)}</image:loc>\n`;
           // Every image previously claimed to be an "abstract realism PORTRAIT painting",
@@ -1944,9 +1953,12 @@ Crawl-delay: 1
             const artwork = await resolveArtworkForPath(req.path);
             if (artwork) {
               html = injectArtworkMeta(html, artwork);
+              // Measured from the actual bytes, or absent. Never inferred from the physical
+              // canvas size — that is centimetres of painting, not pixels of photograph.
+              const imageSize = await measurePrimaryImage(artwork.images as (string | null)[] | null);
               html = html.replace(
                 '<div id="root"></div>',
-                `<div id="root">${renderArtworkHtml(artwork, SEO_BASE_URL)}</div>`,
+                `<div id="root">${renderArtworkHtml(artwork, SEO_BASE_URL, imageSize)}</div>`,
               );
             }
           } catch (e) {

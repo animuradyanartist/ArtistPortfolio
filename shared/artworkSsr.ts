@@ -170,7 +170,19 @@ export function artworkJsonLd(a: SsrArtwork, baseUrl: string): Record<string, un
  * placed inside #root — so a first-wave crawler reads the painting rather than an empty
  * shell, and React replaces it on hydration.
  */
-export function renderArtworkHtml(a: SsrArtwork, baseUrl: string): string {
+/**
+ * Intrinsic pixel size of the primary image, when it could be MEASURED.
+ *
+ * Optional, and omitted rather than guessed: a wrong width/height reserves the wrong box and
+ * the layout shifts anyway, only with confidence. The server measures the bytes and passes
+ * the result; callers that cannot measure pass nothing and the attributes are absent.
+ */
+export interface SsrImageSize {
+  width: number;
+  height: number;
+}
+
+export function renderArtworkHtml(a: SsrArtwork, baseUrl: string, imageSize?: SsrImageSize | null): string {
   const e = escapeHtml;
   const fact = artworkFactLine(a);
   const image = artworkImageUrl(a, baseUrl);
@@ -179,6 +191,10 @@ export function renderArtworkHtml(a: SsrArtwork, baseUrl: string): string {
   const alt = [a.title, a.medium ? `${a.medium} painting` : "painting", "by Ani Muradyan"]
     .filter(Boolean)
     .join(" — ");
+  // Present only when real. `width`/`height` give the browser an aspect to reserve space
+  // with and tell Google the shape of the picture; the CSS above still governs how it is
+  // actually laid out, so adding them changes no visual result.
+  const sizeAttrs = imageSize ? ` width="${imageSize.width}" height="${imageSize.height}"` : "";
   const priceLine = isPurchasable(a)
     ? `<p style="font-size:1.05rem;color:#0f172a;margin-bottom:0.25rem"><strong>${e(ARTWORK_PRICE_CURRENCY)} ${e(
         Number(a.price).toLocaleString("en-US"),
@@ -187,7 +203,8 @@ export function renderArtworkHtml(a: SsrArtwork, baseUrl: string): string {
 
   return (
     `<article id="artwork-ssr" style="padding:3rem 1.5rem;max-width:760px;margin:0 auto;font-family:system-ui,sans-serif">` +
-    `<img src="${e(image)}" alt="${e(alt)}" style="width:100%;height:auto;border-radius:12px;margin-bottom:2rem" />` +
+    `<img src="${e(image)}" alt="${e(alt)}"${sizeAttrs}` +
+    ` style="width:100%;height:auto;border-radius:12px;margin-bottom:2rem" />` +
     `<h1 style="font-size:2.4rem;font-weight:700;color:#0f172a;margin-bottom:0.5rem">${e(a.title)}</h1>` +
     (fact ? `<p style="color:#64748b;font-size:1rem;margin-bottom:1.5rem">${e(fact)}</p>` : "") +
     `<p style="font-size:1.1rem;line-height:1.75;color:#334155;margin-bottom:1.5rem">${e(artworkNarrative(a))}</p>` +
@@ -197,4 +214,38 @@ export function renderArtworkHtml(a: SsrArtwork, baseUrl: string): string {
     ` · <a href="/about" style="color:#1d4ed8;text-decoration:underline">About Ani Muradyan</a></p>` +
     `</article>`
   );
+}
+
+/**
+ * The image addresses an artwork declares to a crawler, in slot order.
+ *
+ * ONE IMPLEMENTATION, because a sitemap that disagrees with the page about which images
+ * exist is worse than either version alone. routes.ts builds the XML around this; nothing
+ * else decides the rule.
+ *
+ * A stored (`data:`) image is represented by the route that actually serves its bytes.
+ * Skipping those declared nothing for every self-hosted work — 38 images across 14 artworks
+ * in production, announced nowhere.
+ */
+export function artworkSitemapImageLocs(
+  artworkId: number,
+  images: (string | null | undefined)[] | null | undefined,
+  baseUrl: string,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  (images ?? []).forEach((imgSrc, imgIdx) => {
+    if (typeof imgSrc !== "string" || !imgSrc) return;
+    const url = imgSrc.startsWith("data:")
+      ? `${baseUrl}/img/artwork/${artworkId}/${imgIdx}`
+      : imgSrc.startsWith("http")
+        ? imgSrc
+        : `${baseUrl}${imgSrc}`;
+    // One entry per address: two slots holding the same file would otherwise declare the
+    // same image twice under a single page.
+    if (seen.has(url)) return;
+    seen.add(url);
+    out.push(url);
+  });
+  return out;
 }
