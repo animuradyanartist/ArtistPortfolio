@@ -1,0 +1,86 @@
+{
+  "createdAt": "2026-08-19T11:59:03.967Z",
+  "records": [
+    {
+      "artworkId": 78,
+      "title": "Path to Tranquility",
+      "imageIndex": 0,
+      "originalUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2096103_ba82351196eab4531454cf60fe5a96c2.jpeg",
+      "originalHost": "www.singulart.com",
+      "bytes": 254500,
+      "sha256": "da4aaa1ce4baacb1bca7bd0fd719506cb523f1aeec2e6399e2dfcaee936fd77c"
+    },
+    {
+      "artworkId": 78,
+      "title": "Path to Tranquility",
+      "imageIndex": 1,
+      "originalUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/alts/zoom/alt_2096103_50a1650fb46eb6f8cae5341b1af097a0.jpeg",
+      "originalHost": "www.singulart.com",
+      "bytes": 285518,
+      "sha256": "4fdebecf755ac2278487a984032d999326bba3d9861ff76d8b2e06df54d4106a"
+    },
+    {
+      "artworkId": 78,
+      "title": "Path to Tranquility",
+      "imageIndex": 2,
+      "originalUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/alts/zoom/alt_2096103_459a838cade229fa7d6e18f4ddaa86a7.jpeg",
+      "originalHost": "www.singulart.com",
+      "bytes": 259562,
+      "sha256": "70fd97cf13cdbbb4a64fa5b7806d35ef65c1facd08bd824dd45b63bb4a61138d"
+    },
+    {
+      "artworkId": 69,
+      "title": "Road to Tuscany",
+      "imageIndex": 0,
+      "originalUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2666400_f81a1ada2cf523239b99bd427c810797.jpeg",
+      "originalHost": "www.singulart.com",
+      "bytes": 291494,
+      "sha256": "9145ba912106ab6f3174fac90379549c58aab6ff74f57864b56b9af2d2d779c8"
+    },
+    {
+      "artworkId": 63,
+      "title": "Strength in Shadows",
+      "imageIndex": 0,
+      "originalUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2130929_f466d68ebd225d731a14887c2b69f066.jpeg",
+      "originalHost": "www.singulart.com",
+      "bytes": 262166,
+      "sha256": "9c9c0d9b864115fb5e92d93c55321025aad398838a41e202dffe022b4ffa559b"
+    },
+    {
+      "artworkId": 40,
+      "title": "Blue Drift",
+      "imageIndex": 0,
+      "originalUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2520049_2d7c745405e97efc567ac615ce1c7d3e.png",
+      "originalHost": "www.singulart.com",
+      "bytes": 834628,
+      "sha256": "3cebeaf59c475cbaebaaadf1125ef74a02174d9e6dbddfe3347f5c7cf9b40c4b"
+    },
+    {
+      "artworkId": 40,
+      "title": "Blue Drift",
+      "imageIndex": 1,
+      "originalUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/alts/zoom/alt_2520049_be63a7c443cc80222e19ac7bc57baf41.jpeg",
+      "originalHost": "www.singulart.com",
+      "bytes": 274639,
+      "sha256": "40924e96aea2e73e79e739e7a21ca3d1bc7b25467b6ef7c9f6e9618ae9708601"
+    },
+    {
+      "artworkId": 40,
+      "title": "Blue Drift",
+      "imageIndex": 2,
+      "originalUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/alts/zoom/alt_2520049_4d803c568e4c20d8303d1570eab5485d.jpeg",
+      "originalHost": "www.singulart.com",
+      "bytes": 158172,
+      "sha256": "c8e16788b31cfa192ee6bc31b3125e0ae8ac1149726f424db4ff8416cb38d467"
+    },
+    {
+      "artworkId": 79,
+      "title": "No Measure for Distance",
+      "imageIndex": 0,
+      "originalUrl": "https://www.singulart.com/images/artworks/v2/cropped/62448/main/zoom/2764409_6208a2d2134f857e06de24c966c031ea.jpeg",
+      "originalHost": "www.singulart.com",
+      "bytes": 218845,
+      "sha256": "28c7c1090fa7247be0838e2dc5c29c57bd04b9b943a039b064eed300f40ba0fb"
+    }
+  ]
+}
