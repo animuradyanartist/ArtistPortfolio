@@ -19,6 +19,7 @@ import {
   artworkSitemapImageLocs,
 } from "@shared/artworkSsr";
 import { isKnownAddressFor, knownAddresses } from "@shared/artworkAddress";
+import { isMissingArtworkPath } from "@shared/artworkNotFound";
 import { measurePrimaryImage } from "./imageDimensions";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
@@ -1980,6 +1981,22 @@ Crawl-delay: 1
           // same row the tags are built from, exactly as /path, /blog and /artworks do.
           try {
             const artwork = await resolveArtworkForPath(req.path);
+
+            // A PAINTING THAT DOES NOT EXIST SHOULD SAY SO.
+            //
+            // Everything above has already had its chance: a canonical URL resolves, a legacy
+            // marketplace slug and a case variant are 301'd by the middleware registered
+            // earlier, and a bare id resolves. Reaching here with nothing means the path is a
+            // claim about a specific painting that is not one.
+            //
+            // It used to answer 200 with the generic shell and a self-canonical — a soft 404.
+            // The status line is the fix; the shell still renders, so a person who mistypes a
+            // URL sees the site rather than a bare string.
+            if (isMissingArtworkPath(req.path, Boolean(artwork))) {
+              res.status(404).setHeader('Content-Type', 'text/html');
+              return res.send(html);
+            }
+
             if (artwork) {
               html = injectArtworkMeta(html, artwork);
               // Measured from the actual bytes, or absent. Never inferred from the physical
