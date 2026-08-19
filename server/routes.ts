@@ -20,7 +20,7 @@ import {
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
-import { requireBlogAgent, agentFields, agentMayEdit, blogAgentConfigured } from "./blogAgent";
+import { requireBlogAgent, agentFields, agentReadable, agentMayEdit, blogAgentConfigured } from "./blogAgent";
 import { PATH_NARRATIVE } from "@shared/pathNarrative";
 import { buildInfo } from "./buildInfo";
 
@@ -1221,6 +1221,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Two routes, one credential, no way to go live. `requireBlogAgent` accepts a token that
   // the publish and delete routes above do not — the boundary is which door the key opens,
   // not what the caller was asked to do. There is no agent publish route to disable.
+
+  /**
+   * THE LIBRARY, as the agent sees it — read-only, and the reason it can stop repeating
+   * itself.
+   *
+   * Non-duplication cannot be checked from titles. Two articles share a thesis, an artwork,
+   * a quotation or a conclusion in their PROSE, so the prose is what has to be comparable.
+   * Drafts are included deliberately: a draft the owner has not published yet is exactly
+   * the thing a second draft is most likely to collide with, and it is invisible on every
+   * public route.
+   *
+   * Nothing here mutates. There is no id parameter, no body, no status field to set. It
+   * reads through the same storage call the admin list uses, then narrows to an allowlist,
+   * so a column added later is not silently exposed.
+   */
+  app.get("/api/agent/blog", requireBlogAgent, async (_req, res) => {
+    try {
+      const posts = await storage.getBlogPosts({ includeDrafts: true });
+      res.json(posts.map((p) => agentReadable(p as unknown as Record<string, unknown>)));
+    } catch (error) {
+      console.error("Error listing posts for agent:", error);
+      res.status(500).json({ message: "Failed to list posts" });
+    }
+  });
 
   app.post("/api/agent/blog", requireBlogAgent, async (req, res) => {
     try {

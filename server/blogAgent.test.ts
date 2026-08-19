@@ -7,7 +7,7 @@
  * which posts it is allowed to touch.
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { agentFields, agentMayEdit, blogAgentConfigured } from "./blogAgent";
+import { agentFields, agentReadable, agentMayEdit, blogAgentConfigured } from "./blogAgent";
 
 describe("what the agent may say", () => {
   it("keeps the fields an article needs", () => {
@@ -75,5 +75,36 @@ describe("the credential fails closed", () => {
   it("a real token configures it", () => {
     process.env.BLOG_AGENT_TOKEN = "x".repeat(48);
     expect(blogAgentConfigured()).toBe(true);
+  });
+});
+
+describe("what the agent may read back", () => {
+  const row = {
+    id: 3, slug: "s", title: "T", status: "draft", excerpt: "E", body: "B",
+    origin: "career_os", decisionRef: "exp-001", publishedAt: null,
+    coverImage: null, coverImageAlt: null,
+  };
+
+  it("returns the prose, because duplication lives in the prose and not in the title", () => {
+    const out = agentReadable(row);
+    expect(out.body).toBe("B");
+    expect(out.excerpt).toBe("E");
+    expect(out.title).toBe("T");
+  });
+
+  it("shows status, so a draft can be compared against — reading it is not setting it", () => {
+    expect(agentReadable(row).status).toBe("draft");
+    // The write side still refuses the same field.
+    expect(agentFields({ status: "published" })).not.toHaveProperty("status");
+  });
+
+  it("is an allowlist — a column added to the table later is not exposed by accident", () => {
+    const out = agentReadable({ ...row, adminNotes: "private", internalScore: 9 });
+    expect(out).not.toHaveProperty("adminNotes");
+    expect(out).not.toHaveProperty("internalScore");
+  });
+
+  it("omits absent fields rather than inventing nulls for them", () => {
+    expect(agentReadable({ id: 1 })).toEqual({ id: 1 });
   });
 });
