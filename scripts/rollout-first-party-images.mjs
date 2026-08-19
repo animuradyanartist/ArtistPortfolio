@@ -26,7 +26,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { checkProductionLiveness, describeLiveness } from "./lib/productionLiveness.mjs";
 
 const SITE = process.env.PILOT_SITE_URL || "https://animuradyan.com";
 const PILOT_IDS = new Set([78, 69, 63, 40, 79]);
@@ -82,8 +81,24 @@ async function main() {
   console.log(`\nproposed refs   : /uploads/artworks/<artworkId>-<idx>.<ext>`);
   console.log(`rollback        : original URL recorded per slot before any write, as the pilot did`);
 
-  const live = await checkProductionLiveness(async () => artworks.map((a) => a.id), SITE);
-  console.log(describeLiveness(live, SITE));
+  // NO LIVENESS VERDICT IS PRINTED HERE, BECAUSE THIS TOOL CANNOT EARN ONE.
+  //
+  // It used to call checkProductionLiveness with the ids it had just fetched from
+  // `${SITE}/api/artworks`, while the guard independently fetches that same endpoint for the
+  // other side of the comparison. It compared the live site to itself, so it always printed
+  // "this IS the database serving the site" — from a script that opens no database at all.
+  //
+  // That is worse than printing nothing: this PR's own description quoted that line as
+  // verification. A check that cannot fail is not a check, and the module it borrows says so
+  // in as many words — "Not being able to prove you are connected to production is not
+  // permission to write to it."
+  //
+  // The execute path below is unimplemented. When it is built, it must open the database it
+  // intends to write to and call assertProductionOrExit with ids queried FROM that
+  // connection, exactly as scripts/copy-prod-to-dev.mjs now does.
+  console.log(`\nproduction db   : not verified — this tool holds no database connection.`);
+  console.log(`                  the execute path must call assertProductionOrExit() with ids`);
+  console.log(`                  queried from the connection it is about to write to.`);
 
   if (!EXECUTE) {
     console.log(`\nDRY RUN — nothing written. ${targets.length} images would move.`);
