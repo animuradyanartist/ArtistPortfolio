@@ -44,7 +44,7 @@ async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   console.log(`Snapshotting ${BASE} ...`);
-  const [artworks, galleryPhotos, exhibitions, homepageSettings, artistBio, contactSettings, printsLight] =
+  const [artworks, galleryPhotos, exhibitions, homepageSettings, artistBio, contactSettings, printsLight, blogPosts] =
     await Promise.all([
       getJson("/api/artworks"),
       getJson("/api/gallery-photos"),
@@ -53,6 +53,8 @@ async function main() {
       getJson("/api/artist-bio"),
       getJson("/api/contact-settings"),
       getJson("/api/prints"),
+      // Published writing, so the /blog surfaces are checkable in preview at all.
+      getJson("/api/blog").catch(() => []),
     ]);
 
   for (const a of artworks) {
@@ -90,9 +92,12 @@ async function main() {
   }
   console.log(`prints: ${prints.length}`);
 
+  console.log(`blog posts: ${(blogPosts || []).length}`);
+
   const snapshot = {
     snapshotFrom: BASE,
     artworks,
+    blogPosts,
     galleryPhotos,
     exhibitions,
     homepageSettings,

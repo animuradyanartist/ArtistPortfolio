@@ -195,6 +195,22 @@ export class MemStorage implements IStorage {
         this.artworks = new Map(snap.artworks.map((a: Artwork) => [a.id, a]));
         this.currentArtworkId = Math.max(...snap.artworks.map((a: Artwork) => a.id)) + 1;
       }
+      // Published writing. Without it, /blog and every article page are unreviewable in
+      // preview — the one place the article layouts can be looked at before deploying them.
+      //
+      // NOT UNDER TEST. `blog.test.ts` asserts that a fresh store is empty, which is the
+      // right thing for it to assert: "a draft cannot leak" must be provable without
+      // depending on whether a developer happens to have a snapshot file on disk. Seeding
+      // it here would make that boundary test pass or fail according to local state.
+      if (!process.env.VITEST && Array.isArray(snap.blogPosts) && snap.blogPosts.length > 0) {
+        this.blogPosts = snap.blogPosts.map((p: BlogPost) => ({
+          ...p,
+          publishedAt: p.publishedAt ? new Date(p.publishedAt) : null,
+          createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+          updatedAt: p.updatedAt ? new Date(p.updatedAt) : new Date(),
+        }));
+        this.currentBlogPostId = Math.max(...snap.blogPosts.map((p: BlogPost) => p.id)) + 1;
+      }
       if (Array.isArray(snap.galleryPhotos) && snap.galleryPhotos.length > 0) {
         this.galleryPhotos = new Map(snap.galleryPhotos.map((g: GalleryPhoto) => [g.id, g]));
         this.currentGalleryPhotoId = Math.max(...snap.galleryPhotos.map((g: GalleryPhoto) => g.id)) + 1;

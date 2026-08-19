@@ -105,8 +105,16 @@ describe("image-sitemap.xml", () => {
   it("does not claim every painting is a portrait", async () => {
     // The caption asserted "abstract realism portrait painting" on all 154 images,
     // landscapes included. A caption is a claim, and that one was false.
+    //
+    // CHECKED ON THE GENERATED TITLE, NOT THE WHOLE DOCUMENT. The captions carry HER
+    // descriptions, and one of them — "Rebirth" — correctly calls itself a contemporary
+    // portrait painting, because it is one. Scanning the entire XML made a true sentence
+    // of hers fail a test about a templated falsehood of ours, and it only ever passed
+    // because the fixture happened to omit that work.
     const xml = await (await fetch(`${origin}/image-sitemap.xml`)).text();
-    expect(xml).not.toMatch(/portrait painting/i);
+    const titles = [...xml.matchAll(/<image:title>([\s\S]*?)<\/image:title>/g)].map((m) => m[1]!);
+    expect(titles.length).toBeGreaterThan(0);
+    for (const t of titles) expect(t).not.toMatch(/portrait painting/i);
   });
 
   it("escapes text so one ampersand cannot invalidate the document", async () => {

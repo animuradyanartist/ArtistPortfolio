@@ -10,3 +10,7 @@ public/uploads/_cache/
 # Local preview snapshot of live-site content (regenerate with scripts/snapshot-preview-data.mjs)
 server/preview-data.json
 public/uploads/preview/
+
+# Replit workspace state — local tooling, never part of the app (contains secrets)
+.config/
+.local/

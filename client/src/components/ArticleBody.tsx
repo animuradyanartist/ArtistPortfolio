@@ -88,7 +88,11 @@ export function ArticleBody({ body, artworks = [], variant = "reader" }: Article
           // Unknown title: render nothing. Never invent an image or a URL.
           if (!fig) return null;
           return (
-            <figure key={i} className="my-10">
+            // The reader lets a painting break past the reading column: constrained to a
+            // text measure it reads as an illustration OF the writing rather than its
+            // subject. The admin preview keeps it inline — that panel is for checking what
+            // the article says, not for admiring it.
+            <figure key={i} className={reader ? "my-12 md:-mx-16 lg:-mx-24" : "my-10"}>
               <Link href={fig.href} className="block">
                 <img
                   src={fig.imageUrl}
