@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { ArticleBody } from "@/components/ArticleBody";
 import type { BlogPost, Artwork } from "@shared/schema";
 import { Plus, Edit, Trash, Eye, Globe, Undo2, Bot, User, Upload, X, ImageIcon } from "lucide-react";
 import {
@@ -238,18 +239,7 @@ export default function AdminArticles() {
             <p className="text-slate-500 text-sm mb-6">{when(preview.publishedAt ?? preview.createdAt)} · Ani Muradyan</p>
             <p className="text-lg text-slate-600 mb-8">{preview.excerpt}</p>
             {/* The same plain-text shape the server renders — paragraphs, headings, lists. */}
-            {String(preview.body ?? "").split(/\n{2,}/).map((block, i) => {
-              const b = block.trim();
-              if (!b) return null;
-              if (/^###\s+/.test(b)) return <h3 key={i} className="text-xl font-bold text-slate-900 mt-8 mb-3">{b.replace(/^###\s+/, "")}</h3>;
-              if (/^##\s+/.test(b)) return <h2 key={i} className="text-2xl font-bold text-slate-900 mt-8 mb-3">{b.replace(/^##\s+/, "")}</h2>;
-              if (/^[-*]\s+/.test(b)) return (
-                <ul key={i} className="list-disc pl-6 text-slate-700 mb-4">
-                  {b.split("\n").map((l, j) => <li key={j} className="mb-1">{l.replace(/^[-*]\s+/, "")}</li>)}
-                </ul>
-              );
-              return <p key={i} className="text-slate-700 leading-relaxed mb-4">{b.replace(/\n/g, " ")}</p>;
-            })}
+            {<ArticleBody body={preview.body} artworks={artworks} variant="preview" />}
           </article>
         </CardContent>
       </Card>

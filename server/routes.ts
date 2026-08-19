@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, insertBlogPostSchema, prints } from "@shared/schema";
 import { artworkCanonicalUrl, artworkCanonicalPath, toSlug } from "@shared/canonical";
+import { artworkFigure, parseArticle, parseInline } from "@shared/articleMarkdown";
 import { ARTWORKS_TITLE } from "@shared/pageMeta";
 import {
   ARTWORK_PRICE_CURRENCY,
@@ -35,6 +36,13 @@ import { buildInfo } from "./buildInfo";
  * prerendered section, so an article is real text to a first-wave crawler rather than an
  * empty shell waiting on JavaScript.
  */
+/**
+ * The crawlable article, built from the SAME parser the reader and the admin preview use
+ * (shared/articleMarkdown). Three hand-rolled copies of this subset had drifted: none
+ * handled blockquotes, and the admin preview did no inline formatting at all, so a draft
+ * reached the owner showing raw link syntax. Parsing happens once; only the output idiom
+ * differs here.
+ */
 function renderArticleHtml(
   post: {
     title: string; excerpt: string; body: string;
@@ -42,38 +50,56 @@ function renderArticleHtml(
     coverImage?: string | null; coverImageAlt?: string | null;
   },
   esc: (t: string) => string,
+  artworks: Array<{ id: number; title: string; seoSlug?: string | null; medium?: string | null;
+                    dimensions?: string | null; year?: number | null; availability?: string | null;
+                    images?: (string | null)[] | null }> = [],
 ): string {
-  const blocks = String(post.body ?? "").split(/\n{2,}/).map((raw) => {
-    const block = raw.trim();
-    if (!block) return "";
-    const inline = (t: string) =>
-      esc(t)
-        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|\/[^)\s]*)\)/g, '<a href="$2" style="color:#1d4ed8;text-decoration:underline">$1</a>');
+  const inline = (text: string) =>
+    parseInline(text)
+      .map((n) => {
+        if (n.kind === "strong") return `<strong>${esc(n.text)}</strong>`;
+        if (n.kind === "link") return `<a href="${esc(n.href)}" style="color:#1d4ed8;text-decoration:underline">${esc(n.text)}</a>`;
+        return esc(n.text);
+      })
+      .join("");
 
-    const h = /^(#{2,3})\s+(.*)$/.exec(block);
-    if (h) {
-      const level = h[1].length; // ## → h2, ### → h3. h1 is the article title, once.
-      const size = level === 2 ? "1.6rem" : "1.25rem";
-      return `<h${level} style="font-size:${size};font-weight:700;color:#0f172a;margin:2rem 0 0.75rem">${inline(h[2])}</h${level}>`;
+  const blocks = parseArticle(post.body).map((b) => {
+    if (b.kind === "heading") {
+      const size = b.level === 2 ? "1.6rem" : "1.25rem";
+      return `<h${b.level} style="font-size:${size};font-weight:700;color:#0f172a;margin:2rem 0 0.75rem">${inline(b.text)}</h${b.level}>`;
     }
-    if (/^([-*])\s+/.test(block)) {
-      const items = block.split(/\n/).map((l) => l.replace(/^([-*])\s+/, "").trim()).filter(Boolean);
+    if (b.kind === "list") {
       return `<ul style="list-style:disc;padding-left:1.5rem;color:#334155;margin-bottom:1rem">${
-        items.map((i) => `<li style="margin-bottom:0.35rem">${inline(i)}</li>`).join("")}</ul>`;
+        b.items.map((i) => `<li style="margin-bottom:0.35rem">${inline(i)}</li>`).join("")}</ul>`;
     }
-    return `<p style="font-size:1.05rem;line-height:1.75;color:#334155;margin-bottom:1rem">${inline(block.replace(/\n/g, " "))}</p>`;
+    if (b.kind === "quote") {
+      return `<blockquote style="border-left:3px solid #94a3b8;padding-left:1.25rem;margin:2rem 0;font-style:italic;color:#334155">${
+        b.paragraphs.map((q) => `<p style="margin-bottom:0.75rem">${inline(q)}</p>`).join("")}</blockquote>`;
+    }
+    if (b.kind === "artwork") {
+      const fig = artworkFigure(b.title, artworks, {
+        canonicalPath: (a) => artworkCanonicalPath({ id: a.id, title: a.title, seoSlug: a.seoSlug ?? null }),
+        imageUrl: (a) => {
+          const first = Array.isArray(a.images) ? a.images.find((i) => typeof i === "string" && i.trim()) : null;
+          return first && /^https?:\/\//i.test(first) ? first : `/img/artwork/${a.id}/0`;
+        },
+      });
+      // A named work that is not hers renders as nothing — never an invented image.
+      if (!fig) return "";
+      const status = fig.status ? `<span style="display:block;color:#94a3b8">${esc(fig.status)}</span>` : "";
+      return `<figure style="margin:2.5rem 0">` +
+        `<a href="${esc(fig.href)}"><img src="${esc(fig.imageUrl)}" alt="${esc(fig.alt)}" loading="lazy" style="width:100%;height:auto;border-radius:8px;border:1px solid #e2e8f0" /></a>` +
+        `<figcaption style="margin-top:0.75rem;font-size:0.9rem;color:#64748b">` +
+        `<a href="${esc(fig.href)}" style="color:#334155;text-decoration:underline">${esc(fig.title)}</a>` +
+        `${esc(fig.caption.slice(fig.title.length))}${status}</figcaption></figure>`;
+    }
+    return `<p style="font-size:1.05rem;line-height:1.75;color:#334155;margin-bottom:1rem">${inline(b.text)}</p>`;
   }).join("");
 
   const published = post.publishedAt ?? post.createdAt;
   const dateLine = published
     ? `<p style="color:#64748b;font-size:0.9rem;margin-bottom:1.5rem"><time datetime="${published.toISOString()}">${published.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</time> \u00b7 Ani Muradyan</p>`
     : "";
-
-  // The image is part of the crawlable article, not decoration bolted on by JavaScript.
-  // `alt` is written by whoever chose the picture; when they left it blank the attribute is
-  // EMPTY rather than filled with the title — an empty alt tells a screen reader "skip
-  // this", a wrong one wastes the listener's time.
   const cover = post.coverImage
     ? `<img src="${esc(post.coverImage)}" alt="${esc(post.coverImageAlt ?? "")}" style="width:100%;height:auto;border-radius:12px;margin-bottom:2rem" />`
     : "";
@@ -1831,7 +1857,8 @@ Crawl-delay: 1
                 };
                 html = html.replace('</head>',
                   `  <script type="application/ld+json">${JSON.stringify(jsonld).replace(/<\/script>/gi, '<\\/script>')}</script>\n</head>`);
-                html = html.replace('<div id="root">', renderArticleHtml(post, esc) + '<div id="root">');
+                const bodyArtworks = await storage.getAllArtworks().catch(() => []);
+                html = html.replace('<div id="root">', renderArticleHtml(post, esc, bodyArtworks as never) + '<div id="root">');
               }
             }
           } catch (e) {
