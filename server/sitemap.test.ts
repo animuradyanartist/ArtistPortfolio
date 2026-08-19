@@ -139,4 +139,62 @@ describe("image-sitemap.xml", () => {
       await storage.deleteArtwork((created as { id: number }).id);
     }
   });
+
+  /**
+   * THE GALLERY LOOP KEPT THE SKIP THE ARTWORK LOOP LOST.
+   *
+   * All 16 gallery photographs are stored as `data:` rows, so `startsWith('data:')` dropped
+   * every one of them and /gallery was declared as a <url> element with no images inside it.
+   *
+   * THESE MUST CREATE THEIR OWN `data:` ROW. A gitignored server/preview-data.json seeds 16
+   * gallery photos on a developer machine, but those values are the ALREADY-REFIFIED
+   * "/img/gallery/:id/0?v=..." strings taken from the public API — never `data:`. Against
+   * that snapshot the unfixed code emits correct-looking output, so a test leaning on
+   * ambient gallery data passes whether or not the bug is present.
+   */
+  it("declares a stored gallery photograph at the address the site already serves it from", async () => {
+    const photo = await storage.createGalleryPhoto({
+      title: "Opening night",
+      image: "data:image/png;base64,AAAA",
+      exhibitionName: "Yerevan",
+      location: "Armenia",
+      year: 2026,
+    } as never);
+    const id = (photo as { id: number }).id;
+    try {
+      const xml = await (await fetch(`${origin}/image-sitemap.xml`)).text();
+      const block = /<url>\s*<loc>[^<]*\/gallery<\/loc>([\s\S]*?)<\/url>/.exec(xml)?.[1] ?? "";
+      expect(block).toContain(`<image:loc>${BASE}/img/gallery/${id}/0</image:loc>`);
+      // A base64 blob is not an address, and must never reach the document.
+      expect(xml).not.toContain("data:image");
+    } finally {
+      await storage.deleteGalleryPhoto(id);
+    }
+  });
+
+  it("leaves an externally hosted gallery photograph exactly as it is", async () => {
+    const ext = "https://cdn.example.com/opening.jpg";
+    const photo = await storage.createGalleryPhoto({ title: "Ext", image: ext } as never);
+    const id = (photo as { id: number }).id;
+    try {
+      const xml = await (await fetch(`${origin}/image-sitemap.xml`)).text();
+      expect(xml).toContain(`<image:loc>${ext}</image:loc>`);
+    } finally {
+      await storage.deleteGalleryPhoto(id);
+    }
+  });
+
+  it("omits the /gallery element entirely rather than declaring a page with no images", async () => {
+    // The guard counted ROWS, not declarable images, so 16 skipped photos still produced
+    // "<url><loc>.../gallery</loc></url>" — an entry that spends crawl budget to say nothing.
+    // Verified verbatim in production on 2026-08-19.
+    const existing = await storage.getAllGalleryPhotos();
+    const xml = await (await fetch(`${origin}/image-sitemap.xml`)).text();
+    const block = /<url>\s*<loc>[^<]*\/gallery<\/loc>([\s\S]*?)<\/url>/.exec(xml)?.[1];
+    if (existing.length === 0) {
+      expect(block).toBeUndefined();
+    } else {
+      expect(block).toContain("<image:image>");
+    }
+  });
 });

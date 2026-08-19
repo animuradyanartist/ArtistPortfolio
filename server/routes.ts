@@ -1520,12 +1520,36 @@ Crawl-delay: 1
         xml += '  </url>\n';
       });
 
-      if (galleryPhotos.length > 0) {
+      // THE SAME DEFECT AS THE ARTWORK LOOP ABOVE, ONE LOOP LOWER.
+      //
+      // Every gallery photograph is stored as a `data:` row, so this skip dropped all 16 of
+      // them and /gallery entered the sitemap as a <url> element with nothing inside it —
+      // an entry that spends crawl budget to say nothing at all.
+      //
+      // The bytes are already served at /img/gallery/:id/0, so the address is real and
+      // declaring it is not a promise the site cannot keep. This is the rule the artwork
+      // loop above already follows; it is written out here rather than shared, because
+      // artworkSitemapImageLocs exists to stop the sitemap and the SSR page disagreeing
+      // about an artwork's images, and nothing else renders gallery photographs.
+      //
+      // A gallery row holds ONE image in a single `image` column, so the index is always 0
+      // — the same ref server/images.ts builds via toImageRef().
+      const galleryImages = galleryPhotos.flatMap(photo => {
+        if (!photo.image) return [];
+        const imgUrl = photo.image.startsWith('data:')
+          ? `${SEO_BASE_URL}/img/gallery/${photo.id}/0`
+          : photo.image.startsWith('http')
+            ? photo.image
+            : `${SEO_BASE_URL}${photo.image}`;
+        return [{ photo, imgUrl }];
+      });
+
+      // Gate on what will actually be declared, not on how many rows exist. The old guard
+      // counted rows, which is how an empty <url> element reached production.
+      if (galleryImages.length > 0) {
         xml += '  <url>\n';
         xml += `    <loc>${SEO_BASE_URL}/gallery</loc>\n`;
-        galleryPhotos.forEach(photo => {
-          if (!photo.image || photo.image.startsWith('data:')) return;
-          const imgUrl = photo.image.startsWith('http') ? photo.image : `${SEO_BASE_URL}${photo.image}`;
+        galleryImages.forEach(({ photo, imgUrl }) => {
           xml += '    <image:image>\n';
           xml += `      <image:loc>${escXml(imgUrl)}</image:loc>\n`;
           // A studio/exhibition photograph is not a painting, and was being announced as
