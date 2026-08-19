@@ -9,8 +9,13 @@
  * So this is a SECOND, deliberately smaller credential, and the boundary is enforced by
  * which routes accept it rather than by what the agent is told to do:
  *
- *   requireBlogAgent  → POST /api/agent/blog        create a draft
- *                     → PATCH /api/agent/blog/:id   revise its OWN, still-unpublished draft
+ *   requireBlogAgent  → GET   /api/agent/blog        read titles+bodies, to avoid repeating itself
+ *                     → POST  /api/agent/blog        create a draft
+ *                     → PATCH /api/agent/blog/:id    revise its OWN, still-unpublished draft
+ *
+ * The GET is READ-ONLY and mutates nothing. It exists because non-duplication is a quality
+ * property the agent cannot check blind: it has to see the library, including drafts that
+ * are not public, to know whether it is about to say the same thing twice.
  *
  * There is no agent publish route. Not a disabled one, not a guarded one — none exists,
  * so there is nothing to reach. Publishing lives behind `requireAdminAuth` alone.
@@ -73,6 +78,37 @@ export function agentFields(body: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const k of AGENT_WRITABLE) {
     if (src[k] !== undefined) out[k] = src[k];
+  }
+  return out;
+}
+
+/**
+ * What the agent may READ back — the mirror of `AGENT_WRITABLE`, and deliberately not
+ * "the row".
+ *
+ * Career OS has to answer "does this candidate repeat something already in the library?"
+ * before it drafts. That question needs the prose — a title tells you almost nothing about
+ * whether two articles share a thesis, an artwork, a quotation or a conclusion. So the body
+ * is readable. Nothing else grows readable by accident: this is an allowlist, so a column
+ * added to the posts table later is invisible here until someone decides otherwise.
+ *
+ * `status` IS readable, unlike on the write side. Reading it is how the agent avoids
+ * duplicating a draft that is not public yet; being unable to SET it is what keeps
+ * publication the owner's.
+ */
+const AGENT_READABLE = [
+  "id", "slug", "title", "status", "excerpt", "body",
+  "origin", "decisionRef", "publishedAt", "coverImage", "coverImageAlt",
+] as const;
+
+/**
+ * Project a post down to the readable fields. PURE, so the boundary is testable without a
+ * server — the same discipline `agentFields` follows on the way in.
+ */
+export function agentReadable(post: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of AGENT_READABLE) {
+    if (post[k] !== undefined) out[k] = post[k];
   }
   return out;
 }
