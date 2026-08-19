@@ -3,6 +3,7 @@ import session from "express-session";
 import pgSession from "connect-pg-simple";
 import compression from "compression";
 import path from "path";
+import { randomBytes } from "node:crypto";
 import fs from "fs";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -20,16 +21,42 @@ app.use(express.urlencoded({ extended: false, limit: '100mb' }));
 // PostgreSQL session store for production compatibility
 const PgStore = pgSession(session);
 
+/**
+ * THE SESSION SECRET, WHICH USED TO BE PUBLISHED.
+ *
+ * This fell back to a placeholder string written in the source, in a public repository. A
+ * literal fallback is not a default, it is a shipped secret: it survives every deploy that
+ * forgets to set the real one, silently, which is exactly when it matters.
+ *
+ * Unset now means a RANDOM secret for the lifetime of this process. Cookies signed by an
+ * older process stop verifying, so sessions do not survive a restart — visibly inconvenient
+ * rather than invisibly insecure. Setting SESSION_SECRET restores persistence across restarts.
+ */
+function sessionSecret(): string {
+  const configured = process.env.SESSION_SECRET?.trim();
+  if (configured) return configured;
+  console.warn(
+    "[auth] SESSION_SECRET is not set — using a random per-process secret. " +
+    "Admin sessions will not survive a restart. Set SESSION_SECRET to keep them.",
+  );
+  return randomBytes(32).toString("hex");
+}
+
 // Session configuration for admin authentication.
 // Without a database (local preview mode) fall back to the default
 // in-memory session store.
+// Express must be told a proxy sits in front of it, or req.ip is the platform edge's address
+// and the login rate limiter puts every visitor on earth in one bucket. express-session reads
+// its own `proxy: true` below, so this does not change cookie-secure behaviour.
+app.set('trust proxy', 1);
+
 app.use(session({
   store: hasDatabase ? new PgStore({
     pool: pool,
     tableName: 'session',
     createTableIfMissing: true,
   }) : undefined,
-  secret: process.env.SESSION_SECRET || 'fallback-secret-key-change-in-production',
+  secret: sessionSecret(),
   resave: false,
   saveUninitialized: false,
   cookie: {
