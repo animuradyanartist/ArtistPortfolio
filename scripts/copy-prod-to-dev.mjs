@@ -66,6 +66,21 @@ async function copyTable(tableName, columns) {
 async function main() {
   console.log('Connecting to production (neondb) and dev (neondb_dev)...\n');
 
+  // THE PREFLIGHT ABOVE WAS IMPORTED AND NEVER CALLED.
+  //
+  // It was added on 2026-08-19 to stop exactly one failure — copying the Replit WORKSPACE
+  // database into "dev" and calling the result a production snapshot — and then the call
+  // itself was left out, so for the whole of its existence this script has run with no
+  // preflight at all. An import is not a check.
+  //
+  // The ids come from prodPool, the connection this script is about to read from, and are
+  // compared against the ids the live site is serving. assertProductionOrExit exits 3 on any
+  // mismatch and on every uncertainty, before the first TRUNCATE below.
+  await assertProductionOrExit(async () => {
+    const { rows } = await prodPool.query('SELECT id FROM artworks');
+    return rows.map((r) => r.id);
+  });
+
   await copyTable('artworks', [
     'id', 'title', 'slug', 'seo_slug', 'description', 'medium', 'dimensions',
     'year', 'price', 'images', 'type', 'size', 'availability',
