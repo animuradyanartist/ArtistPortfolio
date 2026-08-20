@@ -24,6 +24,7 @@ import { measurePrimaryImage } from "./imageDimensions";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
 import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "./auth";
+import { checkLoginAllowed, recordLoginFailure, recordLoginSuccess, clientIpOf } from "./loginRateLimit";
 import { requireBlogAgent, agentFields, agentReadable, agentMayEdit, blogAgentConfigured } from "./blogAgent";
 import { PATH_NARRATIVE } from "@shared/pathNarrative";
 import { buildInfo } from "./buildInfo";
@@ -173,26 +174,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Authentication endpoints
   app.post("/api/auth/login", async (req, res) => {
+    // THROTTLED BEFORE THE PASSWORD IS EVEN READ. Unlimited guesses at one secret is a
+    // problem bounded only by bandwidth, and this endpoint is public.
+    const ip = clientIpOf(req);
+    const gate = checkLoginAllowed(ip);
+    if (!gate.allowed) {
+      res.setHeader("Retry-After", String(gate.retryAfterSeconds));
+      return res.status(429).json({
+        message: "Too many login attempts. Try again later.",
+        authenticated: false,
+      });
+    }
     try {
-      const { password } = req.body;
-      
+      const { password } = req.body ?? {};
+
       if (!password) {
         return res.status(400).json({ message: "Password is required" });
       }
-      
-      if (authenticateAdminSession(req, password)) {
+
+      if (await authenticateAdminSession(req, password)) {
+        recordLoginSuccess(ip);
         res.json({ 
           message: "Login successful", 
           authenticated: true 
         });
       } else {
+        recordLoginFailure(ip);
+        // SAME ANSWER FOR EVERY FAILURE. A wrong password, an unconfigured server and a
+        // session-store error are indistinguishable from outside: a probe learns nothing
+        // about which one it hit.
         res.status(401).json({ 
           message: "Invalid password", 
           authenticated: false 
         });
       }
     } catch (error) {
-      res.status(500).json({ message: "Login failed", error });
+      recordLoginFailure(ip);
+      // Never echo the error: it can carry configuration detail to an unauthenticated caller.
+      console.error("Login failed:", error);
+      res.status(500).json({ message: "Login failed" });
     }
   });
   
