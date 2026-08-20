@@ -5,6 +5,7 @@ import compression from "compression";
 import path from "path";
 import { randomBytes } from "node:crypto";
 import fs from "fs";
+import { SELF_HEAL_DDL } from "./selfHealDdl";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { pool, hasDatabase } from "./db";
@@ -162,126 +163,16 @@ app.use((req, res, next) => {
     // Google-friendly URLs. Both are selected by every artwork query, so a DB
     // missing either column breaks the whole Originals/detail flow.
     try {
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS category text`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS seo_slug text`);
-      // Incremental Singulart image sync: marks that an artwork's detail page has
-      // already been checked for its full image set (so it is fetched once, not
-      // every sync). Nullable + default false, so existing rows read as unchecked.
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS detail_images_checked boolean DEFAULT false`);
-      // Source material for grounding, kept apart from the public `description` so an
-      // ingest can never silently rewrite what her site says. See shared/schema.ts.
+      // ONE LIST, SHARED WITH scripts/sync-dev-schema.mjs.
       //
-      // REMEMBER THE 2026-08-17 RULE: the DEVELOPMENT database is the source of truth for
-      // production's SCHEMA. These run in both environments, but only if the app has been
-      // STARTED in the workspace before a publish — a column that exists only in
-      // production is scheduled for deletion by the dev→prod sync.
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS source_description text`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS source_description_provider text`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS derived_categories text[]`);
-      // "Where the work lives" section content (JSON array of {image, caption}).
-      await pool.query(`ALTER TABLE homepage_settings ADD COLUMN IF NOT EXISTS room_items text`);
-      // Blog posts. Created here rather than by a migration for the same reason as the
-      // rest of this block: the table must exist on a live database that nobody ran
-      // `db:push` against, or every /blog request 500s. Idempotent.
-      await pool.query(`CREATE TABLE IF NOT EXISTS blog_posts (
-        id serial PRIMARY KEY,
-        slug text NOT NULL,
-        title text NOT NULL,
-        excerpt text NOT NULL,
-        body text NOT NULL,
-        status text NOT NULL DEFAULT 'draft',
-        source_note text,
-        evidence text[],
-        cover_image text,
-        published_at timestamp,
-        created_at timestamp DEFAULT now(),
-        updated_at timestamp DEFAULT now()
-      )`);
-      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS blog_posts_slug_unique ON blog_posts (slug)`);
-
-      // ── DIRECT WEBSITE SALE ────────────────────────────────────────────────────────────
-      //
-      // Same reasoning as everything above it: these columns are read by every artwork query
-      // once commerce ships, so a database nobody ran `db:push` against would 500 on the
-      // Originals grid. ADD COLUMN IF NOT EXISTS is idempotent and safe to run on every boot.
-      //
-      // NOTHING HERE TOUCHES `price`. The marketplace figure is a separate column in a
-      // separate channel and is not read, written or migrated by any of this.
-      //
-      // Defaults are the closed ones: direct sale OFF, no price. Enabling a work is her
-      // decision in Admin, not a side effect of a deploy.
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS direct_sale_enabled boolean DEFAULT false`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS website_price_minor integer`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS website_currency text DEFAULT 'EUR'`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS shipping_enabled boolean DEFAULT true`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS shipping_override_minor integer`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS shipping_destination_overrides text`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS packed_depth_cm integer`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS packing_margin_cm integer`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS fulfilment_notes text`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS reserved_until timestamp`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS reserved_by_order_id integer`);
-      // Commitments — a work can be available and still not hers to sell.
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS has_commitment boolean DEFAULT false`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS commitment_type text`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS commitment_details text`);
-      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS commitment_until text`);
-
-      // Orders. Created here for the same reason blog_posts is: the table must exist on a
-      // live database nobody migrated, or every commerce request 500s.
-      await pool.query(`CREATE TABLE IF NOT EXISTS orders (
-        id serial PRIMARY KEY,
-        reference text NOT NULL,
-        status text NOT NULL DEFAULT 'pending',
-        payment_status text NOT NULL DEFAULT 'unpaid',
-        buyer_name text,
-        buyer_email text,
-        buyer_phone text,
-        ship_country text,
-        ship_address1 text,
-        ship_address2 text,
-        ship_city text,
-        ship_region text,
-        ship_postal_code text,
-        item_type text NOT NULL DEFAULT 'artwork',
-        artwork_id integer,
-        artwork_snapshot text,
-        item_price_minor integer,
-        currency text NOT NULL DEFAULT 'EUR',
-        shipping_minor integer,
-        total_minor integer,
-        shipping_basis text,
-        shipping_calculation text,
-        stripe_checkout_session_id text,
-        stripe_payment_intent_id text,
-        reserved_at timestamp,
-        reservation_expires_at timestamp,
-        paid_at timestamp,
-        shipping_carrier text,
-        tracking_number text,
-        shipped_at timestamp,
-        delivered_at timestamp,
-        attribution text,
-        created_at timestamp DEFAULT now(),
-        updated_at timestamp DEFAULT now()
-      )`);
-      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS orders_reference_unique ON orders (reference)`);
-      // Partial, because most orders have no session id yet and NULLs must not collide.
-      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session_unique
-        ON orders (stripe_checkout_session_id) WHERE stripe_checkout_session_id IS NOT NULL`);
-
-      // The idempotency ledger. The unique index IS the mechanism — a duplicate Stripe
-      // delivery loses the INSERT and does nothing.
-      await pool.query(`CREATE TABLE IF NOT EXISTS stripe_events (
-        id serial PRIMARY KEY,
-        event_id text NOT NULL,
-        type text NOT NULL,
-        received_at timestamp DEFAULT now()
-      )`);
-      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS stripe_events_event_id_unique ON stripe_events (event_id)`);
-
-      // Finding the works a sweeper must release, without scanning the catalogue.
-      await pool.query(`CREATE INDEX IF NOT EXISTS artworks_reserved_until_idx ON artworks (reserved_until)`);
+      // It used to be written out inline here, which meant the only way to apply it was to
+      // START the app. Replit's publish syncs the DEVELOPMENT database onto production, so a
+      // workspace that was pulled but never run leaves development behind — and every column
+      // that exists only in production is then scheduled for deletion. Extracting the list
+      // lets the same statements be applied to development directly, in about a second.
+      for (const statement of SELF_HEAL_DDL) {
+        await pool.query(statement);
+      }
 
       // EXPIRED CHECKOUT HOLDS — released on boot, then on a timer.
       //

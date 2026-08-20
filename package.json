@@ -10,7 +10,8 @@
     "check": "tsc",
     "test": "vitest run",
     "db:push": "drizzle-kit push",
-    "prepare": "git config pull.rebase true 2>/dev/null; git config rerere.enabled true 2>/dev/null; exit 0"
+    "prepare": "git config pull.rebase true 2>/dev/null; git config rerere.enabled true 2>/dev/null; exit 0",
+    "db:sync": "node scripts/sync-dev-schema.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
