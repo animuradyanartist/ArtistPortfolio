@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Artwork } from "@shared/schema";
 import { PurchasePanel } from "@/components/PurchasePanel";
 import { artworkCommerceDisplay } from "@shared/commerce/display";
+import { isKnownAddressFor } from "@shared/artworkAddress";
+import { useAfterPaint } from "@/lib/afterPaint";
 import {
   updateCanonicalUrl,
   updateMetaDescription,
@@ -19,7 +21,32 @@ import { Eyebrow, OutlineButton } from "@/components/editorial";
 import { artworkCategory } from "@/lib/artworkCategory";
 import CollectorSignup from "@/components/CollectorSignup";
 
+/**
+ * THE PAINTING THE SERVER ALREADY SENT.
+ *
+ * The artwork detail HTML carries the row it was prerendered from (see the SSR handler in
+ * server/routes.ts). Without this the page mounted, discarded that prerender and showed a
+ * full-screen "Loading…" until /api/artworks/:id answered — a wait the server had already
+ * done the work to avoid.
+ *
+ * MATCHED BY ADDRESS, NOT ASSUMED. The preload describes the painting this DOCUMENT was
+ * served for. Navigating to another work inside the app leaves it on `window`, so it is only
+ * used when the URL genuinely belongs to that artwork — the same shared rule the server
+ * redirect and the resolver use, so all three agree on what a painting's addresses are.
+ */
+const _preloadedArtwork: Artwork | undefined =
+  typeof window !== "undefined" ? (window as any).__PRELOADED_ARTWORK__ : undefined;
+
+function preloadFor(param: string): Artwork | undefined {
+  const a = _preloadedArtwork;
+  if (!a || typeof a.id !== "number") return undefined;
+  return isKnownAddressFor(a, param) ? a : undefined;
+}
+
 const CATEGORY_LABEL = { landscape: "Landscape", figurative: "Figurative" } as const;
+
+/** Four, so three remain after the work being viewed is filtered out. */
+const RELATED_POOL = 4;
 
 /** Solid dark action button matching the homepage CTAs */
 function DarkButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
@@ -40,6 +67,8 @@ export default function ArtworkDetailPage() {
   const idParam = params.id as string;
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  const preloaded = preloadFor(idParam);
+
   const { data: artwork, isLoading, error } = useQuery<Artwork>({
     queryKey: ["/api/artworks", idParam],
     queryFn: async () => {
@@ -48,11 +77,22 @@ export default function ArtworkDetailPage() {
       return res.json();
     },
     enabled: !!idParam,
+    // Renders immediately from the server's own copy; the fetch still runs and replaces it.
+    ...(preloaded ? { placeholderData: preloaded } : {}),
   });
 
-  // Full collection — for the "More from the collection" strip (cached query)
-  const { data: allArtworks = [] } = useQuery<Artwork[]>({
-    queryKey: ["/api/artworks"],
+  // "MORE FROM THE COLLECTION" IS NOT WHY ANYONE OPENED THIS PAGE.
+  //
+  // Three thumbnails, far below the fold, were costing the whole 54-artwork catalogue —
+  // 111KB — requested in the same breath as the painting itself. Two things changed: it asks
+  // for four works instead of every one, and it does not ask at all until the browser has
+  // painted and gone idle, so it can no longer compete with the artwork for the first render.
+  // Its own query key, so the gallery's cache of the full collection is untouched.
+  const relatedReady = useAfterPaint();
+
+  const { data: relatedPool = [] } = useQuery<Artwork[]>({
+    queryKey: [`/api/artworks?limit=${RELATED_POOL}`],
+    enabled: relatedReady,
   });
 
   // Reset gallery to first image when navigating between artworks
@@ -178,7 +218,7 @@ export default function ArtworkDetailPage() {
         : "Inquire"
       : availabilityLabel;
 
-  const moreWorks = allArtworks.filter((a) => a.id !== artwork.id).slice(0, 3);
+  const moreWorks = relatedPool.filter((a) => a.id !== artwork.id).slice(0, 3);
 
   return (
     <div className="min-h-screen bg-[#f5f1ea]">

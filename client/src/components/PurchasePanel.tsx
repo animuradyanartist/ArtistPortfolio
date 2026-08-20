@@ -39,7 +39,16 @@ interface Quote {
 export function PurchasePanel({ artworkId, marketplaceUrl, marketplaceLabel = "View on Singulart" }:
   { artworkId: number; marketplaceUrl?: string | null; marketplaceLabel?: string }) {
   const cart = useCart();
-  const [country, setCountry] = useState<string | null>(null);
+  // SEEDED ON THE FIRST RENDER, NOT AFTER IT.
+  //
+  // `country` is part of the query key, so starting at null asked /api/commerce/quote once
+  // with no country, then again the moment the effect below resolved one — two round trips,
+  // ~3s combined on the live site, before a price appeared. `displayCountry` is pure and
+  // synchronous (time zone, then locale, then a stated default), so there was never a reason
+  // to wait for an effect to call it. The effect stays, to follow a country chosen elsewhere
+  // in the app; on first render it now sets the value that is already there, which React
+  // discards without re-rendering — so exactly one quote is requested.
+  const [country, setCountry] = useState<string | null>(() => displayCountry(cart.country));
   const [changing, setChanging] = useState(false);
 
   // DETECTION IS A CONVENIENCE, NEVER A GATE (PART 5). The locale is a hint; the select below
