@@ -108,6 +108,23 @@ describe("the credential comes from the environment, and nothing else", () => {
     expect("short".length).toBeLessThan(MIN_ADMIN_PASSWORD_LENGTH);
   });
 
+  it("accepts a secret of exactly the minimum length, and refuses one character less", () => {
+    // The boundary is a real decision, not an incidental constant: the owner's password sits
+    // exactly on it. Derived from the constant so the two cannot drift apart, and asserted on
+    // the value as well, so changing the floor is a visible edit rather than a silent one.
+    expect(MIN_ADMIN_PASSWORD_LENGTH).toBe(10);
+
+    const atMinimum = "a".repeat(MIN_ADMIN_PASSWORD_LENGTH);
+    process.env.ADMIN_PASSWORD = atMinimum;
+    expect(loginAdmin(atMinimum)).toBe(true);
+    expect(loginAdmin(atMinimum + "x")).toBe(false);
+
+    const oneShort = "a".repeat(MIN_ADMIN_PASSWORD_LENGTH - 1);
+    process.env.ADMIN_PASSWORD = oneShort;
+    // The correct value, still refused — the floor fails closed rather than bending.
+    expect(loginAdmin(oneShort)).toBe(false);
+  });
+
   it("carries no credential literal in the source it is defined in", () => {
     // A password in the file is a password in the repository, and this repository is public.
     const src = fs.readFileSync(path.resolve(process.cwd(), "server/auth.ts"), "utf8");

@@ -33,8 +33,17 @@ declare module 'express-session' {
 /**
  * Long enough that a value typed in by hand is a deliberate password rather than a leftover.
  * Also the reason a blank or placeholder variable cannot accidentally authenticate anyone.
+ *
+ * TEN, set by the owner. The number that actually protects this endpoint is not this one — it
+ * is the attempt limiter in loginRateLimit.ts. The secret lives in an environment variable, not
+ * in a stealable password hash, so there is no offline attack to lengthen the password against;
+ * the realistic threat is online guessing, and that is bounded to five attempts per address
+ * before a doubling lockout, under a global ceiling. Against that budget the difference between
+ * ten and twelve characters is not what decides the outcome.
+ *
+ * It remains a floor, not a suggestion: below it every login fails, including an empty one.
  */
-export const MIN_ADMIN_PASSWORD_LENGTH = 12;
+export const MIN_ADMIN_PASSWORD_LENGTH = 10;
 
 /** Is a usable admin credential configured in this process? Presence only — never the value. */
 export function isAdminPasswordConfigured(): boolean {
