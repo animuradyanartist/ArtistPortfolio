@@ -29,7 +29,7 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart";
 import { Eyebrow } from "@/components/editorial";
-import { countryOptions, guessCountry } from "@/lib/countries";
+import { countryOptions, displayCountry } from "@/lib/countries";
 
 interface ValidatedCart {
   items: Array<{ id: number; title: string; dimensions: string; year: number; medium: string;
@@ -43,7 +43,7 @@ interface ValidatedCart {
 export default function CartPage() {
   const cart = useCart();
   const [country, setCountry] = useState<string | null>(null);
-  useEffect(() => { setCountry(cart.country ?? guessCountry()); }, [cart.country]);
+  useEffect(() => { setCountry(displayCountry(cart.country)); }, [cart.country]);
 
   const { data, isLoading } = useQuery<ValidatedCart>({
     queryKey: ["/api/commerce/cart/validate", cart.ids.join(","), country],
@@ -119,7 +119,6 @@ export default function CartPage() {
                 <span className="text-[11px] tracking-[0.2em] uppercase text-stone-500">Shipping to</span>
                 <select className="bg-transparent text-sm text-stone-800 text-right border-b border-stone-300 focus:border-stone-800 focus:outline-none py-1"
                   value={country ?? ""} onChange={(e) => { setCountry(e.target.value); cart.setCountry(e.target.value); }}>
-                  <option value="" disabled>Choose a country</option>
                   {countryOptions().map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
                 </select>
               </label>

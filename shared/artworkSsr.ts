@@ -51,6 +51,11 @@ export interface SsrArtwork extends CanonicalArtwork {
   images?: (string | null)[] | null;
   /** Categories her own source description explicitly states. Never inferred. */
   derivedCategories?: string[] | null;
+  /** Direct website sale — so the server-rendered Offer can state the price a buyer can
+   *  actually pay here, rather than the marketplace figure. See artworkOffer. */
+  directSaleEnabled?: boolean | null;
+  websitePriceMinor?: number | null;
+  websiteCurrency?: string | null;
 }
 
 export function escapeHtml(value: unknown): string {
@@ -121,6 +126,27 @@ export function artworkDimensions(a: SsrArtwork): { width: number; height: numbe
 export function artworkOffer(a: SsrArtwork, baseUrl: string): Record<string, unknown> | null {
   if (!isPurchasable(a)) return null;
   const url = artworkCanonicalUrl(baseUrl, a);
+
+  // ONE PAINTING, ONE OFFER — whoever is asking.
+  //
+  // This runs server-side, before JavaScript; the artwork page emits its own Offer after
+  // hydration. When direct sale is on they must agree, and they did not: this said
+  // "USD 2260" (the Singulart figure) while the rendered page said "EUR 2400" (the website
+  // price), so a first-wave crawler and a person saw two different prices for the same work.
+  //
+  // Direct sale wins where it applies, because it is the price somebody can actually pay
+  // here. Everywhere else the marketplace Offer is untouched.
+  const websiteMinor = a.websitePriceMinor;
+  if (a.directSaleEnabled && typeof websiteMinor === "number" && websiteMinor > 0) {
+    return {
+      "@type": "Offer",
+      price: websiteMinor / 100,
+      priceCurrency: a.websiteCurrency || "EUR",
+      availability: "https://schema.org/InStock",
+      url,
+    };
+  }
+
   return {
     "@type": "Offer",
     price: a.price,

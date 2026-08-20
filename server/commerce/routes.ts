@@ -19,16 +19,22 @@ import { validateBuyer, validateArtworkIds, sanitiseAttribution } from "./valida
 import { stripeClient, stripeMode, isCheckoutConfigured, checkoutBlockedReason } from "./stripeClient";
 import { reserveArtwork, releaseReservation, markSold, releaseExpiredReservations, RESERVATION_MINUTES } from "./reservation";
 import {
-  createOrder, getOrder, getOrderByReference, getOrderBySession, nextReference,
+  createOrder, getOrder, getOrderByReference, getOrderBySession, nextReference, recentUnpaidOrderCount,
   markOrderPaid, markOrderCancelled, markOrderFailed, claimStripeEvent,
 } from "./orders";
 import { clientIpOf } from "../loginRateLimit";
 
 /**
- * A small fixed-window limiter for the endpoints that cost money or create rows.
+ * A small fixed-window limiter for the endpoints that create rows.
  *
- * Separate from the login limiter on purpose: locking a would-be buyer out of checkout
- * because somebody else guessed passwords would be its own kind of failure.
+ * BEST-EFFORT, AND KNOWN TO BE. The bucket lives in this process's memory, and production does
+ * not behave as a single process — forty rapid requests to the maintenance route were all
+ * served without tripping a twenty-request limit. So this catches a naive loop and nothing
+ * more; the guard that actually bounds order creation is `recentUnpaidOrderCount`, which is
+ * backed by the shared database. Kept because it is free and does help a single instance.
+ *
+ * Separate from the login limiter on purpose: locking a would-be buyer out of checkout because
+ * somebody else guessed passwords would be its own kind of failure.
  */
 const buckets = new Map<string, { count: number; resetAt: number }>();
 const LIMIT = 20;
@@ -259,6 +265,17 @@ export function registerCommerceRoutes(app: Express): void {
         });
       }
       const artwork = artworks[0]!;
+
+      // THE SHARED-STATE GUARD, immediately before the first row is written. Five unpaid
+      // checkouts in a quarter of an hour is far more than a real buyer needs and far less
+      // than a script wants.
+      const recent = await recentUnpaidOrderCount(buyer.value.email);
+      if (recent >= 5) {
+        return res.status(429).json({
+          code: "too-many-checkouts",
+          message: "There are several unfinished checkouts on this email address. Please complete or abandon one before starting another.",
+        });
+      }
 
       const reference = await nextReference();
       const order = await createOrder({

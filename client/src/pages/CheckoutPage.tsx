@@ -14,7 +14,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart";
 import { Eyebrow } from "@/components/editorial";
-import { countryOptions, guessCountry } from "@/lib/countries";
+import { countryOptions, displayCountry } from "@/lib/countries";
 import { readAttribution, trackBeginCheckout } from "@/lib/commerceAnalytics";
 
 const REGION_REQUIRED = new Set(["US", "CA", "AU"]);
@@ -31,7 +31,7 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  useEffect(() => { setCountry(cart.country ?? guessCountry()); }, [cart.country]);
+  useEffect(() => { setCountry(displayCountry(cart.country)); }, [cart.country]);
 
   const { data } = useQuery<{ checkoutEnabled: boolean; items: Array<{ id: number; title: string; dimensions: string; imageUrl: string; priceFormatted: string | null; purchasable: boolean }>;
     totals: null | { ok: true; itemsFormatted: string; shippingFormatted: string; totalFormatted: string; shippingEstimated: boolean; dutiesMayApply: boolean; totalMinor: number; shippingMinor: number; currency: string } | { ok: false } }>({
@@ -125,7 +125,6 @@ export default function CheckoutPage() {
             <select
               className="w-full bg-transparent border-b border-stone-300 focus:border-stone-800 focus:outline-none py-2 text-stone-900"
               value={country ?? ""} onChange={(e) => { setCountry(e.target.value); cart.setCountry(e.target.value); }}>
-              <option value="" disabled>Choose a country</option>
               {countryOptions().map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
             </select>
             {errors.country && <p className="text-sm text-red-700 mt-1">{errors.country}</p>}
