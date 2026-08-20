@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Menu, X } from "lucide-react";
+import { Menu, X, ShoppingBag } from "lucide-react";
+import { useCart } from "@/lib/cart";
 import { Button } from "@/components/ui/button";
 import type { BlogPost } from "@shared/schema";
 import { siteNavigation } from "@shared/siteNavigation";
@@ -37,8 +38,8 @@ export default function Navigation() {
             </Link>
           </div>
           
-          <div className="hidden md:block">
-            <div className="ml-10 flex items-baseline space-x-8">
+          <div className="hidden md:flex items-center gap-8">
+            <div className="flex items-baseline space-x-8">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
@@ -53,9 +54,11 @@ export default function Navigation() {
                 </Link>
               ))}
             </div>
+            <CartLink />
           </div>
           
-          <div className="md:hidden">
+          <div className="flex items-center gap-2 md:hidden">
+            <CartLink />
             <Button
               variant="ghost"
               size="sm"
@@ -89,5 +92,27 @@ export default function Navigation() {
         </div>
       )}
     </nav>
+  );
+}
+
+/**
+ * THE CART, IN THE NAVIGATION — and invisible until it holds something.
+ *
+ * A permanently visible cart on a portfolio reads as a shop; an empty one reads as a shop
+ * with nothing in it. So it appears only once a work has been added, which is also the only
+ * moment it is useful.
+ */
+function CartLink() {
+  const { count } = useCart();
+  if (count === 0) return null;
+  return (
+    <Link href="/cart" aria-label={`Cart, ${count} work${count === 1 ? "" : "s"}`}>
+      <span className="relative inline-flex items-center text-charcoal hover:text-deep-blue transition-colors cursor-pointer">
+        <ShoppingBag size={20} />
+        <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-deep-blue text-white text-[11px] leading-[18px] text-center tabular-nums">
+          {count}
+        </span>
+      </span>
+    </Link>
   );
 }

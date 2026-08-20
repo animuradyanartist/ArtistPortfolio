@@ -1,0 +1,96 @@
+/**
+ * THE CART HOLDS IDS. NOTHING ELSE IS TRUSTED.
+ *
+ * localStorage is a text file the visitor can edit, so this stores artwork ids and a chosen
+ * destination country — identity and preference, never money. Prices, availability and
+ * shipping shown anywhere in the cart come from `POST /api/commerce/cart/validate`, which
+ * re-reads the rows, and the checkout recomputes everything again before Stripe is called.
+ * A tampered localStorage can therefore change what you are LOOKING at and never what you
+ * are CHARGED.
+ *
+ * ORIGINALS ARE QUANTITY ONE, structurally. The cart is a Set of ids: adding a work twice is
+ * the same as adding it once, so there is no quantity to display and no +/- control to build.
+ */
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+
+const STORAGE_KEY = "am.cart.v1";
+const COUNTRY_KEY = "am.cart.country.v1";
+
+interface CartState {
+  ids: number[];
+  count: number;
+  has: (id: number) => boolean;
+  add: (id: number) => void;
+  remove: (id: number) => void;
+  clear: () => void;
+  country: string | null;
+  setCountry: (c: string) => void;
+}
+
+const CartContext = createContext<CartState | null>(null);
+
+function readIds(): number[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    // Defensive on read: anything that is not a positive integer is discarded rather than
+    // carried into a request.
+    return Array.from(new Set(parsed.filter((n): n is number => Number.isInteger(n) && (n as number) > 0)));
+  } catch { return []; }
+}
+
+export function CartProvider({ children }: { children: ReactNode }) {
+  const [ids, setIds] = useState<number[]>([]);
+  const [country, setCountryState] = useState<string | null>(null);
+
+  // Read once on mount rather than during render, so server-rendered HTML and the first
+  // client paint agree.
+  useEffect(() => {
+    setIds(readIds());
+    try { setCountryState(localStorage.getItem(COUNTRY_KEY)); } catch { /* private mode */ }
+  }, []);
+
+  const persist = useCallback((next: number[]) => {
+    setIds(next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* quota or private mode */ }
+  }, []);
+
+  const add = useCallback((id: number) => {
+    setIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const remove = useCallback((id: number) => {
+    setIds((prev) => {
+      const next = prev.filter((n) => n !== id);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const clear = useCallback(() => persist([]), [persist]);
+
+  const setCountry = useCallback((c: string) => {
+    setCountryState(c);
+    try { localStorage.setItem(COUNTRY_KEY, c); } catch { /* ignore */ }
+  }, []);
+
+  const value = useMemo<CartState>(() => ({
+    ids, count: ids.length, has: (id) => ids.includes(id),
+    add, remove, clear, country, setCountry,
+  }), [ids, add, remove, clear, country, setCountry]);
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+}
+
+export function useCart(): CartState {
+  const ctx = useContext(CartContext);
+  if (!ctx) throw new Error("useCart must be used inside <CartProvider>");
+  return ctx;
+}

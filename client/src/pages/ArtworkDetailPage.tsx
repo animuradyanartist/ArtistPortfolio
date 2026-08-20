@@ -3,6 +3,7 @@ import { useParams, useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Artwork } from "@shared/schema";
+import { PurchasePanel } from "@/components/PurchasePanel";
 import {
   updateCanonicalUrl,
   updateMetaDescription,
@@ -90,15 +91,32 @@ export default function ArtworkDetailPage() {
           url: BASE_URL,
           nationality: { "@type": "Country", name: "Armenia" },
         },
+        // THE OFFER FOLLOWS WHAT IS ACTUALLY BUYABLE.
+        //
+        // When direct sale is on and priced, the Offer states THAT price and THAT currency —
+        // the figure a buyer can really pay here, in the currency they will really be charged.
+        // Otherwise the existing marketplace Offer is left exactly as it was, because changing
+        // it would be a claim this site cannot honour. A sold work publishes no Offer at all,
+        // which is unchanged and is what stops Google advertising a painting that is gone.
         offers:
-          SHOW_PRICES && artwork.availability === "available"
-            ? {
-                "@type": "Offer",
-                price: artwork.price,
-                priceCurrency: "USD",
-                availability: "https://schema.org/InStock",
-              }
-            : undefined,
+          artwork.availability !== "available"
+            ? undefined
+            : directSale
+              ? {
+                  "@type": "Offer",
+                  price: (artwork.websitePriceMinor as number) / 100,
+                  priceCurrency: artwork.websiteCurrency ?? "EUR",
+                  availability: "https://schema.org/InStock",
+                  url: `${BASE_URL}${canonicalPath}`,
+                }
+              : SHOW_PRICES && artwork.price
+                ? {
+                    "@type": "Offer",
+                    price: artwork.price,
+                    priceCurrency: "USD",
+                    availability: "https://schema.org/InStock",
+                  }
+                : undefined,
       });
 
       if (location !== canonicalPath) {
@@ -137,6 +155,13 @@ export default function ArtworkDetailPage() {
       </div>
     );
   }
+
+  /** Direct sale is only "on" when it is switched on AND actually priced. */
+  const directSale = Boolean(
+    (artwork as { directSaleEnabled?: boolean }).directSaleEnabled &&
+    typeof (artwork as { websitePriceMinor?: number | null }).websitePriceMinor === "number" &&
+    ((artwork as { websitePriceMinor?: number | null }).websitePriceMinor ?? 0) > 0,
+  );
 
   const availabilityLabel =
     artwork.availability === "available"
@@ -268,8 +293,13 @@ export default function ArtworkDetailPage() {
               ))}
             </dl>
 
-            {/* Actions — only for pieces that are still available */}
-            {artwork.availability === "available" && (
+            {/* DIRECT SALE, when she has switched it on for this work. The panel renders
+                nothing at all otherwise, so every un-enabled painting keeps exactly the
+                marketplace behaviour it has today (PART 34). */}
+            <PurchasePanel artworkId={artwork.id} marketplaceUrl={artwork.buyLink} />
+
+            {/* The existing marketplace actions, shown when direct sale is NOT the route. */}
+            {!directSale && artwork.availability === "available" && (
               <div className="flex flex-wrap items-center gap-4">
                 {artwork.buyLink ? (
                   <a href={artwork.buyLink} target="_blank" rel="noopener noreferrer">
