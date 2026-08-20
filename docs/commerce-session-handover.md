@@ -66,15 +66,20 @@ full-catalogue read does not happen — `/artworks/69` and `/api/artworks/69`).
 |---|---|---|---|
 | TTFB | 3561ms | 1087ms | −69% |
 | First contentful paint | 4236ms | 1476ms | −65% |
-| **Painting visible to the visitor** | **7105ms** | **1191ms** | **−83%** |
-| "Loading…" on screen | 3827→7105ms (3.3s) | never rendered | gone |
+| **Painting on screen and staying there** | **6844 · 6721 · 7105ms** | **1191 · 1251 · 1097ms** | **−83%** |
+| "Loading…" on screen | 3.0-3.3s of it | never rendered | gone |
 | Price + shipping settled | 8467ms | 2505ms | −70% |
 | API requests | 5 | 4 | |
 | Everything settled | 8467ms | 2768ms | −67% |
 
-"Painting visible" is sampled from the live DOM every 130ms in a same-origin iframe, not
-inferred: before it reads `Loading…` for 3.3 seconds, after it goes straight from blank to
-"Road to Tuscany / Oil on Canvas · 61x71cm · 2026".
+Those are three runs each, not one sample. "On screen" is read from the live DOM every 120-130ms
+in a same-origin iframe rather than inferred from a timing API.
+
+The before column has a detail worth stating exactly, because it is the whole problem in one
+sentence: the painting DID appear at about 3.5s, from the prerender — and then React mounted,
+threw it away, and put `Loading…` in its place until about 6.7s. A visitor saw the work they
+came for, lost it, and waited three more seconds for it to come back. After the change the
+same prerendered content is what React renders from, so it appears once and stays.
 
 Request-level, on the detail page:
 
