@@ -53,6 +53,78 @@ export const artworks = pgTable("artworks", {
    * silently changes which works an article may cite as evidence.
    */
   derivedCategories: text("derived_categories").array(),
+
+  // ── DIRECT WEBSITE SALE ──────────────────────────────────────────────────────────────
+  //
+  // SEPARATE FROM `price` ON PURPOSE, and the separation is the whole point.
+  //
+  // `price` above is the MARKETPLACE figure, imported from Singulart. It is a different
+  // number for a different channel — it carries a gallery's commission, it is denominated by
+  // their listing, and 19 of her 54 rows carry 0 because the work was never listed. Reusing
+  // it as the website price would publish a wrong number for a third of the catalogue and
+  // would mean an edit in one channel silently repricing the other. Nothing below is derived
+  // from it and nothing below writes to it.
+  //
+  // Minor units (cents), because Stripe charges in minor units and a float cannot hold 2420.50
+  // exactly. `price` stays an integer of whole marketplace units; the two never convert.
+
+  /** The master switch. Off means the work is not for sale here, whatever else is set. */
+  directSaleEnabled: boolean("direct_sale_enabled").default(false),
+  /** What she charges on her own site, in minor units. Null means unpriced, never free. */
+  websitePriceMinor: integer("website_price_minor"),
+  /** ISO-4217. EUR unless she chooses otherwise per work. */
+  websiteCurrency: text("website_currency").default("EUR"),
+  /** Whether this work may be shipped at all. A work she will only hand over in person
+   *  can be priced and still not shippable. */
+  shippingEnabled: boolean("shipping_enabled").default(true),
+  /** A flat shipping figure she has set by hand, minor units, any destination. Beats the
+   *  estimator and is never labelled "estimated". */
+  shippingOverrideMinor: integer("shipping_override_minor"),
+  /** Per-country overrides as JSON, e.g. {"DE":19000}. Beats the flat override. Kept as
+   *  text rather than jsonb so the boot self-heal can add it to any Postgres without a type
+   *  migration; parsed and validated on read. */
+  shippingDestinationOverrides: text("shipping_destination_overrides"),
+  /** Crated depth for THIS work, cm, when the default crate is wrong for it. */
+  packedDepthCm: integer("packed_depth_cm"),
+  /** Padding added to width and height for THIS work, cm. */
+  packingMarginCm: integer("packing_margin_cm"),
+  /** Anything she needs to remember when packing it — "ships unstretched", "frame is loose". */
+  fulfilmentNotes: text("fulfilment_notes"),
+
+  // ── COMMITMENTS ──────────────────────────────────────────────────────────────────────
+  //
+  // A work can be technically available and still not hers to sell: promised to a gallery for
+  // a show, held for a collector who asked for first refusal.
+  //
+  // THE NAMES AND SEMANTICS ARE BORROWED DELIBERATELY, not invented. The separate
+  // ani-muradyan-portfolio project already models exactly this as
+  // `hasCommitment` + `commitment { type, details, until }`, and that is the vocabulary she
+  // already uses. Matching it means a future reconciliation of the two systems is a copy
+  // rather than a translation — and means this is not a second, competing idea of what a
+  // commitment is.
+  //
+  // NOT COPIED: `artistPrice` and `retailPrice`. Those are private internal figures belonging
+  // to that project's own commercial workflow. Duplicating them here would create exactly the
+  // parallel pricing model that must not exist — the website sale price is `websitePriceMinor`
+  // and nothing else.
+  hasCommitment: boolean("has_commitment").default(false),
+  /** gallery | collector | other — free text, to stay compatible with the other system. */
+  commitmentType: text("commitment_type"),
+  commitmentDetails: text("commitment_details"),
+  /** ISO date. A commitment past this date no longer blocks a sale. Blank means open-ended,
+   *  which blocks until she clears it — the safe reading of "promised, no end date". */
+  commitmentUntil: text("commitment_until"),
+
+  // ── CHECKOUT RESERVATION ─────────────────────────────────────────────────────────────
+  //
+  // The unique-original guard. `reservedUntil` in the FUTURE means a checkout is holding this
+  // work; the conditional UPDATE that sets it is what stops two people buying one painting
+  // (see server/commerce/reservation.ts). `availability` is NOT set to "sold" here — a person
+  // who opens checkout and wanders off must not mark a painting sold.
+  /** When the current hold lapses. Past or null means nobody holds it. */
+  reservedUntil: timestamp("reserved_until"),
+  /** Which order holds it, so expiry and payment can both find their own reservation. */
+  reservedByOrderId: integer("reserved_by_order_id"),
 }, (t) => ({
   // Production has a plain UNIQUE INDEX named `artworks_seo_slug_unique` (created
   // outside Drizzle). Declaring it here as a uniqueIndex — NOT `.unique()` on the
@@ -120,6 +192,14 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export const insertArtworkSchema = createInsertSchema(artworks).omit({
   id: true,
+  // SYSTEM-OWNED, and therefore not writable through the artwork editor.
+  //
+  // These two are the unique-original guard. They are set by the conditional UPDATE in
+  // server/commerce/reservation.ts and cleared by payment or expiry. Leaving them in the
+  // admin's accepted shape would mean a save on an unrelated field could release a hold that
+  // a live checkout is relying on — which is precisely the race the guard exists to prevent.
+  reservedUntil: true,
+  reservedByOrderId: true,
 });
 
 export const insertPrintSchema = createInsertSchema(prints).omit({
@@ -301,3 +381,111 @@ export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({
 });
 export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
 export type BlogPost = typeof blogPosts.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// ORDERS
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * WHAT SOMEBODY BOUGHT, AND WHAT IT COST THEM ON THE DAY.
+ *
+ * The snapshot columns are not duplication. She will reprice a work, adjust her packing
+ * defaults, and change a shipping tariff — and none of that may retroactively rewrite what a
+ * buyer was charged in August. So the price, the currency, the shipping figure, the
+ * destination and the parcel calculation are all COPIED here at checkout and never read back
+ * from `artworks` again. An order is a historical fact; the artwork row is a current one.
+ *
+ * `artworkId` is kept alongside the snapshot so fulfilment can still find the painting, but
+ * it is deliberately NOT a foreign key with a cascade: deleting an artwork must not delete
+ * the record that somebody paid for it.
+ *
+ * PRINTS LATER (PART 33). The line is `artwork_id` + `item_type`, defaulted to "artwork".
+ * A print order adds a row with `item_type: "print"` and its own snapshot; nothing about
+ * originals has to move for that to happen.
+ */
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  /** Human-facing reference, e.g. AM-2026-0007. Shown to the buyer; never the raw id. */
+  reference: text("reference").notNull(),
+
+  status: text("status").notNull().default("pending"),
+  paymentStatus: text("payment_status").notNull().default("unpaid"),
+
+  // ── the buyer ──
+  buyerName: text("buyer_name"),
+  buyerEmail: text("buyer_email"),
+  buyerPhone: text("buyer_phone"),
+
+  // ── where it goes ──
+  shipCountry: text("ship_country"),
+  shipAddress1: text("ship_address1"),
+  shipAddress2: text("ship_address2"),
+  shipCity: text("ship_city"),
+  shipRegion: text("ship_region"),
+  shipPostalCode: text("ship_postal_code"),
+
+  // ── what was bought, as it stood at purchase time ──
+  itemType: text("item_type").notNull().default("artwork"),
+  artworkId: integer("artwork_id"),
+  /** Title, dimensions, medium, year, image — so an order still reads correctly after edits. */
+  artworkSnapshot: text("artwork_snapshot"),
+  itemPriceMinor: integer("item_price_minor"),
+  currency: text("currency").notNull().default("EUR"),
+  shippingMinor: integer("shipping_minor"),
+  totalMinor: integer("total_minor"),
+  /** How the shipping figure was reached — the estimator's own provenance string, or the
+   *  fact that a human set it. An order must be able to explain its shipping line. */
+  shippingBasis: text("shipping_basis"),
+  /** Packed dimensions, chargeable weight and the tariff breakdown, as JSON. */
+  shippingCalculation: text("shipping_calculation"),
+
+  // ── Stripe, for reconciliation ──
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+
+  // ── the reservation this order holds ──
+  reservedAt: timestamp("reserved_at"),
+  reservationExpiresAt: timestamp("reservation_expires_at"),
+  paidAt: timestamp("paid_at"),
+
+  // ── fulfilment ──
+  shippingCarrier: text("shipping_carrier"),
+  trackingNumber: text("tracking_number"),
+  shippedAt: timestamp("shipped_at"),
+  deliveredAt: timestamp("delivered_at"),
+
+  /** Where the buyer came from, when the page knew — utm_* and the landing path. JSON.
+   *  Kept so search and image traffic can eventually be judged against sales, not clicks. */
+  attribution: text("attribution"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  referenceUnique: uniqueIndex("orders_reference_unique").on(t.reference),
+  sessionUnique: uniqueIndex("orders_stripe_session_unique").on(t.stripeCheckoutSessionId),
+}));
+
+export const insertOrderSchema = createInsertSchema(orders).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type Order = typeof orders.$inferSelect;
+
+/**
+ * EVERY STRIPE EVENT WE HAVE ALREADY ACTED ON.
+ *
+ * Stripe retries. It also delivers out of order, and it delivers the same event twice when a
+ * response is slow. The webhook is made idempotent by INSERTing the event id here inside the
+ * same work as the state change: the unique index means the second delivery loses the race
+ * and is acknowledged without doing anything. That is cheaper and far more reliable than
+ * trying to detect duplication from the order's own state.
+ */
+export const stripeEvents = pgTable("stripe_events", {
+  id: serial("id").primaryKey(),
+  eventId: text("event_id").notNull(),
+  type: text("type").notNull(),
+  receivedAt: timestamp("received_at").defaultNow(),
+}, (t) => ({
+  eventUnique: uniqueIndex("stripe_events_event_id_unique").on(t.eventId),
+}));
+export type StripeEvent = typeof stripeEvents.$inferSelect;

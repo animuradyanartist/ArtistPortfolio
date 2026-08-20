@@ -22,6 +22,13 @@ import EditArtworkPage from "@/pages/EditArtworkPage";
 import CreatePrintPage from "@/pages/CreatePrintPage";
 import EditPrintPage from "@/pages/EditPrintPage";
 import NotFound from "@/pages/not-found";
+import CartPage from "@/pages/CartPage";
+import CheckoutPage from "@/pages/CheckoutPage";
+import OrderConfirmationPage from "@/pages/OrderConfirmationPage";
+import AdminOrdersPage from "@/pages/AdminOrdersPage";
+import AdminOrderDetailPage from "@/pages/AdminOrderDetailPage";
+import { CartProvider } from "@/lib/cart";
+import { captureAttribution } from "@/lib/commerceAnalytics";
 import SeoArtworkPage from "@/pages/SeoArtworkPage";
 import BlogPage from "@/pages/BlogPage";
 import BlogPostPage from "@/pages/BlogPostPage";
@@ -63,6 +70,13 @@ function Router() {
       <Route path="/admin/edit-print/:id" component={EditPrintPage} />
       <Route path="/blog" component={BlogPage} />
       <Route path="/blog/:slug" component={BlogPostPage} />
+      {/* Direct sales. Declared BEFORE the /:seoSlug catch-all, which would otherwise
+          swallow /cart and /checkout exactly as it once would have swallowed /blog. */}
+      <Route path="/cart" component={CartPage} />
+      <Route path="/checkout" component={CheckoutPage} />
+      <Route path="/order/:reference" component={OrderConfirmationPage} />
+      <Route path="/admin/orders" component={AdminOrdersPage} />
+      <Route path="/admin/orders/:id" component={AdminOrderDetailPage} />
       {/* Keep the catch-all LAST: /:seoSlug would otherwise swallow /blog. */}
       <Route path="/:seoSlug" component={SeoArtworkPage} />
       <Route component={NotFound} />
@@ -70,12 +84,21 @@ function Router() {
   );
 }
 
+/** Records utm_* and the landing path once per session, so an order can say where it came
+ *  from. Renders nothing. */
+function AttributionCapture() {
+  useEffect(() => { captureAttribution(); }, []);
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+       <CartProvider>
         <div className="min-h-screen bg-soft-white">
           <CanonicalManager />
+          <AttributionCapture />
           <ScrollToTop />
           <Navigation />
           <main>
@@ -83,6 +106,7 @@ function App() {
           </main>
           <Toaster />
         </div>
+       </CartProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
