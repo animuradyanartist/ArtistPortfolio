@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExternalLink, X, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Artwork } from "@shared/schema";
 import { SHOW_PRICES } from "@/lib/featureFlags";
+import { artworkCommerceDisplay } from "@shared/commerce/display";
 
 interface ArtworkModalProps {
   artwork: Artwork | null;
@@ -170,7 +171,13 @@ export default function ArtworkModal({ artwork, open, onClose }: ArtworkModalPro
                     </Badge>
                   </div>
                   
-                  {artwork.availability === 'available' && (artwork.buyLink || artwork.saatchiUrl) && (
+                  {/* NEVER A PRIMARY OFF-SITE BUY FOR A WORK ON DIRECT SALE.
+                      This component is currently unreferenced, but it carried a full-width
+                      "Buy Now" straight to Singulart. Left dead and unguarded it is one import
+                      away from reintroducing exactly the bug this change fixes. */}
+                  {artwork.availability === 'available'
+                    && !artworkCommerceDisplay(artwork as never).directSale
+                    && (artwork.buyLink || artwork.saatchiUrl) && (
                     <a
                       href={artwork.buyLink || artwork.saatchiUrl || '#'}
                       target="_blank"

@@ -161,6 +161,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Serves base64 DB images as resized, cacheable WebP (see server/images.ts)
   registerImageRoutes(app);
 
+  /**
+   * THE ADDRESS INDEX — read once a minute, not once a visitor.
+   *
+   * Three places resolve a URL to a painting: this redirect, /api/artworks/:id, and the SSR
+   * handler. All three used to answer the question by pulling the whole table, base64 images
+   * and all, out of Neon. On the live site that was the single largest cost on an artwork
+   * page: /artworks/69 (a bare id, which skips this redirect) answered in 0.85-1.88s while
+   * the identical /artworks/road-to-tuscany-69 took 3.52-4.12s for a byte-identical 9,615-byte
+   * response. The whole difference was one full-catalogue read.
+   *
+   * It is memoised on the same cache and the same TTL as /api/artworks, so an admin edit
+   * clears it through the existing invalidateApiCache() and nothing can go stale for longer
+   * than the list already could.
+   */
+  const artworkAddresses = () =>
+    memoJson("artworks:addresses", 60_000, () => storage.getArtworkAddressIndex());
+
+
   // Direct artwork sales. Self-contained under /api/commerce/* — nothing above or below
   // changes behaviour when payment is unconfigured, which is what lets the whole system
   // ship and be verified before a Stripe key exists.
@@ -277,8 +295,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const artworks = await memoJson("artworks:list", 60_000, async () =>
         refifyImagesList("artwork", await storage.getAllArtworks())
       );
+
+      // ?limit=N — FOR PAGES THAT WANT A FEW WORKS, NOT THE COLLECTION.
+      //
+      // The artwork detail page shows three other paintings under "More from the collection"
+      // and was downloading all 54 rows (111KB) to render them. The gallery still asks for
+      // everything and gets everything; this only lets a caller say how many it actually
+      // needs. Served from the same memoised list, so it costs the database nothing extra.
+      const limit = Number.parseInt(String(req.query.limit ?? ""), 10);
+      const body =
+        Number.isInteger(limit) && limit > 0 ? artworks.slice(0, limit) : artworks;
+
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-      res.json(artworks);
+      res.json(body);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch artworks" });
     }
@@ -305,17 +334,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNumeric) {
         artwork = await storage.getArtwork(parseInt(param));
       } else {
-        const allArtworks = await storage.getAllArtworks();
         // Resolve in priority order so every URL form lands on the exact
         // piece — including duplicate titles:
         //   1. exact stored slug / seoSlug (legacy + Singulart slugs)
         //   2. our canonical "<title>-<id>" form: match the trailing id
         //   3. clean toSlug(title) (older short URLs; first match)
+        //
+        // THE ORDER IS UNCHANGED; WHAT IT READS IS NOT. This matched against every full row
+        // in the table — every base64 image — to compare four strings, and then returned one
+        // of them. Now the comparison runs on the address index and the winner is fetched by
+        // its indexed id. On the live database that is the difference between 2.3-3.4s and
+        // 0.5-1.2s for the same JSON.
+        const addresses = await artworkAddresses();
         const trailingId = param.match(/-(\d+)$/);
-        artwork =
-          allArtworks.find(a => a.slug === param || a.seoSlug === param) ||
-          (trailingId ? allArtworks.find(a => a.id === parseInt(trailingId[1])) : undefined) ||
-          allArtworks.find(a => toSlug(a.title) === param);
+        const found =
+          addresses.find(a => a.slug === param || a.seoSlug === param) ||
+          (trailingId ? addresses.find(a => a.id === parseInt(trailingId[1])) : undefined) ||
+          addresses.find(a => toSlug(a.title) === param);
+        artwork = found ? await storage.getArtwork(found.id) : undefined;
       }
       if (!artwork) {
         return res.status(404).json({ message: "Artwork not found" });
@@ -1616,7 +1652,7 @@ Crawl-delay: 1
    * painting.
    */
   const artworkForSlug = async (slug: string) => {
-    const all = await storage.getAllArtworks();
+    const all = await artworkAddresses();
     return all.find((a) => isKnownAddressFor(a, slug)) ?? null;
   };
 
@@ -1665,8 +1701,18 @@ Crawl-delay: 1
       param = decodeURIComponent(param.split('?')[0].split('#')[0]);
       if (!param || RESERVED_PATHS.has(param)) return null;
       if (/^\d+$/.test(param)) return (await storage.getArtwork(parseInt(param))) || null;
-      const bySeo = await storage.getArtworkBySeoSlug(param);
-      if (bySeo) return bySeo;
+
+      // ONE INDEX READ, THEN ONE ROW.
+      //
+      // The rules below are exactly the rules that were here before — seoSlug first, then a
+      // trailing id that must genuinely belong to the work, then the stored or title slug.
+      // They are now all answered from the memoised address index, so deciding WHICH painting
+      // this URL means costs no database round trip at all, and only the painting that won is
+      // actually fetched.
+      const all = await artworkAddresses();
+
+      const bySeo = all.find((a) => a.seoSlug === param);
+      if (bySeo) return (await storage.getArtwork(bySeo.id)) || null;
 
       // THE TRAILING ID MUST AGREE WITH THE REST OF THE ADDRESS.
       //
@@ -1680,11 +1726,13 @@ Crawl-delay: 1
       // addresses work. It just has to be an address that actually belongs to that work.
       const trailing = param.match(/-(\d+)$/);
       if (trailing) {
-        const byId = await storage.getArtwork(parseInt(trailing[1]));
-        if (byId && isKnownAddressFor(byId, param)) return byId;
+        const wanted = parseInt(trailing[1]);
+        const byId = all.find((a) => a.id === wanted);
+        if (byId && isKnownAddressFor(byId, param)) return (await storage.getArtwork(byId.id)) || null;
       }
-      const all = await storage.getAllArtworks();
-      return all.find((a) => a.slug === param || toSlug(a.title) === param) || null;
+
+      const match = all.find((a) => a.slug === param || toSlug(a.title) === param);
+      return match ? (await storage.getArtwork(match.id)) || null : null;
     };
 
     // Rewrite the shared <head> tags (title, description, OG, Twitter,
@@ -2066,6 +2114,26 @@ Crawl-delay: 1
               html = html.replace(
                 '<div id="root"></div>',
                 `<div id="root">${renderArtworkHtml(artwork, SEO_BASE_URL, imageSize)}</div>`,
+              );
+
+              // THE PAINTING IS ALREADY IN THIS RESPONSE — SO DO NOT MAKE THE BROWSER ASK FOR IT.
+              //
+              // The prerender above puts the image, the title and the metadata in the HTML. Then
+              // React mounted, threw all of it away, and rendered a full-screen "Loading…" until
+              // /api/artworks/:id came back — which on the live site is a 0.5-3.4s wait, staring at
+              // the word Loading, for a painting the server had already sent. Handing React the
+              // same row it just rendered from removes the wait entirely: the artwork paints on
+              // the first React render, with no request in front of it.
+              //
+              // Refified exactly like /api/artworks/:id, so this is byte-for-byte the payload the
+              // query would have fetched — /img/artwork/:id/:idx references, never base64. React
+              // Query still revalidates in the background, so an edit is never more than one
+              // refresh behind.
+              const preloaded = JSON.stringify(refifyImages("artwork", artwork))
+                .replace(/</g, '\\u003c');
+              html = html.replace(
+                '</head>',
+                `  <script>window.__PRELOADED_ARTWORK__=${preloaded};</script>\n</head>`,
               );
             }
           } catch (e) {

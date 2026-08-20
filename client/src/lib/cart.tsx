@@ -41,15 +41,26 @@ function readIds(): number[] {
   } catch { return []; }
 }
 
+function readCountry(): string | null {
+  try { return localStorage.getItem(COUNTRY_KEY); } catch { return null; }
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const [ids, setIds] = useState<number[]>([]);
-  const [country, setCountryState] = useState<string | null>(null);
+  // KNOWN ON THE FIRST RENDER, because something asks for a shipping quote on it.
+  //
+  // This was read in the mount effect with the ids. That is right for the ids — the cart
+  // badge is visible chrome, and settling it after mount keeps the first paint stable. It
+  // was wrong for the country: PurchasePanel turns the country into a query key, so a value
+  // that arrives one render late costs a whole extra round trip to /api/commerce/quote
+  // before any price appears. The country is never rendered by the server and this app
+  // client-renders (createRoot, not hydrateRoot), so reading it during render is safe.
+  const [country, setCountryState] = useState<string | null>(readCountry);
 
   // Read once on mount rather than during render, so server-rendered HTML and the first
   // client paint agree.
   useEffect(() => {
     setIds(readIds());
-    try { setCountryState(localStorage.getItem(COUNTRY_KEY)); } catch { /* private mode */ }
   }, []);
 
   const persist = useCallback((next: number[]) => {

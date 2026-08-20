@@ -109,11 +109,7 @@ export default function OrderConfirmationPage() {
           </p>
         </div>
 
-        <Link href="/artworks">
-          <a className="mt-10 inline-block border border-stone-800 px-8 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-900 hover:bg-stone-900 hover:text-stone-50 transition-colors">
-            Back to the paintings
-          </a>
-        </Link>
+        <Link href="/artworks" className="mt-10 inline-block border border-stone-800 px-8 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-900 hover:bg-stone-900 hover:text-stone-50 transition-colors">Back to the paintings</Link>
       </div>
     </Shell>
   );

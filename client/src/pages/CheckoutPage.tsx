@@ -96,7 +96,7 @@ export default function CheckoutPage() {
       <Shell>
         <p className="text-stone-700 max-w-prose leading-relaxed">
           Online payment is not open yet. Please{" "}
-          <Link href="/contact"><a className="border-b border-stone-400 hover:border-stone-800">enquire about this work</a></Link>{" "}
+          <Link href="/contact" className="border-b border-stone-400 hover:border-stone-800">enquire about this work</Link>{" "}
           and Ani will arrange the purchase with you directly.
         </p>
       </Shell>
@@ -104,7 +104,7 @@ export default function CheckoutPage() {
   }
 
   if (!Number.isInteger(artworkId)) {
-    return <Shell><p className="text-stone-600">No work selected. <Link href="/artworks"><a className="border-b border-stone-400">Browse the paintings</a></Link>.</p></Shell>;
+    return <Shell><p className="text-stone-600">No work selected. <Link href="/artworks" className="border-b border-stone-400">Browse the paintings</Link>.</p></Shell>;
   }
 
   return (

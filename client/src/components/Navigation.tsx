@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Menu, X, ShoppingBag } from "lucide-react";
 import { useCart } from "@/lib/cart";
+import { useAfterPaint } from "@/lib/afterPaint";
 import { Button } from "@/components/ui/button";
 import type { BlogPost } from "@shared/schema";
 import { siteNavigation } from "@shared/siteNavigation";
@@ -17,7 +18,18 @@ export default function Navigation() {
   // flag to set, and unpublishing the last article removes the link on its own. The query
   // shares BlogPage's cache key and the client sets staleTime: Infinity, so this costs one
   // request per session rather than one per page.
-  const { data: publishedPosts } = useQuery<BlogPost[]>({ queryKey: ["/api/blog"] });
+  //
+  // AND NOT BEFORE THE PAGE THE VISITOR ASKED FOR HAS PAINTED. This ran on mount, so every
+  // page on the site — including an artwork page, where the painting is the whole point —
+  // spent a round trip deciding whether a navigation link should exist before it showed
+  // anything. Gated on the browser being idle, it is the last thing the page does rather
+  // than one of the first. Nothing else changes: still one request per session, still
+  // driven by the published count.
+  const navReady = useAfterPaint();
+  const { data: publishedPosts } = useQuery<BlogPost[]>({
+    queryKey: ["/api/blog"],
+    enabled: navReady,
+  });
   const navigation = siteNavigation(publishedPosts?.length);
 
   const isActive = (href: string) => {
