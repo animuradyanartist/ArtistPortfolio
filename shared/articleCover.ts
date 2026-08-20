@@ -27,7 +27,7 @@
  * PURE. No DOM, no server APIs — importable from the reader, the SSR shell and the admin.
  */
 
-import { artworkFigure, citedArtworkTitles, type ArtworkFigure, type FigureArtwork } from "./articleMarkdown";
+import { artworkFigure, artworkFigureById, artworkIdFromImageUrl, citedArtworkTitles, type ArtworkFigure, type FigureArtwork } from "./articleMarkdown";
 
 export interface CoverResolvers {
   canonicalPath: (a: FigureArtwork) => string;
@@ -68,6 +68,30 @@ export function resolveArticleCover(
 ): ArticleCover {
   const explicit = article.coverImage?.trim();
   if (explicit) {
+    // AN EXPLICIT COVER THAT IS ONE OF OUR OWN PAINTINGS IS STILL A PAINTING.
+    //
+    // "Explicit wins" was written when the only way a cover got set was the owner pasting a
+    // URL, where there is nothing to credit and nowhere to link. Career OS then began sending
+    // `coverImage` with every draft it writes — always `/img/artwork/:id/:idx`, always one of
+    // her works — and each of those articles silently lost its credit line, its link to the
+    // painting and, on a sold work, the "In a private collection" note that stops the caption
+    // reading as an offer.
+    //
+    // Found on draft 4: the cover rendered as a bare image while the three figures below it,
+    // resolved from the same rows, each carried a title, a link and a status.
+    //
+    // Resolved BY ID, never by title: seven of her works exist twice, once migrated and once
+    // not, so a title lookup can hand back the other row and quietly change which painting
+    // the cover credits.
+    //
+    // Intent still beats inference — this does not choose a different cover, it only says
+    // what the chosen one is. A genuinely external URL still resolves to "explicit" below.
+    const ownId = artworkIdFromImageUrl(explicit);
+    if (ownId !== null) {
+      const fig = artworkFigureById(ownId, artworks, resolve);
+      if (fig) return { kind: "artwork", ...fig };
+    }
+
     return {
       kind: "explicit",
       imageUrl: explicit,

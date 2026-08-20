@@ -157,7 +157,30 @@ export function artworkFigure(
   artworks: FigureArtwork[],
   resolve: { canonicalPath: (a: FigureArtwork) => string; imageUrl: (a: FigureArtwork) => string },
 ): ArtworkFigure | null {
-  const a = artworks.find((x) => norm(x.title) === norm(title));
+  return figureFor(artworks.find((x) => norm(x.title) === norm(title)), resolve);
+}
+
+/**
+ * The same figure, addressed by id rather than by title.
+ *
+ * Titles are not unique. Seven of her works exist twice — once migrated and once not — so
+ * looking one up by name can return the other row. Anywhere the id is already known, this is
+ * the correct door; `artworkFigure` above is for the `:artwork[Title]` directive, which only
+ * ever carries a name.
+ */
+export function artworkFigureById(
+  id: number,
+  artworks: FigureArtwork[],
+  resolve: { canonicalPath: (a: FigureArtwork) => string; imageUrl: (a: FigureArtwork) => string },
+): ArtworkFigure | null {
+  return figureFor(artworks.find((x) => x.id === id), resolve);
+}
+
+/** The one composition both doors share. */
+function figureFor(
+  a: FigureArtwork | undefined,
+  resolve: { canonicalPath: (a: FigureArtwork) => string; imageUrl: (a: FigureArtwork) => string },
+): ArtworkFigure | null {
   if (!a) return null;
 
   const caption = [a.title, a.medium, a.dimensions, a.year ? String(a.year) : null]
@@ -198,4 +221,21 @@ export function figureImageUrl(a: Pick<FigureArtwork, "id">): string {
 /** Every artwork an article names via a directive, in order of appearance. */
 export function citedArtworkTitles(body: string): string[] {
   return parseArticle(body).flatMap((b) => (b.kind === "artwork" ? [b.title] : []));
+}
+
+/**
+ * The artwork id inside one of OUR OWN image URLs, or null for anybody else's.
+ *
+ * `/img/artwork/42/0`, with or without a cache-busting query, and with or without this
+ * site's origin in front of it. A CDN URL returns null, which is the point: only an address
+ * we serve tells us which row the picture belongs to.
+ */
+export function artworkIdFromImageUrl(url: string): number | null {
+  const u = url.trim();
+  if (!u) return null;
+  const path = u.replace(/^https?:\/\/[^/]+/i, "");
+  const m = /^\/img\/artwork\/(\d+)\/\d+(?:[?#].*)?$/.exec(path);
+  if (!m) return null;
+  const id = Number.parseInt(m[1]!, 10);
+  return Number.isFinite(id) ? id : null;
 }
