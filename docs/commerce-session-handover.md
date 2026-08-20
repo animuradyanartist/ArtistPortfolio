@@ -8,7 +8,7 @@
 | #42 | shipping UX, one Offer per painting, DB-backed rate limit | **merged, live** |
 | #43 | drizzle-kit filter/declare contradiction | **merged, live** |
 | #44 | Replit dev→prod schema sync | **merged**; `npm run db:sync` reported 15/15 · 2/2 · 1/1 and the publish completed |
-| #45 | direct-sale CTA hierarchy **+ artwork-page performance** | **open, unmerged** — branch `fix/direct-sale-cta-hierarchy`, head `0d42ce6` |
+| #45 | direct-sale CTA hierarchy **+ artwork-page performance** | **open, unmerged** — branch `fix/direct-sale-cta-hierarchy`, head `13ca247` |
 
 Production: Stripe **configured** (`checkoutEnabled: true`). One artwork enabled for direct sale —
 **id 69, Road to Tuscany, €1,000, available, shipping enabled**, marketplace price 2420 USD
