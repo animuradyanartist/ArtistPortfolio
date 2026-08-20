@@ -113,7 +113,9 @@ describe("drizzle.config and the schema must not contradict each other", () => {
 });
 
 describe("the boot DDL stays a safety net, not the only source of truth", () => {
-  const boot = fs.readFileSync(path.join(ROOT, "server/index.ts"), "utf8");
+  // The statements moved out of server/index.ts into their own module on 2026-08-20 so the
+  // SAME list could also be applied to the development database without starting the app.
+  const boot = fs.readFileSync(path.join(ROOT, "server/selfHealDdl.ts"), "utf8");
 
   it("still creates the commerce schema for an un-migrated database", () => {
     for (const frag of [
@@ -132,6 +134,81 @@ describe("the boot DDL stays a safety net, not the only source of truth", () => 
     const declared = columnNames(artworks);
     for (const c of added) {
       expect(declared, `boot DDL creates artworks.${c} but shared/schema.ts does not declare it — drizzle-kit will propose dropping it`).toContain(c);
+    }
+  });
+});
+
+/**
+ * THE REPLIT DEPLOYMENT PATH — the one that actually deletes things.
+ *
+ * PR #43 fixed drizzle-kit's schema-vs-database diff. That was a real bug and not this one.
+ * Replit Publishing does not run that diff: it syncs the DEVELOPMENT database's schema onto
+ * production, so a column present in production and absent from development is DELETED.
+ *
+ * The commerce schema reached production because the deployed app booted and ran the self-heal
+ * DDL. It never reached development, because the workspace was pulled without being started
+ * and the [postMerge] hook that would have run `db:push` is capped by `timeoutMs` — which was
+ * 20 seconds, less than `npm install` takes, so the schema step was never reached.
+ *
+ * These pin the three things that keep development level with production.
+ */
+describe("the Replit dev → production sync cannot fall behind again", () => {
+  const root = path.resolve(__dirname, "..");
+  const replit = fs.readFileSync(path.join(root, ".replit"), "utf8");
+  const hook = fs.readFileSync(path.join(root, "scripts/post-merge.sh"), "utf8");
+  const ddl = fs.readFileSync(path.join(root, "server/selfHealDdl.ts"), "utf8");
+  const boot = fs.readFileSync(path.join(root, "server/index.ts"), "utf8");
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")) as { scripts: Record<string, string> };
+
+  it("gives the post-merge hook time to reach the schema step", () => {
+    const m = /timeoutMs\s*=\s*(\d+)/.exec(replit);
+    expect(m, ".replit must declare a postMerge timeoutMs").toBeTruthy();
+    // 20s was less than `npm install`, so the hook died before touching the database.
+    expect(Number(m![1])).toBeGreaterThanOrEqual(120_000);
+  });
+
+  it("syncs the schema BEFORE the slow steps, so a timeout cannot skip it", () => {
+    // Compare the COMMAND LINES, not prose: the comment above them explains why
+    // `npm install` is slow, and a naive indexOf would find that mention first.
+    const lines = hook.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+    const sync = lines.findIndex((l) => l.startsWith("npm run db:sync"));
+    const install = lines.findIndex((l) => l === "npm install");
+    expect(sync, "post-merge.sh must run `npm run db:sync`").toBeGreaterThan(-1);
+    expect(install).toBeGreaterThan(-1);
+    expect(sync).toBeLessThan(install);
+  });
+
+  it("offers a one-command way to bring development level", () => {
+    expect(pkg.scripts["db:sync"]).toBeTruthy();
+    expect(fs.existsSync(path.join(root, "scripts/sync-dev-schema.mjs"))).toBe(true);
+  });
+
+  it("boot and the sync script share ONE list, so they cannot drift", () => {
+    expect(boot).toContain("SELF_HEAL_DDL");
+    const script = fs.readFileSync(path.join(root, "scripts/sync-dev-schema.mjs"), "utf8");
+    expect(script).toContain("server/selfHealDdl.ts");
+  });
+
+  it("that shared list still creates the whole commerce schema", () => {
+    for (const frag of [
+      "direct_sale_enabled", "website_price_minor", "website_currency", "shipping_enabled",
+      "shipping_override_minor", "shipping_destination_overrides", "packed_depth_cm",
+      "packing_margin_cm", "fulfilment_notes", "reserved_until", "reserved_by_order_id",
+      "has_commitment", "commitment_type", "commitment_details", "commitment_until",
+      "CREATE TABLE IF NOT EXISTS orders", "CREATE TABLE IF NOT EXISTS stripe_events",
+      "artworks_reserved_until_idx",
+    ]) expect(ddl, `SELF_HEAL_DDL must still create ${frag}`).toContain(frag);
+  });
+
+  it("every statement in that list is additive — it can never drop or truncate", () => {
+    // Only the array body: the file's doc comment also contains backticked prose.
+    const body = ddl.slice(ddl.indexOf("export const SELF_HEAL_DDL"));
+    const stmts = [...body.matchAll(/`([^`]+)`/g)].map((m) => m[1]!.trim());
+    expect(stmts.length).toBeGreaterThan(20);
+    for (const s of stmts) {
+      expect(s, `refuses to be a destructive statement: ${s.slice(0, 60)}`)
+        .not.toMatch(/\b(DROP|TRUNCATE|DELETE\s+FROM|ALTER\s+COLUMN)\b/i);
+      expect(s).toMatch(/IF NOT EXISTS/i);
     }
   });
 });

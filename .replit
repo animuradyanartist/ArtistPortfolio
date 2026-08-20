@@ -37,4 +37,8 @@ waitForPort = 5000
 
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 20000
+# 20000 was not enough for `npm install`, so the hook was killed before it reached the schema
+# sync — which is why development fell behind production and the publish preview proposed
+# dropping the commerce schema. The sync itself now runs first and takes about a second; this
+# budget is for the npm install that follows it.
+timeoutMs = 600000
