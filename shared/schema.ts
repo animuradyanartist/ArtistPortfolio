@@ -1,5 +1,6 @@
-import { pgTable, text, serial, integer, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 export const users = pgTable("users", {
@@ -134,6 +135,14 @@ export const artworks = pgTable("artworks", {
   // Postgres allows multiple NULLs in a unique index and routes.ts stores blank
   // seoSlug as NULL, so this never blocks inserts.
   seoSlugUnique: uniqueIndex("artworks_seo_slug_unique").on(t.seoSlug),
+  // THE SWEEPER'S INDEX, declared here because the boot DDL alone is not enough.
+  //
+  // It was created by ADD-COLUMN-style boot DDL and nowhere else, so drizzle-kit saw an index
+  // in the database that the schema did not know about and DROPPED it on every push —
+  // silently, and verifiably: created, pushed, gone. The reservation sweeper scans
+  // `reserved_until <= now()` every minute, so losing it costs a sequential scan of the whole
+  // catalogue on a timer.
+  reservedUntilIdx: index("artworks_reserved_until_idx").on(t.reservedUntil),
 }));
 
 export const prints = pgTable("prints", {
@@ -462,7 +471,14 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (t) => ({
   referenceUnique: uniqueIndex("orders_reference_unique").on(t.reference),
-  sessionUnique: uniqueIndex("orders_stripe_session_unique").on(t.stripeCheckoutSessionId),
+  // PARTIAL, matching the boot DDL exactly. Most orders have no session id until Stripe is
+  // called, and a plain unique index would be fine in Postgres (it permits many NULLs) — but
+  // the DDL writes `WHERE stripe_checkout_session_id IS NOT NULL` and a declaration that says
+  // something different is a drift waiting to be "corrected" by a future drizzle-kit that
+  // does diff index predicates. Declared as it actually is.
+  sessionUnique: uniqueIndex("orders_stripe_session_unique")
+    .on(t.stripeCheckoutSessionId)
+    .where(sql`${t.stripeCheckoutSessionId} IS NOT NULL`),
 }));
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
