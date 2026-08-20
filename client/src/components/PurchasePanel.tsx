@@ -28,7 +28,7 @@ interface Quote {
   currency: string;
   priceFormatted: string | null;
   supportedCountries: string[];
-  stripeConfigured: boolean;
+  checkoutEnabled: boolean;
   shipping:
     | { ok: true; amountMinor: number; amountFormatted: string; estimated: boolean; zoneLabel: string | null;
         totalFormatted: string | null; dutiesMayApply: boolean }
@@ -127,7 +127,12 @@ export function PurchasePanel({ artworkId, marketplaceUrl }: { artworkId: number
       </div>
 
       <div className="mt-8 flex flex-wrap items-center gap-4">
-        {shipping?.ok ? (
+        {/* FAILS CLOSED ON PAYMENT.
+            No Buy button exists until BOTH Stripe secrets are present. Rendering one and
+            letting somebody type their address before a 503 is worse than never offering it:
+            the price and the shipping estimate below are still true and still useful, so they
+            stay — only the action that cannot complete is withheld. */}
+        {shipping?.ok && data.checkoutEnabled ? (
           <Link href={`/checkout?artwork=${artworkId}`}>
             <a className="inline-block bg-stone-900 text-stone-50 px-8 py-3 text-[11px] tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors duration-300">
               Buy now
@@ -143,6 +148,14 @@ export function PurchasePanel({ artworkId, marketplaceUrl }: { artworkId: number
           {inCart ? "In your cart" : "Add to cart"}
         </button>
       </div>
+
+      {!data.checkoutEnabled && (
+        <p className="mt-6 text-sm text-stone-700 leading-relaxed max-w-md">
+          Online payment for this work is not open yet.{" "}
+          <Link href="/contact"><a className="border-b border-stone-400 hover:border-stone-800">Enquire about buying it</a></Link>{" "}
+          and Ani will arrange it with you directly.
+        </p>
+      )}
 
       {/* PART 10 — factual, and deliberately not a tax engine. Nothing is collected on it. */}
       {shipping?.ok && shipping.dutiesMayApply && (

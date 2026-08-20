@@ -95,3 +95,29 @@ export async function bootstrapWebhookEndpoint(publicBaseUrl: string): Promise<
     return { created: false, reason: "error", detail: e instanceof Error ? e.message : "unknown" };
   }
 }
+
+/**
+ * IS CHECKOUT ACTUALLY SAFE TO OFFER? — the single gate the whole system asks.
+ *
+ * BOTH SECRETS, NOT ONE. It is tempting to open checkout as soon as `STRIPE_SECRET_KEY`
+ * exists, because that alone is enough to take a payment. That is exactly the danger: with no
+ * `STRIPE_WEBHOOK_SECRET` the webhook cannot verify a signature, so a customer's card is
+ * charged and NOTHING can confirm it — the order stays `unpaid`, the reservation lapses on
+ * schedule, the painting goes quietly back on sale, and the only record of the money is in
+ * Stripe's dashboard.
+ *
+ * Taking money we cannot reconcile is worse than not selling. So "configured" means both, and
+ * every surface — the artwork page, the cart, the checkout page and the checkout route — asks
+ * this one function rather than forming its own opinion.
+ */
+export type CheckoutBlockedReason = "no-secret-key" | "no-webhook-secret" | null;
+
+export function checkoutBlockedReason(): CheckoutBlockedReason {
+  if (!stripeSecretKey()) return "no-secret-key";
+  if (!stripeWebhookSecret()) return "no-webhook-secret";
+  return null;
+}
+
+export function isCheckoutConfigured(): boolean {
+  return checkoutBlockedReason() === null;
+}

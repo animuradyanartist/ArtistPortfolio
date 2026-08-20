@@ -16,7 +16,7 @@ import { zoneFor, ZONE_LABEL, supportedCountries, isLikelyImportDutiable } from 
 import { priceOrder, toShippable, currencyOf } from "./pricing";
 import { shippingProvider } from "./providers";
 import { validateBuyer, validateArtworkIds, sanitiseAttribution } from "./validate";
-import { stripeClient, stripeMode } from "./stripeClient";
+import { stripeClient, stripeMode, isCheckoutConfigured, checkoutBlockedReason } from "./stripeClient";
 import { reserveArtwork, releaseReservation, markSold, releaseExpiredReservations, RESERVATION_MINUTES } from "./reservation";
 import {
   createOrder, getOrder, getOrderByReference, getOrderBySession, nextReference,
@@ -95,7 +95,9 @@ export function registerCommerceRoutes(app: Express): void {
         currency,
         priceFormatted: artwork.websitePriceMinor ? formatMoney(artwork.websitePriceMinor, currency) : null,
         supportedCountries: supportedCountries(),
-        stripeConfigured: stripeMode() !== "unconfigured",
+        // ONE FLAG, and it means "a customer may safely be offered a Buy button" — not
+        // merely "a key exists". The UI must never have to reason about which half is missing.
+        checkoutEnabled: isCheckoutConfigured(),
       };
 
       // A country is optional — the page renders a price before it knows where you are.
@@ -180,7 +182,7 @@ export function registerCommerceRoutes(app: Express): void {
           : { ok: false, error: priced.error };
       }
 
-      return res.json({ items, missing, country: country || null, totals });
+      return res.json({ items, missing, country: country || null, totals, checkoutEnabled: isCheckoutConfigured() });
     } catch {
       return res.status(500).json({ message: "Could not check your cart right now." });
     }
@@ -190,14 +192,25 @@ export function registerCommerceRoutes(app: Express): void {
   app.post("/api/commerce/checkout", async (req, res) => {
     if (rateLimited(req, res, "checkout")) return;
     try {
+      // THE GATE, BEFORE ANYTHING ELSE HAPPENS.
+      //
+      // Placed above the database check, the validation, the pricing, the order INSERT and the
+      // reservation, so that with payment unconfigured this route cannot create a row, cannot
+      // hold a painting, and cannot reach Stripe. Nothing below it runs.
+      const blocked = checkoutBlockedReason();
+      if (blocked) {
+        return res.status(503).json({
+          code: "checkout-unconfigured",
+          reason: blocked,
+          message: "Online payment is not available yet. Please use the enquiry link to buy this work.",
+        });
+      }
+
       if (!hasDatabase) return res.status(503).json({ message: "Checkout is unavailable." });
 
       const stripe = stripeClient();
       if (!stripe) {
-        return res.status(503).json({
-          message: "Online payment is not configured yet. Please use the enquiry link to buy this work.",
-          code: "stripe-unconfigured",
-        });
+        return res.status(503).json({ code: "checkout-unconfigured", message: "Online payment is not available yet." });
       }
 
       const ids = validateArtworkIds((req.body ?? {}).artworkIds);

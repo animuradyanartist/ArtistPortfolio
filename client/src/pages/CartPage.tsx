@@ -35,6 +35,7 @@ interface ValidatedCart {
   items: Array<{ id: number; title: string; dimensions: string; year: number; medium: string;
     imageUrl: string; priceFormatted: string | null; purchasable: boolean; unavailableReason: string | null }>;
   missing: number[];
+  checkoutEnabled: boolean;
   totals: null | { ok: true; itemsFormatted: string; shippingFormatted: string; totalFormatted: string;
     shippingEstimated: boolean; dutiesMayApply: boolean } | { ok: false; error: unknown };
 }
@@ -97,7 +98,7 @@ export default function CartPage() {
                   </div>
                   <div className="text-right shrink-0 flex flex-col items-end">
                     <p className="text-sm text-stone-900 tabular-nums">{item.priceFormatted ?? "—"}</p>
-                    {item.purchasable && (
+                    {item.purchasable && data?.checkoutEnabled && (
                       <Link href={`/checkout?artwork=${item.id}`}>
                         <a className="mt-3 inline-block bg-stone-900 text-stone-50 px-5 py-2 text-[11px] tracking-[0.18em] uppercase hover:bg-stone-700 transition-colors">
                           Buy this work
@@ -139,7 +140,14 @@ export default function CartPage() {
                 </p>
               )}
 
-              {buyable.length > 0 && (
+              {buyable.length > 0 && data?.checkoutEnabled === false && (
+                <p className="text-sm text-stone-700 leading-relaxed pt-2">
+                  Online payment is not open yet.{" "}
+                  <Link href="/contact"><a className="border-b border-stone-400">Enquire about buying</a></Link>.
+                </p>
+              )}
+
+              {buyable.length > 0 && data?.checkoutEnabled && (
                 <p className="text-xs text-stone-500 leading-relaxed pt-2">
                   {buyable.length === 1
                     ? "Use “Buy this work” above to continue to payment."

@@ -33,7 +33,7 @@ export default function CheckoutPage() {
 
   useEffect(() => { setCountry(cart.country ?? guessCountry()); }, [cart.country]);
 
-  const { data } = useQuery<{ items: Array<{ id: number; title: string; dimensions: string; imageUrl: string; priceFormatted: string | null; purchasable: boolean }>;
+  const { data } = useQuery<{ checkoutEnabled: boolean; items: Array<{ id: number; title: string; dimensions: string; imageUrl: string; priceFormatted: string | null; purchasable: boolean }>;
     totals: null | { ok: true; itemsFormatted: string; shippingFormatted: string; totalFormatted: string; shippingEstimated: boolean; dutiesMayApply: boolean; totalMinor: number; shippingMinor: number; currency: string } | { ok: false } }>({
     queryKey: ["/api/commerce/cart/validate", artworkId, country],
     enabled: Number.isInteger(artworkId) && Boolean(country),
@@ -88,6 +88,20 @@ export default function CheckoutPage() {
       setSubmitting(false);
     }
   };
+
+  // Nobody should reach this page with payment unconfigured, but a pasted URL does not know
+  // that. The form is not rendered at all rather than collecting an address it cannot use.
+  if (data && data.checkoutEnabled === false) {
+    return (
+      <Shell>
+        <p className="text-stone-700 max-w-prose leading-relaxed">
+          Online payment is not open yet. Please{" "}
+          <Link href="/contact"><a className="border-b border-stone-400 hover:border-stone-800">enquire about this work</a></Link>{" "}
+          and Ani will arrange the purchase with you directly.
+        </p>
+      </Shell>
+    );
+  }
 
   if (!Number.isInteger(artworkId)) {
     return <Shell><p className="text-stone-600">No work selected. <Link href="/artworks"><a className="border-b border-stone-400">Browse the paintings</a></Link>.</p></Shell>;
