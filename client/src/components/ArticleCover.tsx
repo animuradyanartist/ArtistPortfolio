@@ -1,3 +1,4 @@
+import { figureImageUrl } from "@shared/articleMarkdown";
 /**
  * An article's cover, resolved from the work it already names.
  *
@@ -10,10 +11,8 @@ import { resolveArticleCover, type ArticleLike, type ArticleCover as Cover } fro
 import type { FigureArtwork } from "@shared/articleMarkdown";
 
 /** Matches the server's resolution: the stored absolute URL, else this site's image route. */
-export function imageUrlFor(a: FigureArtwork): string {
-  const first = Array.isArray(a.images) ? a.images.find((i) => typeof i === "string" && i.trim()) : null;
-  return first && /^https?:\/\//i.test(first) ? first : `/img/artwork/${a.id}/0`;
-}
+/** Kept as a named export for existing importers; the rule itself lives in shared/. */
+export const imageUrlFor = figureImageUrl;
 
 export function coverFor(article: ArticleLike, artworks: FigureArtwork[]): Cover {
   return resolveArticleCover(article, artworks, {

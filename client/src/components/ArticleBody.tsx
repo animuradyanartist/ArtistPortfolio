@@ -11,13 +11,10 @@
  */
 import { Link } from "wouter";
 import { artworkCanonicalPath } from "@shared/canonical";
-import { artworkFigure, parseArticle, parseInline, type FigureArtwork } from "@shared/articleMarkdown";
+import { artworkFigure, parseArticle, parseInline, type FigureArtwork, figureImageUrl } from "@shared/articleMarkdown";
 
 /** Matches the server's resolution: the stored absolute URL, else this site's image route. */
-function imageUrlFor(a: FigureArtwork): string {
-  const first = Array.isArray(a.images) ? a.images.find((i) => typeof i === "string" && i.trim()) : null;
-  return first && /^https?:\/\//i.test(first) ? first : `/img/artwork/${a.id}/0`;
-}
+
 
 function Inline({ text }: { text: string }) {
   return (
@@ -83,7 +80,7 @@ export function ArticleBody({ body, artworks = [], variant = "reader" }: Article
         if (b.kind === "artwork") {
           const fig = artworkFigure(b.title, artworks, {
             canonicalPath: (a) => artworkCanonicalPath({ id: a.id, title: a.title, seoSlug: a.seoSlug ?? null }),
-            imageUrl: imageUrlFor,
+            imageUrl: figureImageUrl,
           });
           // Unknown title: render nothing. Never invent an image or a URL.
           if (!fig) return null;

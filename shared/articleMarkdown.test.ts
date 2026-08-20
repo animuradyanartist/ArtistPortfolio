@@ -10,9 +10,12 @@
  * three is the defect these tests exist to make impossible.
  */
 import { describe, it, expect } from "vitest";
+import fsMod from "node:fs";
+import pathMod from "node:path";
 import {
   artworkFigure, citedArtworkTitles, parseArticle, parseInline,
   type FigureArtwork,
+  figureImageUrl,
 } from "./articleMarkdown";
 
 describe("nothing reaches the reader as raw Markdown", () => {
@@ -110,5 +113,45 @@ describe("artwork figures resolve from the database, never from the article", ()
   it("omits caption fields the row does not have", () => {
     const sparse: FigureArtwork[] = [{ id: 5, title: "Untitled Study", availability: "available" }];
     expect(artworkFigure("Untitled Study", sparse, resolve)!.caption).toBe("Untitled Study");
+  });
+});
+
+/**
+ * THE FIGURE'S IMAGE ADDRESS — one rule, in one place.
+ *
+ * The server prerender, ArticleCover and ArticleBody each had their own copy, and all three
+ * agreed on the wrong answer: an artwork whose stored image is an absolute URL had that URL
+ * used directly, so a figure pointed at the Singulart CDN while the site served the same
+ * picture itself. The route redirects for a work we do not host, so the first-party address is
+ * never worse — and a work migrated later starts serving first-party in every article already
+ * written, without anyone editing a body.
+ */
+describe("figureImageUrl", () => {
+  it("always addresses the site's own route, whatever the stored value is", () => {
+    expect(figureImageUrl({ id: 78 })).toBe("/img/artwork/78/0");
+  });
+
+  it("does not hand out a third-party URL even when the row holds one", () => {
+    const remote = {
+      id: 42,
+      title: "Remote",
+      images: ["https://www.singulart.com/images/artworks/remote.jpg"],
+    } as unknown as Parameters<typeof figureImageUrl>[0];
+    expect(figureImageUrl(remote)).toBe("/img/artwork/42/0");
+    expect(figureImageUrl(remote)).not.toMatch(/singulart/i);
+  });
+
+  it("is the ONLY implementation — no surface re-derives it", () => {
+    // The defect this file exists to prevent, applied to itself: three copies that drift.
+    const files = [
+      "server/routes.ts",
+      "client/src/components/ArticleBody.tsx",
+      "client/src/components/ArticleCover.tsx",
+    ];
+    for (const f of files) {
+      const src = fsMod.readFileSync(pathMod.resolve(process.cwd(), f), "utf8");
+      expect(src).not.toMatch(/\/\^https\?:\\\/\\\/\/i\.test\(first\)/);
+      expect(src).toMatch(/figureImageUrl/);
+    }
   });
 });

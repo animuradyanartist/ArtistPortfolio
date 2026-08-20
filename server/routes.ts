@@ -7,7 +7,7 @@ import sharp from "sharp";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, insertBlogPostSchema, prints } from "@shared/schema";
 import { artworkCanonicalUrl, artworkCanonicalPath, toSlug } from "@shared/canonical";
-import { artworkFigure, parseArticle, parseInline } from "@shared/articleMarkdown";
+import { artworkFigure, figureImageUrl, parseArticle, parseInline } from "@shared/articleMarkdown";
 import { ARTWORKS_TITLE } from "@shared/pageMeta";
 import {
   ARTWORK_PRICE_CURRENCY,
@@ -84,10 +84,7 @@ function renderArticleHtml(
     if (b.kind === "artwork") {
       const fig = artworkFigure(b.title, artworks, {
         canonicalPath: (a) => artworkCanonicalPath({ id: a.id, title: a.title, seoSlug: a.seoSlug ?? null }),
-        imageUrl: (a) => {
-          const first = Array.isArray(a.images) ? a.images.find((i) => typeof i === "string" && i.trim()) : null;
-          return first && /^https?:\/\//i.test(first) ? first : `/img/artwork/${a.id}/0`;
-        },
+        imageUrl: figureImageUrl,
       });
       // A named work that is not hers renders as nothing — never an invented image.
       if (!fig) return "";
