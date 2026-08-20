@@ -177,6 +177,24 @@ export function artworkFigure(
   };
 }
 
+/**
+ * THE IMAGE ADDRESS A FIGURE SHOULD USE — one implementation, for the same reason this file
+ * exists at all.
+ *
+ * There were three copies (the server prerender, ArticleCover and ArticleBody), and all three
+ * agreed on the wrong answer: given an artwork whose stored image is an absolute URL, they used
+ * that URL directly, so a figure pointed at the Singulart CDN even though the site serves the
+ * same picture itself.
+ *
+ * `/img/artwork/:id/:idx` is always the better address. For a work the site hosts it returns
+ * the bytes, resized and cached; for one it does not, it 302s to the same CDN URL the copies
+ * were hardcoding — so this is never worse, and the moment a work is migrated to first-party
+ * hosting every article already written starts serving it without anyone editing a body.
+ */
+export function figureImageUrl(a: Pick<FigureArtwork, "id">): string {
+  return `/img/artwork/${a.id}/0`;
+}
+
 /** Every artwork an article names via a directive, in order of appearance. */
 export function citedArtworkTitles(body: string): string[] {
   return parseArticle(body).flatMap((b) => (b.kind === "artwork" ? [b.title] : []));
