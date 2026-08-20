@@ -18,7 +18,7 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart";
 import { trackAddToCart, trackViewItem } from "@/lib/commerceAnalytics";
-import { COUNTRY_NAME, guessCountry } from "@/lib/countries";
+import { countryOptions, guessCountry } from "@/lib/countries";
 
 interface Quote {
   artwork: { id: number; title: string } | null;
@@ -96,8 +96,8 @@ export function PurchasePanel({ artworkId, marketplaceUrl }: { artworkId: number
             onChange={(e) => { setCountry(e.target.value); cart.setCountry(e.target.value); }}
           >
             <option value="" disabled>Choose a country</option>
-            {data.supportedCountries.map((c) => (
-              <option key={c} value={c}>{COUNTRY_NAME[c] ?? c}</option>
+            {countryOptions(data.supportedCountries).map((c) => (
+              <option key={c.code} value={c.code}>{c.name}</option>
             ))}
           </select>
         </label>

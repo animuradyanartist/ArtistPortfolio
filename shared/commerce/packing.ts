@@ -26,9 +26,22 @@ export interface PackingConfig {
   weightRoundingStepKg: number;
 }
 
+/**
+ * CALIBRATED, NOT GUESSED — and the depth is the number that mattered.
+ *
+ * The first version used a 12cm crate. Against the owner's own FedEx shipment — a 65×75cm work
+ * the carrier billed at ~11kg — a 12cm crate computes 15.3kg: roughly 50% too heavy on EVERY
+ * work, which then multiplied through the per-kilo rate AND pushed almost every painting over
+ * the additional-handling threshold. That single wrong constant was most of why a 79×71cm work
+ * quoted €613 to Germany.
+ *
+ * 8cm reproduces the carrier's own figure: 75×85×8 = 10.2kg against a reported 11kg. It is
+ * also the depth the specification itself uses in its worked example. A flat canvas travels in
+ * a flat crate; 12cm was the thickness of a box nobody was packing.
+ */
 export const DEFAULT_PACKING: PackingConfig = {
   packingMarginCm: 10,
-  packedDepthCm: 12,
+  packedDepthCm: 8,
   volumetricDivisor: 5000,
   weightRoundingStepKg: 0.5,
 };

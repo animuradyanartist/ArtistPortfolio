@@ -20,6 +20,7 @@ import {
   ZONE_TARIFF, SAFETY_MARGIN_FRACTION, SHIPPING_ESTIMATE_BASIS,
   OVERSIZE_LONGEST_SIDE_CM, OVERSIZE_LENGTH_PLUS_GIRTH_CM,
   MAX_LONGEST_SIDE_CM, MAX_LENGTH_PLUS_GIRTH_CM,
+  DOMESTIC_MAX_LONGEST_SIDE_CM, DOMESTIC_MAX_LENGTH_PLUS_GIRTH_CM,
 } from "./tariff";
 
 /** What the estimator is told about one artwork. Deliberately not the DB row. */
@@ -112,9 +113,15 @@ export function estimateShipping(
 
   const longest = longestSideCm(parcel);
   const girth = lengthPlusGirthCm(parcel);
-  if (longest > MAX_LONGEST_SIDE_CM || girth > MAX_LENGTH_PLUS_GIRTH_CM) {
+  // Domestic delivery is a van; the international parcel envelope does not apply to it.
+  const maxSide = zone === "AM" ? DOMESTIC_MAX_LONGEST_SIDE_CM : MAX_LONGEST_SIDE_CM;
+  const maxGirth = zone === "AM" ? DOMESTIC_MAX_LENGTH_PLUS_GIRTH_CM : MAX_LENGTH_PLUS_GIRTH_CM;
+  if (longest > maxSide || girth > maxGirth) {
     return { ok: false, reason: "parcel-too-large", countryCode, zone,
-      detail: "Crated, this work exceeds the size this estimator will quote." };
+      // WORDING MATTERS HERE. The work can be shipped; it is beyond what a standard parcel
+      // service carries, so it goes as freight on a quote. Saying "cannot be shipped" would
+      // be both untrue and a lost sale.
+      detail: "Crated, this work is larger than standard parcel services carry, so it ships as freight on a quote." };
   }
 
   const tariff = ZONE_TARIFF[zone];

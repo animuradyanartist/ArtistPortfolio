@@ -100,6 +100,10 @@ export default function EditArtworkPage() {
       packedDepthCm: null as number | null,
       packingMarginCm: null as number | null,
       fulfilmentNotes: null as string | null,
+      hasCommitment: false,
+      commitmentType: null as string | null,
+      commitmentDetails: null as string | null,
+      commitmentUntil: null as string | null,
     },
   });
 
@@ -138,6 +142,10 @@ export default function EditArtworkPage() {
         packedDepthCm: artwork.packedDepthCm ?? null,
         packingMarginCm: artwork.packingMarginCm ?? null,
         fulfilmentNotes: artwork.fulfilmentNotes ?? null,
+        hasCommitment: artwork.hasCommitment ?? false,
+        commitmentType: artwork.commitmentType ?? null,
+        commitmentDetails: artwork.commitmentDetails ?? null,
+        commitmentUntil: artwork.commitmentUntil ?? null,
       };
       
       console.log('Form data being set:', formData);

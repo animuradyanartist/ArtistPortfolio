@@ -54,12 +54,15 @@ export function ArtworkCommerceFields({ form, dimensions, availability, artworkI
   const status = useMemo(() => purchasability({
     id: 0,
     availability,
+    hasCommitment: v.hasCommitment ?? false,
+    commitmentUntil: v.commitmentUntil ?? null,
     directSaleEnabled,
     websitePriceMinor: v.websitePriceMinor ?? null,
     websiteCurrency: v.websiteCurrency ?? null,
     shippingEnabled: v.shippingEnabled !== false,
     reservedUntil: null,
-  }), [availability, directSaleEnabled, v.websitePriceMinor, v.websiteCurrency, v.shippingEnabled]);
+  }), [availability, directSaleEnabled, v.websitePriceMinor, v.websiteCurrency, v.shippingEnabled,
+       v.hasCommitment, v.commitmentUntil]);
 
   // What a buyer in Germany would be quoted, computed here from the same shared estimator the
   // website uses — so she can see a wrong crate depth before a customer does.
@@ -188,6 +191,36 @@ export function ArtworkCommerceFields({ form, dimensions, availability, artworkI
                   : <span className="text-stone-500"> — your manual figure</span>}
               </>
             : <strong className="text-amber-700">a manual quote — {preview.detail}</strong>}
+        </div>
+
+        {/* PROMISED, BUT NOT SOLD. Same names and meaning as the commercial workflow in the
+            other portfolio project, so the two can be reconciled without translation. */}
+        <div className="border-t border-stone-200 pt-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Switch id="hasCommitment" checked={v.hasCommitment === true}
+              onCheckedChange={(c) => form.setValue("hasCommitment", c, { shouldDirty: true })} />
+            <Label htmlFor="hasCommitment" className="text-sm">Promised to a gallery or collector</Label>
+          </div>
+          {v.hasCommitment === true && (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <Label htmlFor="commitmentType">Promised to</Label>
+                <Input id="commitmentType" placeholder="gallery" defaultValue={v.commitmentType ?? ""}
+                  onChange={(e) => form.setValue("commitmentType", e.target.value || null, { shouldDirty: true })} />
+              </div>
+              <div>
+                <Label htmlFor="commitmentDetails">Details</Label>
+                <Input id="commitmentDetails" placeholder="Autumn show, Yerevan" defaultValue={v.commitmentDetails ?? ""}
+                  onChange={(e) => form.setValue("commitmentDetails", e.target.value || null, { shouldDirty: true })} />
+              </div>
+              <div>
+                <Label htmlFor="commitmentUntil">Until</Label>
+                <Input id="commitmentUntil" type="date" defaultValue={v.commitmentUntil ?? ""}
+                  onChange={(e) => form.setValue("commitmentUntil", e.target.value || null, { shouldDirty: true })} />
+                <p className="text-xs text-stone-500 mt-1">Blank = open-ended, keeps blocking</p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div>

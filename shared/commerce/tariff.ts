@@ -41,29 +41,75 @@ export interface ZoneTariff {
 export const SHIPPING_ESTIMATE_BASIS =
   "internal-conservative-estimate-v1 (no carrier account configured; not a FedEx tariff)";
 
+/**
+ * THE RATE CURVE, FITTED TO THE ANCHOR SHIPMENT.
+ *
+ * EU is derived first, from the one datapoint that carries a carrier, a size AND a chargeable
+ * weight: 65×75cm to Germany, 11kg, ≈€321 paid after her account discount. With the corrected
+ * 8cm crate that parcel computes 10.5kg, so:
+ *
+ *     €130 base + 10.5kg × €17 = €308.50   → +8% margin = €333    (paid: ≈€321, +4%)
+ *
+ * A base that large relative to the per-kilo rate is not an accident — international express
+ * out of Armenia is dominated by fixed cost, which is why her 14.4kg Spain parcel cost barely
+ * more than her 10.5kg German one. The other zones are scaled from EU on the same shape.
+ *
+ * WHAT THIS IS NOT: a FedEx tariff. It is fitted to ONE of her invoices and sanity-checked
+ * against two quotes. See calibration.ts, and `calibration.test.ts`, which fails if a change
+ * to these numbers stops reproducing the real shipment.
+ *
+ * Amounts are EUR minor units (cents).
+ */
 export const ZONE_TARIFF: Readonly<Record<ShippingZone, ZoneTariff>> = Object.freeze({
-  AM:        { baseMinor:  2500, perKgMinor:   400, minimumMinor:  3500, oversizeSurchargeMinor:  2000, maxChargeableKg: 60 },
-  NEARBY:    { baseMinor:  6000, perKgMinor:  1400, minimumMinor:  9000, oversizeSurchargeMinor:  5000, maxChargeableKg: 50 },
-  EU:        { baseMinor:  9000, perKgMinor:  2100, minimumMinor: 16000, oversizeSurchargeMinor:  9000, maxChargeableKg: 45 },
-  UK:        { baseMinor: 10000, perKgMinor:  2400, minimumMinor: 18000, oversizeSurchargeMinor: 10000, maxChargeableKg: 45 },
-  EU_NON_EU: { baseMinor: 10500, perKgMinor:  2500, minimumMinor: 19000, oversizeSurchargeMinor: 10000, maxChargeableKg: 45 },
-  NA:        { baseMinor: 12000, perKgMinor:  3000, minimumMinor: 24000, oversizeSurchargeMinor: 12000, maxChargeableKg: 40 },
-  GCC:       { baseMinor: 11000, perKgMinor:  2800, minimumMinor: 22000, oversizeSurchargeMinor: 11000, maxChargeableKg: 40 },
-  ROW:       { baseMinor: 14000, perKgMinor:  3600, minimumMinor: 28000, oversizeSurchargeMinor: 14000, maxChargeableKg: 35 },
+  AM:        { baseMinor:  2500, perKgMinor:   350, minimumMinor:  3500, oversizeSurchargeMinor:  1500, maxChargeableKg: 60 },
+  NEARBY:    { baseMinor:  7000, perKgMinor:  1000, minimumMinor:  9000, oversizeSurchargeMinor:  2500, maxChargeableKg: 50 },
+  EU:        { baseMinor: 13000, perKgMinor:  1700, minimumMinor: 18000, oversizeSurchargeMinor:  4000, maxChargeableKg: 45 },
+  UK:        { baseMinor: 14000, perKgMinor:  1800, minimumMinor: 19000, oversizeSurchargeMinor:  4500, maxChargeableKg: 45 },
+  EU_NON_EU: { baseMinor: 14500, perKgMinor:  1850, minimumMinor: 20000, oversizeSurchargeMinor:  4500, maxChargeableKg: 45 },
+  NA:        { baseMinor: 17000, perKgMinor:  2300, minimumMinor: 26000, oversizeSurchargeMinor:  6000, maxChargeableKg: 40 },
+  GCC:       { baseMinor: 15500, perKgMinor:  2100, minimumMinor: 23000, oversizeSurchargeMinor:  5500, maxChargeableKg: 40 },
+  ROW:       { baseMinor: 19000, perKgMinor:  2700, minimumMinor: 30000, oversizeSurchargeMinor:  7000, maxChargeableKg: 35 },
 });
 
 /**
  * Added on top of the computed figure, as a fraction.
  *
- * Fuel and remote-area surcharges move, and this estimator cannot see them. 12% is the
- * cushion; it is configuration, and it is applied last so it also covers the surcharge.
+ * Fuel and remote-area surcharges move, and this estimator cannot see them. 8% is the cushion,
+ * applied last so it also covers the handling surcharge.
+ *
+ * It came down from 12% because the curve is now fitted to a real invoice rather than guessed:
+ * a margin on top of an already-conservative guess was inflation twice over, and the anchor
+ * figure is what she actually paid after her discount, not a list price.
  */
-export const SAFETY_MARGIN_FRACTION = 0.12;
+export const SAFETY_MARGIN_FRACTION = 0.08;
 
 /** Oversize tests. Trips the surcharge rather than refusing — refusal is in shipping.ts. */
-export const OVERSIZE_LONGEST_SIDE_CM = 120;
+/**
+ * ADDITIONAL HANDLING — a real carrier rule, kept, but no longer punitive.
+ *
+ * FedEx applies additional handling above roughly 121cm on the longest side or 266cm
+ * length-plus-girth. Those thresholds are public and are left alone. What changed is the
+ * surcharge: €90 on top of an already-overweight parcel was most of the remaining
+ * over-estimate, and her own 65×75 shipment (251cm girth) never attracted it at all.
+ */
+export const OVERSIZE_LONGEST_SIDE_CM = 121;
 export const OVERSIZE_LENGTH_PLUS_GIRTH_CM = 266;
 
-/** Beyond these a parcel stops being a parcel and needs a human. */
-export const MAX_LONGEST_SIDE_CM = 200;
+/**
+ * BEYOND A STANDARD PARCEL — which is not the same as "cannot be shipped".
+ *
+ * 274cm longest side and 330cm length-plus-girth are the published limits of standard
+ * international express. A crate past them still travels; it travels as freight, on a quote,
+ * which is a conversation and not a checkout button. So the estimator declines to PRICE it and
+ * says so in those words — the work stays listed, keeps its price, and offers a quote route.
+ *
+ * DOMESTIC ARMENIA IS EXEMPT. A large canvas crossing Yerevan goes in a van, and refusing to
+ * quote it because an international parcel rule says so was simply wrong: the first version
+ * declined her largest works even for local delivery.
+ */
+export const MAX_LONGEST_SIDE_CM = 274;
 export const MAX_LENGTH_PLUS_GIRTH_CM = 330;
+
+/** Domestic delivery is a van, not a parcel network. */
+export const DOMESTIC_MAX_LONGEST_SIDE_CM = 400;
+export const DOMESTIC_MAX_LENGTH_PLUS_GIRTH_CM = 900;

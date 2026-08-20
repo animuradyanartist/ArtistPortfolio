@@ -30,3 +30,17 @@ export function guessCountry(): string | null {
   } catch { /* older browser */ }
   return null;
 }
+
+/**
+ * Countries in the order a person reads them — by NAME, not by ISO code.
+ *
+ * Sorting by code put "United Arab Emirates, Armenia, Austria, Australia" at the top of the
+ * list, which looks like no order at all to somebody trying to find their own country.
+ * `localeCompare` so accented names land where a reader expects them.
+ */
+export function countryOptions(codes?: readonly string[]): Array<{ code: string; name: string }> {
+  const list = (codes && codes.length ? codes : Object.keys(COUNTRY_NAME))
+    .filter((c) => COUNTRY_NAME[c])
+    .map((code) => ({ code, name: COUNTRY_NAME[code]! }));
+  return list.sort((a, b) => a.name.localeCompare(b.name));
+}

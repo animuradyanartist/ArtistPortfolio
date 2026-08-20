@@ -14,7 +14,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart";
 import { Eyebrow } from "@/components/editorial";
-import { COUNTRY_NAME, guessCountry } from "@/lib/countries";
+import { countryOptions, guessCountry } from "@/lib/countries";
 import { readAttribution, trackBeginCheckout } from "@/lib/commerceAnalytics";
 
 const REGION_REQUIRED = new Set(["US", "CA", "AU"]);
@@ -112,7 +112,7 @@ export default function CheckoutPage() {
               className="w-full bg-transparent border-b border-stone-300 focus:border-stone-800 focus:outline-none py-2 text-stone-900"
               value={country ?? ""} onChange={(e) => { setCountry(e.target.value); cart.setCountry(e.target.value); }}>
               <option value="" disabled>Choose a country</option>
-              {Object.keys(COUNTRY_NAME).sort().map((c) => <option key={c} value={c}>{COUNTRY_NAME[c]}</option>)}
+              {countryOptions().map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
             </select>
             {errors.country && <p className="text-sm text-red-700 mt-1">{errors.country}</p>}
           </div>

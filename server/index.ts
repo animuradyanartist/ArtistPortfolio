@@ -221,6 +221,11 @@ app.use((req, res, next) => {
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS fulfilment_notes text`);
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS reserved_until timestamp`);
       await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS reserved_by_order_id integer`);
+      // Commitments — a work can be available and still not hers to sell.
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS has_commitment boolean DEFAULT false`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS commitment_type text`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS commitment_details text`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS commitment_until text`);
 
       // Orders. Created here for the same reason blog_posts is: the table must exist on a
       // live database nobody migrated, or every commerce request 500s.

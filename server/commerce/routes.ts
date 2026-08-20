@@ -82,6 +82,8 @@ export function registerCommerceRoutes(app: Express): void {
         websiteCurrency: artwork.websiteCurrency ?? null,
         shippingEnabled: artwork.shippingEnabled !== false,
         reservedUntil: artwork.reservedUntil ?? null,
+        hasCommitment: artwork.hasCommitment ?? false,
+        commitmentUntil: artwork.commitmentUntil ?? null,
       });
 
       const currency = currencyOf(artwork);
@@ -139,6 +141,8 @@ export function registerCommerceRoutes(app: Express): void {
           websiteCurrency: a.websiteCurrency ?? null,
           shippingEnabled: a.shippingEnabled !== false,
           reservedUntil: a.reservedUntil ?? null,
+          hasCommitment: a.hasCommitment ?? false,
+          commitmentUntil: a.commitmentUntil ?? null,
         }, now);
         const currency = currencyOf(a);
         return {
@@ -150,6 +154,7 @@ export function registerCommerceRoutes(app: Express): void {
           // Plain words, because this is shown to a buyer, not to an operator.
           unavailableReason: p.purchasable ? null
             : p.reasons.includes("reserved") ? "Currently held by another checkout"
+            : p.reasons.includes("committed") ? "Promised to a gallery or collector"
             : p.reasons.includes("not-available") ? "No longer available"
             : "Not available for direct purchase",
         };

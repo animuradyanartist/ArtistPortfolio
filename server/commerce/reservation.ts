@@ -55,18 +55,28 @@ export async function reserveArtwork(
 
   const { rows } = await pool.query(
     `UPDATE artworks
-        SET reserved_until = now() + ($3 || ' minutes')::interval,
+        SET reserved_until = (now() + ($3 || ' minutes')::interval)::timestamp,
             reserved_by_order_id = $2
       WHERE id = $1
         AND availability = 'available'
         AND direct_sale_enabled = true
         AND website_price_minor IS NOT NULL
         AND website_price_minor > 0
+        -- A promise blocks the sale here too, not only in the eligibility check, so a race
+        -- cannot slip past it. Open-ended (NULL/blank until) keeps blocking.
+        --
+        -- Compared as TEXT, not cast to a date: commitment_until holds an ISO 'YYYY-MM-DD',
+        -- and ISO dates sort lexicographically, so "< today" is exactly "is in the past"
+        -- without a cast that behaves differently across engines.
+        AND (has_commitment IS NOT TRUE
+             OR (commitment_until IS NOT NULL
+                 AND commitment_until <> ''
+                 AND commitment_until < $4))
         AND (reserved_until IS NULL
              OR reserved_until <= now()
              OR reserved_by_order_id = $2)
       RETURNING id`,
-    [artworkId, orderId, String(minutes)],
+    [artworkId, orderId, String(minutes), todayIso()],
   );
 
   if (rows.length === 1) return { ok: true };
@@ -156,4 +166,9 @@ export async function releaseExpiredReservations(): Promise<{ artworksReleased: 
   );
 
   return { artworksReleased: artworksReleased ?? 0, ordersCancelled: ordersCancelled ?? 0 };
+}
+
+/** Today in UTC as 'YYYY-MM-DD', for the lexicographic commitment comparison above. */
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
 }

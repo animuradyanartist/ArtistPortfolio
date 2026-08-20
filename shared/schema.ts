@@ -91,6 +91,30 @@ export const artworks = pgTable("artworks", {
   /** Anything she needs to remember when packing it — "ships unstretched", "frame is loose". */
   fulfilmentNotes: text("fulfilment_notes"),
 
+  // ── COMMITMENTS ──────────────────────────────────────────────────────────────────────
+  //
+  // A work can be technically available and still not hers to sell: promised to a gallery for
+  // a show, held for a collector who asked for first refusal.
+  //
+  // THE NAMES AND SEMANTICS ARE BORROWED DELIBERATELY, not invented. The separate
+  // ani-muradyan-portfolio project already models exactly this as
+  // `hasCommitment` + `commitment { type, details, until }`, and that is the vocabulary she
+  // already uses. Matching it means a future reconciliation of the two systems is a copy
+  // rather than a translation — and means this is not a second, competing idea of what a
+  // commitment is.
+  //
+  // NOT COPIED: `artistPrice` and `retailPrice`. Those are private internal figures belonging
+  // to that project's own commercial workflow. Duplicating them here would create exactly the
+  // parallel pricing model that must not exist — the website sale price is `websitePriceMinor`
+  // and nothing else.
+  hasCommitment: boolean("has_commitment").default(false),
+  /** gallery | collector | other — free text, to stay compatible with the other system. */
+  commitmentType: text("commitment_type"),
+  commitmentDetails: text("commitment_details"),
+  /** ISO date. A commitment past this date no longer blocks a sale. Blank means open-ended,
+   *  which blocks until she clears it — the safe reading of "promised, no end date". */
+  commitmentUntil: text("commitment_until"),
+
   // ── CHECKOUT RESERVATION ─────────────────────────────────────────────────────────────
   //
   // The unique-original guard. `reservedUntil` in the FUTURE means a checkout is holding this

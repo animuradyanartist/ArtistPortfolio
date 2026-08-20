@@ -98,6 +98,8 @@ export async function priceOrder(
         websiteCurrency: a.websiteCurrency ?? null,
         shippingEnabled: a.shippingEnabled !== false,
         reservedUntil: a.reservedUntil ?? null,
+        hasCommitment: a.hasCommitment ?? false,
+        commitmentUntil: a.commitmentUntil ?? null,
       },
       now,
     );

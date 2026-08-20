@@ -29,6 +29,10 @@ export interface PurchasableArtwork {
   shippingEnabled: boolean;
   /** An unexpired reservation held by SOMEBODY ELSE's checkout. */
   reservedUntil?: Date | string | null;
+  /** Promised to a gallery or a collector — available, but not hers to sell. */
+  hasCommitment?: boolean | null;
+  /** ISO date the promise lapses. Blank/absent means open-ended, which keeps blocking. */
+  commitmentUntil?: string | null;
 }
 
 export type NotPurchasableReason =
@@ -37,6 +41,7 @@ export type NotPurchasableReason =
   | "no-currency"
   | "not-available"
   | "reserved"
+  | "committed"
   | "shipping-not-configured";
 
 export interface PurchasabilityResult {
@@ -64,6 +69,8 @@ export function purchasability(
 
   if (isReservationActive(artwork.reservedUntil, now)) reasons.push("reserved");
 
+  if (isCommitmentActive(artwork.hasCommitment, artwork.commitmentUntil, now)) reasons.push("committed");
+
   if (!artwork.shippingEnabled) reasons.push("shipping-not-configured");
 
   return { purchasable: reasons.length === 0, reasons };
@@ -81,6 +88,30 @@ export function isReservationActive(reservedUntil: Date | string | null | undefi
   return until.getTime() > now.getTime();
 }
 
+/**
+ * Is a promise still binding?
+ *
+ * An OPEN-ENDED commitment blocks. "Promised to the gallery, no end date agreed" is exactly
+ * the case where selling it out from under them would be worst, so a missing date is read as
+ * "still promised" rather than as "no promise" — the flag is what she set, and only a date she
+ * has actually passed releases it.
+ *
+ * An unreadable date blocks too, for the same reason.
+ */
+export function isCommitmentActive(
+  hasCommitment: boolean | null | undefined,
+  until: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!hasCommitment) return false;
+  const raw = (until ?? "").trim();
+  if (!raw) return true;
+  const end = new Date(raw);
+  if (Number.isNaN(end.getTime())) return true;
+  // Inclusive of the final day: a commitment "until 2026-09-01" is binding all of that day.
+  return end.getTime() + 24 * 60 * 60 * 1000 > now.getTime();
+}
+
 /** What Admin shows next to the toggle, so she can see what is still missing. */
 export const REASON_LABEL: Record<NotPurchasableReason, string> = {
   "direct-sale-disabled": "Direct sale is off",
@@ -88,5 +119,6 @@ export const REASON_LABEL: Record<NotPurchasableReason, string> = {
   "no-currency": "No currency set",
   "not-available": "Availability is not “available”",
   "reserved": "Held by a checkout in progress",
+  "committed": "Promised to a gallery or collector",
   "shipping-not-configured": "Shipping is not enabled",
 };
