@@ -23,15 +23,33 @@ export default defineConfig({
   // them here makes the diff empty so deploys require ZERO migrations.
   // NOTE: tablesFilter only affects drizzle-kit (push/introspect); drizzle-ORM
   // runtime queries against these tables are unaffected.
-  // `blog_posts` was added here on 2026-08-17 after a production article draft VANISHED
-  // across a republish — the row was gone and the id sequence had restarted at 1, which
-  // only happens on DROP+CREATE or TRUNCATE RESTART IDENTITY. The table is declared in
-  // shared/schema.ts AND created by the boot DDL, so a `db:push` that decides the two have
-  // drifted can recreate it and take every published article with it.
+  // `blog_posts` WAS in this list, and being in it is what nearly destroyed the commerce
+  // schema on 2026-08-20.
   //
-  // Losing a draft during a test is cheap. Losing Ani's published writing is not, and the
-  // failure would be silent — the site would simply serve an empty /blog. The boot DDL
-  // already creates the table and adds every column idempotently, so nothing is lost by
-  // taking drizzle-kit off it entirely.
-  tablesFilter: ["!session", "!path_settings", "!app_migrations", "!blog_posts"],
+  // It was added on 2026-08-17 after a production article draft vanished across a republish,
+  // on the reasoning that taking drizzle-kit off the table entirely was the safe move. It was
+  // the opposite, because the table stayed DECLARED in shared/schema.ts. A table that is
+  // filtered out of the database side but still present on the schema side looks, to
+  // drizzle-kit, like a table that has not been created yet — so every deploy asked:
+  //
+  //     Is blog_posts table created or renamed from another table?
+  //       + blog_posts                  create table
+  //       ~ orders › blog_posts         rename table
+  //       ~ stripe_events › blog_posts  rename table
+  //
+  // It offers every REAL table it cannot account for as a rename candidate. Decline the
+  // renames and `orders` and `stripe_events` become "extra" tables, which is a DROP TABLE
+  // CASCADE — and the commerce columns on `artworks` go the same way. That is the destructive
+  // migration that was cancelled.
+  //
+  // The fix is to stop contradicting ourselves: blog_posts is declared in shared/schema.ts and
+  // created identically by the boot DDL, so drizzle-kit sees the same table on both sides and
+  // the diff is empty. Verified against a database built the way production was — schema
+  // pushed, then boot DDL applied — with rows in blog_posts, orders, stripe_events:
+  // "No changes detected", every row intact.
+  //
+  // The three below remain filtered because they are genuinely NOT declared in
+  // shared/schema.ts. That is the rule this file now follows: a table is either declared and
+  // unfiltered, or filtered and undeclared. Never both.
+  tablesFilter: ["!session", "!path_settings", "!app_migrations"],
 });
