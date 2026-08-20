@@ -259,7 +259,12 @@ export default function ArtworkDetailPage() {
             <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">
               {artwork.title || "Untitled"}
             </h1>
-            <p className="text-sm text-stone-800 mb-8">{priceLine}</p>
+            {/* TWO PRICES ON ONE PAGE IS A PAGE THAT CANNOT BE TRUSTED.
+                When direct sale is on, the purchase panel below states the real price, the
+                shipping and the total. This line — which reads the MARKETPLACE figure, and
+                says "Inquire" when there is none — would sit above it saying something
+                different about the same painting. So it stands down and the panel speaks. */}
+            {!directSale && <p className="text-sm text-stone-800 mb-8">{priceLine}</p>}
 
             {artwork.description && (
               <p className="text-sm leading-relaxed text-stone-700 mb-10 max-w-md">
