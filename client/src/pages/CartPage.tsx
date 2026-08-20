@@ -73,7 +73,7 @@ export default function CartPage() {
         {cart.ids.length === 0 ? (
           <p className="text-stone-600">
             Nothing here yet.{" "}
-            <Link href="/artworks"><a className="border-b border-stone-400 hover:border-stone-800">Browse the paintings</a></Link>.
+            <Link href="/artworks" className="border-b border-stone-400 hover:border-stone-800">Browse the paintings</Link>.
           </p>
         ) : isLoading ? (
           <p className="text-stone-500">Checking availability…</p>
@@ -82,10 +82,8 @@ export default function CartPage() {
             <ul className="border-t border-stone-300">
               {data?.items.map((item) => (
                 <li key={item.id} className="flex gap-6 border-b border-stone-300 py-6">
-                  <Link href={`/artworks/${item.id}`}>
-                    <a className="shrink-0 w-24 h-24 overflow-hidden bg-stone-200/60">
-                      <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
-                    </a>
+                  <Link href={`/artworks/${item.id}`} className="shrink-0 w-24 h-24 overflow-hidden bg-stone-200/60">
+                    <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
                   </Link>
                   <div className="flex-1 min-w-0">
                     <h2 className="font-playfair text-xl text-stone-900">{item.title}</h2>
@@ -99,10 +97,11 @@ export default function CartPage() {
                   <div className="text-right shrink-0 flex flex-col items-end">
                     <p className="text-sm text-stone-900 tabular-nums">{item.priceFormatted ?? "—"}</p>
                     {item.purchasable && data?.checkoutEnabled && (
-                      <Link href={`/checkout?artwork=${item.id}`}>
-                        <a className="mt-3 inline-block bg-stone-900 text-stone-50 px-5 py-2 text-[11px] tracking-[0.18em] uppercase hover:bg-stone-700 transition-colors">
-                          Buy this work
-                        </a>
+                      <Link
+                        href={`/checkout?artwork=${item.id}`}
+                        className="mt-3 inline-block bg-stone-900 text-stone-50 px-5 py-2 text-[11px] tracking-[0.18em] uppercase hover:bg-stone-700 transition-colors"
+                      >
+                        Buy this work
                       </Link>
                     )}
                     <button onClick={() => cart.remove(item.id)}
@@ -135,14 +134,14 @@ export default function CartPage() {
               {data?.totals && "ok" in data.totals && !data.totals.ok && (
                 <p className="text-sm text-amber-700">
                   Shipping for this selection needs a quote.{" "}
-                  <Link href="/contact"><a className="border-b border-stone-400">Contact us</a></Link>.
+                  <Link href="/contact" className="border-b border-stone-400">Contact us</Link>.
                 </p>
               )}
 
               {buyable.length > 0 && data?.checkoutEnabled === false && (
                 <p className="text-sm text-stone-700 leading-relaxed pt-2">
                   Online payment is not open yet.{" "}
-                  <Link href="/contact"><a className="border-b border-stone-400">Enquire about buying</a></Link>.
+                  <Link href="/contact" className="border-b border-stone-400">Enquire about buying</Link>.
                 </p>
               )}
 

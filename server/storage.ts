@@ -31,6 +31,14 @@ import { eq, desc } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 
+/** The columns a URL can be resolved by — deliberately not the whole row. */
+export interface ArtworkAddress {
+  id: number;
+  title: string;
+  slug: string | null;
+  seoSlug: string | null;
+}
+
 export interface IStorage {
   // Users
   getUser(id: number): Promise<User | undefined>;
@@ -39,6 +47,15 @@ export interface IStorage {
 
   // Artworks
   getAllArtworks(): Promise<Artwork[]>;
+  /**
+   * EVERY ADDRESS A PAINTING ANSWERS TO, AND NOTHING ELSE.
+   *
+   * Resolving "/artworks/road-to-tuscany-69" needs four short strings per row. It was being
+   * done with `getAllArtworks()`, which drags every base64 image in the table across the wire
+   * — megabytes, to compare a slug. This is the same lookup with the images left in the
+   * database, and it is the only thing slug resolution is allowed to use.
+   */
+  getArtworkAddressIndex(): Promise<ArtworkAddress[]>;
   getArtwork(id: number): Promise<Artwork | undefined>;
   getArtworkBySeoSlug(seoSlug: string): Promise<Artwork | undefined>;
   createArtwork(artwork: InsertArtwork): Promise<Artwork>;
@@ -378,6 +395,12 @@ export class MemStorage implements IStorage {
 
   async getAllArtworks(): Promise<Artwork[]> {
     return Array.from(this.artworks.values());
+  }
+
+  async getArtworkAddressIndex(): Promise<ArtworkAddress[]> {
+    return Array.from(this.artworks.values()).map((a) => ({
+      id: a.id, title: a.title, slug: a.slug ?? null, seoSlug: a.seoSlug ?? null,
+    }));
   }
 
   async getArtwork(id: number): Promise<Artwork | undefined> {
@@ -851,6 +874,22 @@ export class DatabaseStorage implements IStorage {
 
   async getAllArtworks(): Promise<Artwork[]> {
     return healArtworkOp(() => db.select().from(artworks).orderBy(artworks.position));
+  }
+
+  async getArtworkAddressIndex(): Promise<ArtworkAddress[]> {
+    // Four columns, explicitly named. `select()` with no argument would fetch `images` too,
+    // which is the entire cost this exists to avoid.
+    return healArtworkOp(() =>
+      db
+        .select({
+          id: artworks.id,
+          title: artworks.title,
+          slug: artworks.slug,
+          seoSlug: artworks.seoSlug,
+        })
+        .from(artworks)
+        .orderBy(artworks.position),
+    );
   }
 
   async getArtwork(id: number): Promise<Artwork | undefined> {
