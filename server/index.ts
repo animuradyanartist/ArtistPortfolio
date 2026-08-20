@@ -15,7 +15,13 @@ const app = express();
 // Enable gzip compression for all responses
 app.use(compression());
 
-app.use(express.json({ limit: '100mb' }));
+// Stripe signs the RAW bytes, so a webhook cannot verify against a parsed object. Capturing
+// the buffer here — rather than mounting express.raw ahead of this line — keeps the middleware
+// order untouched for every other route, which all still receive ordinary parsed JSON.
+app.use(express.json({
+  limit: '100mb',
+  verify: (req, _res, buf) => { (req as unknown as { rawBody?: Buffer }).rawBody = buf; },
+}));
 app.use(express.urlencoded({ extended: false, limit: '100mb' }));
 
 // PostgreSQL session store for production compatibility
@@ -192,6 +198,115 @@ app.use((req, res, next) => {
         updated_at timestamp DEFAULT now()
       )`);
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS blog_posts_slug_unique ON blog_posts (slug)`);
+
+      // ── DIRECT WEBSITE SALE ────────────────────────────────────────────────────────────
+      //
+      // Same reasoning as everything above it: these columns are read by every artwork query
+      // once commerce ships, so a database nobody ran `db:push` against would 500 on the
+      // Originals grid. ADD COLUMN IF NOT EXISTS is idempotent and safe to run on every boot.
+      //
+      // NOTHING HERE TOUCHES `price`. The marketplace figure is a separate column in a
+      // separate channel and is not read, written or migrated by any of this.
+      //
+      // Defaults are the closed ones: direct sale OFF, no price. Enabling a work is her
+      // decision in Admin, not a side effect of a deploy.
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS direct_sale_enabled boolean DEFAULT false`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS website_price_minor integer`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS website_currency text DEFAULT 'EUR'`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS shipping_enabled boolean DEFAULT true`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS shipping_override_minor integer`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS shipping_destination_overrides text`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS packed_depth_cm integer`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS packing_margin_cm integer`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS fulfilment_notes text`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS reserved_until timestamp`);
+      await pool.query(`ALTER TABLE artworks ADD COLUMN IF NOT EXISTS reserved_by_order_id integer`);
+
+      // Orders. Created here for the same reason blog_posts is: the table must exist on a
+      // live database nobody migrated, or every commerce request 500s.
+      await pool.query(`CREATE TABLE IF NOT EXISTS orders (
+        id serial PRIMARY KEY,
+        reference text NOT NULL,
+        status text NOT NULL DEFAULT 'pending',
+        payment_status text NOT NULL DEFAULT 'unpaid',
+        buyer_name text,
+        buyer_email text,
+        buyer_phone text,
+        ship_country text,
+        ship_address1 text,
+        ship_address2 text,
+        ship_city text,
+        ship_region text,
+        ship_postal_code text,
+        item_type text NOT NULL DEFAULT 'artwork',
+        artwork_id integer,
+        artwork_snapshot text,
+        item_price_minor integer,
+        currency text NOT NULL DEFAULT 'EUR',
+        shipping_minor integer,
+        total_minor integer,
+        shipping_basis text,
+        shipping_calculation text,
+        stripe_checkout_session_id text,
+        stripe_payment_intent_id text,
+        reserved_at timestamp,
+        reservation_expires_at timestamp,
+        paid_at timestamp,
+        shipping_carrier text,
+        tracking_number text,
+        shipped_at timestamp,
+        delivered_at timestamp,
+        attribution text,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS orders_reference_unique ON orders (reference)`);
+      // Partial, because most orders have no session id yet and NULLs must not collide.
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session_unique
+        ON orders (stripe_checkout_session_id) WHERE stripe_checkout_session_id IS NOT NULL`);
+
+      // The idempotency ledger. The unique index IS the mechanism — a duplicate Stripe
+      // delivery loses the INSERT and does nothing.
+      await pool.query(`CREATE TABLE IF NOT EXISTS stripe_events (
+        id serial PRIMARY KEY,
+        event_id text NOT NULL,
+        type text NOT NULL,
+        received_at timestamp DEFAULT now()
+      )`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS stripe_events_event_id_unique ON stripe_events (event_id)`);
+
+      // Finding the works a sweeper must release, without scanning the catalogue.
+      await pool.query(`CREATE INDEX IF NOT EXISTS artworks_reserved_until_idx ON artworks (reserved_until)`);
+
+      // EXPIRED CHECKOUT HOLDS — released on boot, then on a timer.
+      //
+      // On boot as well as on the interval because a restart during a checkout would
+      // otherwise strand that painting until the first tick. Both paths call the same
+      // idempotent statement, so running them together is harmless.
+      //
+      // This reuses the process that is already serving the site rather than introducing a
+      // scheduler: the work is two UPDATEs a minute against an indexed column. The same sweep
+      // is also exposed at POST /api/commerce/maintenance/release-expired so expiry never
+      // depends on this process having stayed up.
+      try {
+        const { releaseExpiredReservations } = await import("./commerce/reservation");
+        const sweep = async () => {
+          try {
+            const r = await releaseExpiredReservations();
+            if (r.artworksReleased || r.ordersCancelled) {
+              console.log(`[commerce] released ${r.artworksReleased} reservation(s), cancelled ${r.ordersCancelled} order(s)`);
+            }
+          } catch (e) {
+            console.error("[commerce] reservation sweep failed:", e);
+          }
+        };
+        await sweep();
+        const timer = setInterval(sweep, 60_000);
+        // Never hold the process open on this alone.
+        if (typeof timer.unref === "function") timer.unref();
+      } catch (e) {
+        console.error("[commerce] could not start the reservation sweeper:", e);
+      }
       // Who drafted it, and the contract that makes a publication measurable later.
       // Added separately so a database created by the first version still gains them.
       await pool.query(`ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS origin text NOT NULL DEFAULT 'manual'`);

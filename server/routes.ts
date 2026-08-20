@@ -29,6 +29,8 @@ import { checkLoginAllowed, recordLoginFailure, recordLoginSuccess, clientIpOf }
 import { requireBlogAgent, agentFields, agentReadable, agentMayEdit, blogAgentConfigured } from "./blogAgent";
 import { PATH_NARRATIVE } from "@shared/pathNarrative";
 import { buildInfo } from "./buildInfo";
+import { registerCommerceRoutes } from "./commerce/routes";
+import { registerAdminCommerceRoutes } from "./commerce/adminRoutes";
 
 /**
  * Render an article body to crawlable HTML.
@@ -158,6 +160,12 @@ const upload = multer({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Serves base64 DB images as resized, cacheable WebP (see server/images.ts)
   registerImageRoutes(app);
+
+  // Direct artwork sales. Self-contained under /api/commerce/* — nothing above or below
+  // changes behaviour when payment is unconfigured, which is what lets the whole system
+  // ship and be verified before a Stripe key exists.
+  registerCommerceRoutes(app);
+  registerAdminCommerceRoutes(app);
 
   // Any mutation invalidates the in-memory API response cache — both before
   // the handler runs and after it finishes, so a concurrent GET can't
