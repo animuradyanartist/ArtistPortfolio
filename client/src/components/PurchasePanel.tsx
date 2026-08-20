@@ -36,7 +36,8 @@ interface Quote {
     | null;
 }
 
-export function PurchasePanel({ artworkId, marketplaceUrl }: { artworkId: number; marketplaceUrl?: string | null }) {
+export function PurchasePanel({ artworkId, marketplaceUrl, marketplaceLabel = "View on Singulart" }:
+  { artworkId: number; marketplaceUrl?: string | null; marketplaceLabel?: string }) {
   const cart = useCart();
   const [country, setCountry] = useState<string | null>(null);
   const [changing, setChanging] = useState(false);
@@ -143,7 +144,7 @@ export function PurchasePanel({ artworkId, marketplaceUrl }: { artworkId: number
         {shipping && !shipping.ok && (
           <p className="text-sm text-stone-700 leading-relaxed">
             Shipping to this destination needs a quote — {shipping.detail.toLowerCase()}{" "}
-            <Link href="/contact"><a className="border-b border-stone-400 hover:border-stone-800">Ask for a shipping quote</a></Link>.
+            <Link href="/contact" className="border-b border-stone-400 hover:border-stone-800">Ask for a shipping quote</Link>.
           </p>
         )}
       </div>
@@ -154,11 +155,16 @@ export function PurchasePanel({ artworkId, marketplaceUrl }: { artworkId: number
             letting somebody type their address before a 503 is worse than never offering it:
             the price and the shipping estimate below are still true and still useful, so they
             stay — only the action that cannot complete is withheld. */}
+        {/* ONE anchor, not two. `<Link><a>…</a></Link>` rendered a nested pair: an outer anchor
+            with NO href wrapping the real one, so a click landing on the wrapper did nothing at
+            all — and a visitor whose Buy Now appeared dead would reasonably try the marketplace
+            link underneath it. */}
         {shipping?.ok && data.checkoutEnabled ? (
-          <Link href={`/checkout?artwork=${artworkId}`}>
-            <a className="inline-block bg-stone-900 text-stone-50 px-8 py-3 text-[11px] tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors duration-300">
-              Buy now
-            </a>
+          <Link
+            href={`/checkout?artwork=${artworkId}`}
+            className="inline-block bg-stone-900 text-stone-50 px-8 py-3 text-[11px] tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors duration-300"
+          >
+            Buy now
           </Link>
         ) : null}
 
@@ -174,7 +180,7 @@ export function PurchasePanel({ artworkId, marketplaceUrl }: { artworkId: number
       {!data.checkoutEnabled && (
         <p className="mt-6 text-sm text-stone-700 leading-relaxed max-w-md">
           Online payment for this work is not open yet.{" "}
-          <Link href="/contact"><a className="border-b border-stone-400 hover:border-stone-800">Enquire about buying it</a></Link>{" "}
+          <Link href="/contact" className="border-b border-stone-400 hover:border-stone-800">Enquire about buying it</Link>{" "}
           and Ani will arrange it with you directly.
         </p>
       )}
@@ -188,11 +194,12 @@ export function PurchasePanel({ artworkId, marketplaceUrl }: { artworkId: number
         </p>
       )}
 
+      {/* SECONDARY, AND NAMED FOR WHERE IT GOES. Small, quiet, below the duties note, and it
+          says "View on Singulart" rather than anything that could read as buying it here. */}
       {marketplaceUrl && (
         <p className="mt-4 text-xs text-stone-500">
-          Also listed on{" "}
           <a href={marketplaceUrl} target="_blank" rel="noopener noreferrer"
-             className="border-b border-stone-300 hover:border-stone-700">the marketplace</a>.
+             className="border-b border-stone-300 hover:border-stone-700">{marketplaceLabel}</a>
         </p>
       )}
     </section>

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { artworkCommerceDisplay } from "@shared/commerce/display";
 import type { Artwork } from "@shared/schema";
 import { updateCanonicalUrl, updateMetaDescription, artworkPath, generateArtworkAlt } from "@/lib/seo";
 import { ARTWORK_PRICE_CURRENCY } from "@shared/artworkSsr";
@@ -183,11 +184,19 @@ export default function ArtworksPage() {
                           artwork.availability === "available" ? "text-stone-800" : "text-red-600"
                         }`}
                       >
-                        {priceLabel(artwork)}
+                        {/* THE WEBSITE PRICE WINS WHERE DIRECT SALE APPLIES.
+                            The grid showed the Singulart figure — USD 2,420 — beside a work she
+                            had put on sale here for €1,000. Two prices for one painting, and the
+                            wrong one was the loud one. */}
+                        {artworkCommerceDisplay(artwork as never).websitePrice ?? priceLabel(artwork)}
                       </span>
                       <Link href={artworkPath(artwork)}>
                         <span className="text-[10px] tracking-[0.2em] uppercase text-stone-700 border-b border-stone-400 pb-0.5 hover:text-stone-900 hover:border-stone-800 transition-colors">
-                          {artwork.availability === "available" ? "Buy Now" : "View Work"}
+                          {artwork.availability !== "available"
+                          ? "View Work"
+                          : artworkCommerceDisplay(artwork as never).directSale
+                            ? "Buy Now"
+                            : "View Work"}
                         </span>
                       </Link>
                     </div>

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Artwork } from "@shared/schema";
 import { PurchasePanel } from "@/components/PurchasePanel";
+import { artworkCommerceDisplay } from "@shared/commerce/display";
 import {
   updateCanonicalUrl,
   updateMetaDescription,
@@ -156,12 +157,12 @@ export default function ArtworkDetailPage() {
     );
   }
 
-  /** Direct sale is only "on" when it is switched on AND actually priced. */
-  const directSale = Boolean(
-    (artwork as { directSaleEnabled?: boolean }).directSaleEnabled &&
-    typeof (artwork as { websitePriceMinor?: number | null }).websitePriceMinor === "number" &&
-    ((artwork as { websitePriceMinor?: number | null }).websitePriceMinor ?? 0) > 0,
-  );
+  /**
+   * ONE RULE, SHARED WITH THE SERVER. This used to re-derive "is it on direct sale?" inline,
+   * which is exactly how a public page drifts away from what checkout will actually accept.
+   */
+  const commerce = artworkCommerceDisplay(artwork as never);
+  const directSale = commerce.directSale;
 
   const availabilityLabel =
     artwork.availability === "available"
@@ -301,7 +302,8 @@ export default function ArtworkDetailPage() {
             {/* DIRECT SALE, when she has switched it on for this work. The panel renders
                 nothing at all otherwise, so every un-enabled painting keeps exactly the
                 marketplace behaviour it has today (PART 34). */}
-            <PurchasePanel artworkId={artwork.id} marketplaceUrl={artwork.buyLink} />
+            <PurchasePanel artworkId={artwork.id} marketplaceUrl={commerce.marketplaceUrl}
+              marketplaceLabel={commerce.marketplaceLabel} />
 
             {/* The existing marketplace actions, shown when direct sale is NOT the route. */}
             {!directSale && artwork.availability === "available" && (
