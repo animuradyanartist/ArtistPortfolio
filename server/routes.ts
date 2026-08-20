@@ -20,6 +20,7 @@ import {
 } from "@shared/artworkSsr";
 import { isKnownAddressFor, knownAddresses } from "@shared/artworkAddress";
 import { isMissingArtworkPath } from "@shared/artworkNotFound";
+import { isMissingBlogPath } from "@shared/blogNotFound";
 import { measurePrimaryImage } from "./imageDimensions";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
@@ -1917,6 +1918,17 @@ Crawl-delay: 1
               html = html.replace('<div id="root">', ssr + '<div id="root">');
             } else {
               const post = await storage.getBlogPostBySlug(slug);
+
+              // AN ARTICLE THAT DOES NOT EXIST SHOULD SAY SO — the /artworks fix, applied to
+              // the surface it never reached. Answering 200 here made every invented slug a
+              // self-canonical thin page, and left each future article's URL indexable for
+              // the days it spends as a draft. The shell still renders, so a mistyped link
+              // shows the site rather than a bare string.
+              if (isMissingBlogPath(req.path, Boolean(post))) {
+                res.status(404).setHeader('Content-Type', 'text/html');
+                return res.send(html);
+              }
+
               if (post) {
                 const url = `${SEO_BASE_URL}/blog/${post.slug}`;
                 const setMeta = (h: string, sel: string, val: string) => {
