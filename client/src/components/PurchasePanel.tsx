@@ -18,7 +18,7 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart";
 import { trackAddToCart, trackViewItem } from "@/lib/commerceAnalytics";
-import { countryOptions, guessCountry } from "@/lib/countries";
+import { countryOptions, displayCountry, COUNTRY_NAME } from "@/lib/countries";
 
 interface Quote {
   artwork: { id: number; title: string } | null;
@@ -39,11 +39,19 @@ interface Quote {
 export function PurchasePanel({ artworkId, marketplaceUrl }: { artworkId: number; marketplaceUrl?: string | null }) {
   const cart = useCart();
   const [country, setCountry] = useState<string | null>(null);
+  const [changing, setChanging] = useState(false);
 
   // DETECTION IS A CONVENIENCE, NEVER A GATE (PART 5). The locale is a hint; the select below
   // is always available and always wins, and nothing about eligibility depends on either.
+  // NOBODY SHOULD HAVE TO PICK A COUNTRY TO LEARN WHAT SOMETHING COSTS.
+  //
+  // The first version left the select on "Choose a country" whenever detection failed, and
+  // showed no shipping and no total until it was operated — administration before an answer.
+  // `displayCountry` always returns one: the time zone's, else the locale's, else a stated
+  // default. It is a DISPLAY choice only; checkout re-prices from the address typed into the
+  // form, so a wrong guess costs a visitor nothing.
   useEffect(() => {
-    setCountry(cart.country ?? guessCountry());
+    setCountry(displayCountry(cart.country));
   }, [cart.country]);
 
   const { data, isLoading } = useQuery<Quote>({
@@ -88,33 +96,47 @@ export function PurchasePanel({ artworkId, marketplaceUrl }: { artworkId: number
       </div>
 
       <div className="mt-6 space-y-3">
-        <label className="flex items-baseline justify-between gap-4">
-          <span className="text-[11px] tracking-[0.2em] uppercase text-stone-500">Shipping to</span>
-          <select
-            className="bg-transparent text-sm text-stone-800 text-right border-b border-stone-300 focus:border-stone-800 focus:outline-none py-1 max-w-[60%]"
-            value={country ?? ""}
-            onChange={(e) => { setCountry(e.target.value); cart.setCountry(e.target.value); }}
-          >
-            <option value="" disabled>Choose a country</option>
-            {countryOptions(data.supportedCountries).map((c) => (
-              <option key={c.code} value={c.code}>{c.name}</option>
-            ))}
-          </select>
-        </label>
+        {/* The answer first, as a sentence, with the country named in it. The control to change
+            it is one click away and never in the way. */}
+        {!changing ? (
+          <p className="text-sm text-stone-700 leading-relaxed">
+            {shipping?.ok ? (
+              <>
+                Shipping to <span className="text-stone-900">{COUNTRY_NAME[country ?? ""] ?? country}</span>
+                {" — "}
+                {shipping.estimated ? "estimated " : ""}
+                <span className="text-stone-900 tabular-nums">{shipping.amountFormatted}</span>
+              </>
+            ) : (
+              <>Shipping to <span className="text-stone-900">{COUNTRY_NAME[country ?? ""] ?? country}</span></>
+            )}
+            {" "}
+            <button type="button" onClick={() => setChanging(true)}
+              className="text-[11px] tracking-[0.18em] uppercase text-stone-500 hover:text-stone-800 border-b border-stone-300 hover:border-stone-700 ml-1 align-baseline">
+              Change country
+            </button>
+          </p>
+        ) : (
+          <label className="flex items-baseline justify-between gap-4">
+            <span className="text-[11px] tracking-[0.2em] uppercase text-stone-500">Shipping to</span>
+            <select
+              autoFocus
+              className="bg-transparent text-sm text-stone-800 text-right border-b border-stone-300 focus:border-stone-800 focus:outline-none py-1 max-w-[60%]"
+              value={country ?? ""}
+              onChange={(e) => { setCountry(e.target.value); cart.setCountry(e.target.value); setChanging(false); }}
+            >
+              {countryOptions(data.supportedCountries).map((c) => (
+                <option key={c.code} value={c.code}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {shipping?.ok && (
-          <>
-            <div className="flex items-baseline justify-between gap-4">
-              <span className="text-[11px] tracking-[0.2em] uppercase text-stone-500">
-                {shipping.estimated ? "Estimated shipping" : "Shipping"}
-              </span>
-              <span className="text-sm text-stone-800 tabular-nums">{shipping.amountFormatted}</span>
-            </div>
-            <div className="flex items-baseline justify-between gap-4 border-t border-stone-200 pt-3">
-              <span className="text-[11px] tracking-[0.2em] uppercase text-stone-700">Total</span>
-              <span className="text-sm text-stone-900 tabular-nums">{shipping.totalFormatted}</span>
-            </div>
-          </>
+          <div className="flex items-baseline justify-between gap-4 border-t border-stone-200 pt-3">
+            <span className="text-[11px] tracking-[0.2em] uppercase text-stone-700">Estimated total</span>
+            <span className="text-sm text-stone-900 tabular-nums">{shipping.totalFormatted}</span>
+          </div>
         )}
 
         {/* PART 9 — the refusal, said plainly, with a way forward rather than a dead end. */}

@@ -160,3 +160,30 @@ export async function claimStripeEvent(eventId: string, type: string): Promise<b
   );
   return rows.length === 1;
 }
+
+/**
+ * HOW MANY CHECKOUTS HAS THIS BUYER STARTED AND NOT PAID FOR, LATELY?
+ *
+ * The in-memory limiter in routes.ts is per-process, and production demonstrably does not
+ * behave as one process: forty rapid requests to the maintenance route were all served, so
+ * either the app runs on several instances or the bucket does not survive between them.
+ * Either way it cannot be the only thing standing between an abuser and a table full of order
+ * rows, so the guard that matters is backed by the DATABASE, which every instance shares.
+ *
+ * Scoped to the email already stored on the order — no new personal data is collected to make
+ * this work, and no IP address is recorded.
+ *
+ * It counts UNPAID orders only. Somebody who really is buying several paintings pays for them,
+ * and paying clears them from this count.
+ */
+export async function recentUnpaidOrderCount(email: string, minutes = 15): Promise<number> {
+  if (!hasDatabase || !email) return 0;
+  const { rows } = await pool.query(
+    `SELECT count(*)::int AS n FROM orders
+      WHERE lower(buyer_email) = lower($1)
+        AND payment_status = 'unpaid'
+        AND created_at > now() - ($2 || ' minutes')::interval`,
+    [email, String(minutes)],
+  );
+  return rows[0]?.n ?? 0;
+}
