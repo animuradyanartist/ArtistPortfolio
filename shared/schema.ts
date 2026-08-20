@@ -168,6 +168,14 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export const insertArtworkSchema = createInsertSchema(artworks).omit({
   id: true,
+  // SYSTEM-OWNED, and therefore not writable through the artwork editor.
+  //
+  // These two are the unique-original guard. They are set by the conditional UPDATE in
+  // server/commerce/reservation.ts and cleared by payment or expiry. Leaving them in the
+  // admin's accepted shape would mean a save on an unrelated field could release a hold that
+  // a live checkout is relying on — which is precisely the race the guard exists to prevent.
+  reservedUntil: true,
+  reservedByOrderId: true,
 });
 
 export const insertPrintSchema = createInsertSchema(prints).omit({

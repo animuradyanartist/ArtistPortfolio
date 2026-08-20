@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { ArtworkCommerceFields } from "@/components/ArtworkCommerceFields";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
@@ -86,6 +87,19 @@ export default function EditArtworkPage() {
       featured: false,
       availableForPrint: false,
       preferredPrintMaterial: "paper",
+      // Direct website sale. Defaults are the closed ones: a work is not on sale here until
+      // she says so, and enabling it is never a side effect of saving something else.
+      // Widened explicitly: without the annotations TypeScript infers the literal type `null`
+      // from these defaults and then refuses the real values on reset().
+      directSaleEnabled: false,
+      websitePriceMinor: null as number | null,
+      websiteCurrency: "EUR",
+      shippingEnabled: true,
+      shippingOverrideMinor: null as number | null,
+      shippingDestinationOverrides: null as string | null,
+      packedDepthCm: null as number | null,
+      packingMarginCm: null as number | null,
+      fulfilmentNotes: null as string | null,
     },
   });
 
@@ -113,6 +127,17 @@ export default function EditArtworkPage() {
         featured: artwork.featured || false,
         availableForPrint: artwork.availableForPrint || false,
         preferredPrintMaterial: artwork.preferredPrintMaterial || "paper",
+        // `?? ` rather than `|| ` throughout: a legitimate 0 or false must survive the load,
+        // and `|| ` would quietly turn "shipping disabled" back on every time she opened a work.
+        directSaleEnabled: artwork.directSaleEnabled ?? false,
+        websitePriceMinor: artwork.websitePriceMinor ?? null,
+        websiteCurrency: artwork.websiteCurrency ?? "EUR",
+        shippingEnabled: artwork.shippingEnabled ?? true,
+        shippingOverrideMinor: artwork.shippingOverrideMinor ?? null,
+        shippingDestinationOverrides: artwork.shippingDestinationOverrides ?? null,
+        packedDepthCm: artwork.packedDepthCm ?? null,
+        packingMarginCm: artwork.packingMarginCm ?? null,
+        fulfilmentNotes: artwork.fulfilmentNotes ?? null,
       };
       
       console.log('Form data being set:', formData);
@@ -579,6 +604,13 @@ export default function EditArtworkPage() {
                 
                 {/* Print Options Section */}
                 <div className="space-y-4">
+                  <ArtworkCommerceFields
+                    form={artworkForm}
+                    artworkId={artworkId}
+                    dimensions={artworkForm.watch("dimensions") || ""}
+                    availability={artworkForm.watch("availability") || "available"}
+                  />
+
                   <h3 className="text-lg font-semibold text-charcoal">Print Options</h3>
                   
                   <div className="flex items-center space-x-2">
