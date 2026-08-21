@@ -6,6 +6,7 @@ import type { Artwork } from "@shared/schema";
 import { PurchasePanel } from "@/components/PurchasePanel";
 import { artworkCommerceDisplay } from "@shared/commerce/display";
 import { isKnownAddressFor } from "@shared/artworkAddress";
+import { ArtworkMissingError, isMissingResponse, meansArtworkMissing, artworkViewState } from "@shared/artworkAvailability";
 import { useAfterPaint } from "@/lib/afterPaint";
 import {
   updateCanonicalUrl,
@@ -69,17 +70,35 @@ export default function ArtworkDetailPage() {
 
   const preloaded = preloadFor(idParam);
 
-  const { data: artwork, isLoading, error } = useQuery<Artwork>({
+  const { data: fetchedArtwork, isLoading, error } = useQuery<Artwork>({
     queryKey: ["/api/artworks", idParam],
     queryFn: async () => {
       const res = await fetch(`/api/artworks/${idParam}`, { credentials: "include" });
+      // A 404 is the server saying this painting does not exist. Anything else is the server
+      // failing to answer — a different fact, which must not be reported as absence.
+      if (isMissingResponse(res.status)) throw new ArtworkMissingError(idParam);
       if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
       return res.json();
     },
     enabled: !!idParam,
     // Renders immediately from the server's own copy; the fetch still runs and replaces it.
     ...(preloaded ? { placeholderData: preloaded } : {}),
+    // Never retry a definitive 404 — the answer will not change and each retry is a request
+    // against a page that is already correctly not-found.
+    retry: (count, err) => !meansArtworkMissing(err) && count < 2,
   });
+
+  // WHICH PAINTING, IF ANY, THIS PAGE HAS TO SHOW.
+  //
+  // Decided by one shared rule rather than by `error || !artwork`, which treated EVERY failed
+  // request as proof of absence. That is what turned Blue Drift into a soft 404: the fetch
+  // failed once, and the page declared the painting non-existent while the server's own copy
+  // of it sat on `window.__PRELOADED_ARTWORK__`. See shared/artworkAvailability.ts.
+  //
+  // Named `artwork` so everything below reads the painting that is actually being displayed —
+  // the fetched row when there is one, the server's preload when there is not.
+  const view = artworkViewState<Artwork>({ fetched: fetchedArtwork, preloaded, error, isLoading });
+  const artwork = view.show;
 
   // "MORE FROM THE COLLECTION" IS NOT WHY ANYONE OPENED THIS PAGE.
   //
@@ -173,7 +192,7 @@ export default function ArtworkDetailPage() {
   const prevImage = () =>
     setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
 
-  if (isLoading) {
+  if (view.state === "loading") {
     return (
       <div className="min-h-screen bg-[#f5f1ea] flex items-center justify-center">
         <p className="font-playfair italic text-xl text-stone-500">Loading…</p>
@@ -181,7 +200,7 @@ export default function ArtworkDetailPage() {
     );
   }
 
-  if (error || !artwork) {
+  if (view.state === "missing" || !artwork) {
     return (
       <div className="min-h-screen bg-[#f5f1ea] flex items-center justify-center px-6">
         <div className="text-center">
