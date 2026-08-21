@@ -59,7 +59,12 @@ app.set('trust proxy', 1);
 
 app.use(session({
   store: hasDatabase ? new PgStore({
-    pool: pool,
+    // connect-pg-simple is typed against @types/pg, and @neondatabase/serverless 1.x no longer
+    // declares its Pool as structurally identical to it — the TYPES diverged, the runtime
+    // contract did not. The store only ever calls `query()`, which the Neon pool implements as
+    // a drop-in; being pg-compatible over a WebSocket is the entire premise of the driver.
+    // Narrowed to this one property so the rest of the file keeps real type checking.
+    pool: pool as unknown as import('pg').Pool,
     tableName: 'session',
     createTableIfMissing: true,
   }) : undefined,
