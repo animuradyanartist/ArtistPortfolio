@@ -21,6 +21,7 @@ import {
 import { isKnownAddressFor, knownAddresses } from "@shared/artworkAddress";
 import { isMissingArtworkPath } from "@shared/artworkNotFound";
 import { isMissingBlogPath } from "@shared/blogNotFound";
+import { isKnownRouteShape, markNotFoundHtml } from "@shared/publicRoutes";
 import { measurePrimaryImage } from "./imageDimensions";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
@@ -2084,7 +2085,9 @@ Crawl-delay: 1
               // shows the site rather than a bare string.
               if (isMissingBlogPath(req.path, Boolean(post))) {
                 res.status(404).setHeader('Content-Type', 'text/html');
-                return res.send(html);
+                // Was still carrying `index, follow` and a canonical for a URL that does not
+                // exist — the status line saying 404 while every tag inside argued with it.
+                return res.send(markNotFoundHtml(html));
               }
 
               if (post) {
@@ -2222,7 +2225,29 @@ Crawl-delay: 1
             // URL sees the site rather than a bare string.
             if (isMissingArtworkPath(req.path, Boolean(artwork))) {
               res.status(404).setHeader('Content-Type', 'text/html');
-              return res.send(html);
+              return res.send(markNotFoundHtml(html));
+            }
+
+            // A PATH THE APPLICATION DOES NOT ROUTE IS NOT A PAGE.
+            //
+            // This is the last thing between an arbitrary string and a 200. Everything with a
+            // claim has already made it: assets and /api never reach this handler, /img,
+            // robots and the sitemaps are routed above it, /prints is redirected above it,
+            // and a bare slug has just been resolved against the artwork table on the line
+            // above — so `artwork` being set is the data saying yes.
+            //
+            // What is left is /completely-made-up-page, /about/sub/page, /gallery/x and every
+            // other string a crawler cares to try. They used to answer 200, self-canonical,
+            // `index, follow`, on an empty body: an unbounded family of soft 404s, each one
+            // asserting it was a page.
+            //
+            // The shell still renders, so a person who mistypes a URL sees the site and its
+            // navigation rather than a bare string — the same choice the artwork and blog
+            // 404s already make. Only the status line, the canonical and the robots tag
+            // change, which is precisely the part a crawler reads.
+            if (!artwork && !isKnownRouteShape(req.path)) {
+              res.status(404).setHeader('Content-Type', 'text/html');
+              return res.send(markNotFoundHtml(html));
             }
 
             if (artwork) {
