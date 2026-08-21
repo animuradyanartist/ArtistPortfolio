@@ -28,6 +28,7 @@ import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "
 import { checkLoginAllowed, recordLoginFailure, recordLoginSuccess, clientIpOf } from "./loginRateLimit";
 import { requireBlogAgent, agentFields, agentReadable, agentMayEdit, blogAgentConfigured } from "./blogAgent";
 import { PATH_NARRATIVE } from "@shared/pathNarrative";
+import { renderAboutHtml, renderExhibitionsHtml, renderGalleryHtml, renderContactHtml } from "./staticPagePrerender";
 import { buildInfo } from "./buildInfo";
 import { registerCommerceRoutes } from "./commerce/routes";
 import { registerAdminCommerceRoutes } from "./commerce/adminRoutes";
@@ -1673,6 +1674,26 @@ Crawl-delay: 1
     }
   });
 
+  // /prints AND EVERYTHING UNDER IT — an unbounded supply of indexable empty pages.
+  //
+  // There has never been a server route for these. They fell through to the catch-all, which
+  // could not resolve them to an artwork ('prints' is in RESERVED_PATHS) and does not treat
+  // them as missing (isMissingArtworkPath only fires under /artworks/), so EVERY path under
+  // /prints answered 200 with an empty shell and a self-canonical — /prints/anything-at-all
+  // included. robots.txt explicitly Allows /prints and /prints/*, and the sitemap deliberately
+  // excludes them, so the only thing telling a crawler these pages are not real was nothing.
+  // That is an infinite soft-404 surface on a site whose whole indexing problem is soft 404s.
+  //
+  // The app has ALREADY decided what these URLs mean: App.tsx routes both to <Redirect to="/">.
+  // This is that same decision, made where a crawler can see it. A human lands on the home page
+  // exactly as before — the difference is that the redirect now costs one hop instead of a
+  // page-load-and-run-JavaScript, and Google is told the URL is not a destination.
+  //
+  // 301 rather than 404 because the client's own answer is "go home", not "does not exist";
+  // a permanent redirect matches that and consolidates any signal these URLs ever accrued.
+  // Registered OUTSIDE the production block so dev and production agree.
+  app.get(['/prints', '/prints/*'], (_req, res) => res.redirect(301, '/'));
+
   // Production: serve static assets + inject correct canonical URL per page
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.resolve(process.cwd(), 'dist/public');
@@ -1888,6 +1909,13 @@ Crawl-delay: 1
             description:
               "The story behind the work, in the artist's own words: inner weight, open space and transformation, told in three chapters \u2014 by Armenian contemporary painter Ani Muradyan.",
           },
+          // Exactly what AboutPage.tsx sets client-side, so the served and rendered titles
+          // cannot drift. /about was the only prerendered page with no server-side title.
+          "/about": {
+            title: "About Ani Muradyan | Contemporary Armenian Artist",
+            description:
+              "Learn about Ani Muradyan, a contemporary Armenian oil painter. Biography, artist statement, education, and exhibition history.",
+          },
           "/exhibitions": {
             title: "Exhibitions \u2014 Ani Muradyan",
             description: "Where the work has been shown. Exhibitions and showings by Armenian contemporary oil painter Ani Muradyan.",
@@ -1944,6 +1972,51 @@ Crawl-delay: 1
             `<p><a href="/artworks" style="color:#1d4ed8;text-decoration:underline">See all original paintings</a> \u00b7 <a href="/about" style="color:#1d4ed8;text-decoration:underline">About Ani Muradyan</a></p>` +
             `</section>`;
           html = html.replace('<div id="root"></div>', `<div id="root">${homeSsr}</div>`);
+        }
+
+        // THE FOUR PAGES A CRAWLER COULD NOT READ AT ALL.
+        //
+        // /about, /exhibitions, /gallery and /contact are in the sitemap, answer 200 and say
+        // `index, follow` — and their body was `<div id="root"></div>`. Zero words, no <h1>,
+        // nothing. A 200 with an empty body is what Google classifies as a SOFT 404, and it
+        // reported exactly that on 21 August 2026. /gallery is also the declared host page for
+        // 16 of the 208 images in the image sitemap, and Google Images will not index an image
+        // whose host page it cannot index — so the photographs went down with the page.
+        //
+        // INSIDE #root, like /path and /artworks/:slug: createRoot() replaces the container's
+        // own children on first render, so this is a pre-hydration fallback that removes
+        // itself. No client-side remover is needed and nothing is duplicated after React
+        // mounts — the homepage learned that the expensive way, see the note above.
+        //
+        // The markup lives in ./staticPagePrerender as pure functions, because the local
+        // sample store has no gallery photographs: the branch that emits <img> and its alt
+        // text cannot be reached by running the server, so it is covered by tests instead.
+        if (['/about', '/exhibitions', '/gallery', '/contact'].includes(req.path)) {
+          try {
+            let ssr = '';
+            if (req.path === '/about') {
+              const [bio, exhibitions] = await Promise.all([
+                storage.getArtistBio(),
+                storage.getAllExhibitions(),
+              ]);
+              ssr = renderAboutHtml(bio, exhibitions);
+            } else if (req.path === '/exhibitions') {
+              ssr = renderExhibitionsHtml(await storage.getAllExhibitions());
+            } else if (req.path === '/gallery') {
+              // Through the SAME helper /api/gallery-photos uses, so the src is the URL the
+              // React page renders. This PR does not touch image URL or cache-busting.
+              ssr = renderGalleryHtml(
+                refifyImageFieldList('gallery', await storage.getAllGalleryPhotos(), 'image'),
+              );
+            } else {
+              ssr = renderContactHtml();
+            }
+            html = html.replace('<div id="root"></div>', `<div id="root">${ssr}</div>`);
+          } catch (e) {
+            // A prerender is an enhancement. If the data read fails the page must still be
+            // served — the shell it falls back to is exactly what shipped before this block.
+            console.error(`[SSR] ${req.path} prerender failed:`, e);
+          }
         }
 
         // PATH: her strongest first-party writing, and it was reaching nobody.
