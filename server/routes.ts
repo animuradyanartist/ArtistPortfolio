@@ -1917,6 +1917,35 @@ Crawl-delay: 1
           }
         }
 
+        // HOME: her name resolves here, and a crawler was reading nothing.
+        //
+        // / is client-rendered, so a crawl returned the shell: 0 words and no <h1> on the one
+        // page 147 of 147 Search Console impressions land on.
+        //
+        // INSIDE #root, NOT BEFORE IT. The first version of this block was concatenated ahead
+        // of <div id="root">, on the reasoning that "React replaces it on mount". React does
+        // no such thing — createRoot() only ever replaces the CONTAINER'S OWN CHILDREN, so a
+        // sibling above the container is permanent. It rendered as a visible unstyled band
+        // above the real header, with a second <h1>, for every human visitor.
+        //
+        // Two patterns in this file solve that, and this is the one with no moving parts:
+        // /path and /artworks/:slug put their prerender INSIDE the container, where the first
+        // client render wipes it. (/artworks and /blog use the other pattern — before #root
+        // plus an explicit .remove() in the React page — because there the block doubles as a
+        // loading fallback until data arrives. The home page has no such data wait, so it
+        // does not need a client-side remover, and one it does not need is one that can fail.)
+        //
+        // Copy, markup and styling are byte-for-byte what shipped; only the placement moved.
+        if (req.path === "/") {
+          const homeSsr =
+            `<section id="prerender-home" style="padding:3rem 1.5rem;max-width:820px;margin:0 auto;font-family:system-ui,sans-serif">` +
+            `<h1 style="font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem">Ani Muradyan</h1>` +
+            `<p style="font-size:1.1rem;line-height:1.7;color:#475569;margin-bottom:1.5rem">Ani Muradyan is an Armenian contemporary oil painter creating figurative works and landscapes \u2014 original oil paintings on canvas, available to collectors.</p>` +
+            `<p><a href="/artworks" style="color:#1d4ed8;text-decoration:underline">See all original paintings</a> \u00b7 <a href="/about" style="color:#1d4ed8;text-decoration:underline">About Ani Muradyan</a></p>` +
+            `</section>`;
+          html = html.replace('<div id="root"></div>', `<div id="root">${homeSsr}</div>`);
+        }
+
         // PATH: her strongest first-party writing, and it was reaching nobody.
         //
         // /path is client-rendered, so a crawl of it returns the same 39-character shell
@@ -1925,11 +1954,6 @@ Crawl-delay: 1
         // rendered here from `shared/pathNarrative.ts`, the same source the React page is
         // checked against, so crawlers are served her words rather than a summary written
         // for them.
-        // Serve this page's own published words to a crawler that never runs the script.
-        // Prepended to #root, which React replaces on mount — the design is unchanged.
-        if (req.path === "/") {
-          html = html.replace('<div id="root">', "<section id=\"prerender-home\" style=\"padding:3rem 1.5rem;max-width:820px;margin:0 auto;font-family:system-ui,sans-serif\"><h1 style=\"font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem\">Ani Muradyan</h1><p style=\"font-size:1.1rem;line-height:1.7;color:#475569;margin-bottom:1.5rem\">Ani Muradyan is an Armenian contemporary oil painter creating figurative works and landscapes — original oil paintings on canvas, available to collectors.</p><p><a href=\"/artworks\" style=\"color:#1d4ed8;text-decoration:underline\">See all original paintings</a> · <a href=\"/about\" style=\"color:#1d4ed8;text-decoration:underline\">About Ani Muradyan</a></p></section>" + '<div id="root">');
-        }
         if (req.path === '/path') {
           try {
             const esc = (t: string) => String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
