@@ -1925,6 +1925,11 @@ Crawl-delay: 1
         // rendered here from `shared/pathNarrative.ts`, the same source the React page is
         // checked against, so crawlers are served her words rather than a summary written
         // for them.
+        // Serve this page's own published words to a crawler that never runs the script.
+        // Prepended to #root, which React replaces on mount — the design is unchanged.
+        if (req.path === "/") {
+          html = html.replace('<div id="root">', "<section id=\"prerender-home\" style=\"padding:3rem 1.5rem;max-width:820px;margin:0 auto;font-family:system-ui,sans-serif\"><h1 style=\"font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem\">Ani Muradyan</h1><p style=\"font-size:1.1rem;line-height:1.7;color:#475569;margin-bottom:1.5rem\">Ani Muradyan is an Armenian contemporary oil painter creating figurative works and landscapes — original oil paintings on canvas, available to collectors.</p><p><a href=\"/artworks\" style=\"color:#1d4ed8;text-decoration:underline\">See all original paintings</a> · <a href=\"/about\" style=\"color:#1d4ed8;text-decoration:underline\">About Ani Muradyan</a></p></section>" + '<div id="root">');
+        }
         if (req.path === '/path') {
           try {
             const esc = (t: string) => String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
