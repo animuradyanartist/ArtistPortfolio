@@ -2132,7 +2132,24 @@ Crawl-delay: 1
                 html = html.replace('</head>',
                   `  <script type="application/ld+json">${JSON.stringify(jsonld).replace(/<\/script>/gi, '<\\/script>')}</script>\n</head>`);
                 const bodyArtworks = await storage.getAllArtworks().catch(() => []);
-                html = html.replace('<div id="root">', renderArticleHtml(post, esc, bodyArtworks as never) + '<div id="root">');
+                // INSIDE #root, NOT BEFORE IT.
+                //
+                // This was concatenated ahead of <div id="root">, where nothing ever removed
+                // it. React's createRoot() replaces the CONTAINER'S OWN CHILDREN, so a sibling
+                // above the container is permanent: every reader of an article got the whole
+                // piece twice — two identical <h1>s and roughly 5,000px of duplicated body —
+                // and search engines got a page whose main content is stated twice.
+                //
+                // /blog (the listing) uses the other pattern on purpose: it stays outside
+                // #root and BlogPage.tsx removes #blog-ssr once real posts have loaded, so it
+                // doubles as a loading fallback. An article has no such wait — the server
+                // already has the post — so it takes the /path and /artworks/:slug approach
+                // instead, where the first client render clears it and no client-side remover
+                // has to exist, let alone be remembered.
+                //
+                // The article HTML, its JSON-LD (injected into </head> above), the canonical
+                // and every image are untouched. Only the insertion point moved.
+                html = html.replace('<div id="root"></div>', `<div id="root">${renderArticleHtml(post, esc, bodyArtworks as never)}</div>`);
               }
             }
           } catch (e) {
