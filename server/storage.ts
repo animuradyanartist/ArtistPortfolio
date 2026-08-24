@@ -2,7 +2,6 @@ import { users, artworks, prints, exhibitions, homepageSettings, artistBio, feed
 import { pathSettings, type PathSettings, type InsertPathSettings } from "@shared/pathSchema";
 import { collectors, type Collector, messages, type Message, type InsertMessage } from "@shared/schema";
 import { blogPosts, type BlogPost, type InsertBlogPost } from "@shared/schema";
-import { withEditorialArticles, editorialArticleBySlug } from "@shared/editorialArticles";
 import { db, pool } from "./db";
 
 // Self-heal for schema-added artworks columns (`category`, `seo_slug`): if an
@@ -681,19 +680,15 @@ export class MemStorage implements IStorage {
   private currentBlogPostId = 1;
 
   async getBlogPosts(opts: { includeDrafts?: boolean } = {}): Promise<BlogPost[]> {
-    const db = this.blogPosts.filter((p) => opts.includeDrafts || p.status === "published");
-    // First-party editorial articles (code, not database) render through the same blog path.
-    // Gated out under VITEST for the same reason the preview snapshot is: blog.test.ts proves
-    // the draft-leak invariant against an empty fresh store, and that proof must not depend on
-    // whatever code articles happen to ship.
-    return process.env.VITEST ? db : withEditorialArticles(db, opts.includeDrafts);
+    return this.blogPosts
+      .filter((p) => opts.includeDrafts || p.status === "published")
+      .sort((a, b) => (b.publishedAt ?? b.createdAt!).getTime() - (a.publishedAt ?? a.createdAt!).getTime());
   }
 
   async getBlogPostBySlug(slug: string, opts: { includeDrafts?: boolean } = {}): Promise<BlogPost | undefined> {
     const post = this.blogPosts.find((p) => p.slug === slug);
-    if (post) return opts.includeDrafts || post.status === "published" ? post : undefined;
-    // A first-party editorial article (code, not a row) resolves here too.
-    return process.env.VITEST ? undefined : editorialArticleBySlug(slug);
+    if (!post) return undefined;
+    return opts.includeDrafts || post.status === "published" ? post : undefined;
   }
 
   async getBlogPostById(id: number): Promise<BlogPost | undefined> {
@@ -1164,18 +1159,17 @@ export class DatabaseStorage implements IStorage {
     const rows = opts.includeDrafts
       ? await db.select().from(blogPosts)
       : await db.select().from(blogPosts).where(eq(blogPosts.status, "published"));
-    const sorted = rows.sort((a, b) => {
+    return rows.sort((a, b) => {
       const at = (a.publishedAt ?? a.createdAt)?.getTime() ?? 0;
       const bt = (b.publishedAt ?? b.createdAt)?.getTime() ?? 0;
       return bt - at;
     });
-    return process.env.VITEST ? sorted : withEditorialArticles(sorted, opts.includeDrafts);
   }
 
   async getBlogPostBySlug(slug: string, opts: { includeDrafts?: boolean } = {}): Promise<BlogPost | undefined> {
     const [row] = await db.select().from(blogPosts).where(eq(blogPosts.slug, slug));
-    if (row) return opts.includeDrafts || row.status === "published" ? row : undefined;
-    return process.env.VITEST ? undefined : editorialArticleBySlug(slug);
+    if (!row) return undefined;
+    return opts.includeDrafts || row.status === "published" ? row : undefined;
   }
 
   async getBlogPostById(id: number): Promise<BlogPost | undefined> {
