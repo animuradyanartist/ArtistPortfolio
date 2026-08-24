@@ -53,6 +53,7 @@ const EXACT_ROUTES: ReadonlySet<string> = new Set([
 /** Families with one dynamic segment. Anchored, and `[^/]+` so they cannot match deeper. */
 const DYNAMIC_ROUTES: readonly RegExp[] = [
   /^\/artworks\/[^/]+$/,
+  /^\/collections\/[^/]+$/,
   /^\/blog\/[^/]+$/,
   // Redirected to / by a route registered before the catch-all, so these never reach it.
   // Listed anyway so this stays a complete statement of what the app routes.

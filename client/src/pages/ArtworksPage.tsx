@@ -95,6 +95,9 @@ export default function ArtworksPage() {
           Original oil paintings on canvas — figurative works and landscapes, each made to hold a
           quiet moment. Available pieces can be inquired about directly.
         </p>
+        <p className="mx-auto max-w-xl text-sm text-stone-500 mt-4">
+          Browse the <Link href="/collections/landscape-paintings"><span className="underline hover:text-stone-800">contemporary landscape paintings</span></Link>.
+        </p>
       </section>
 
       {/* ── Category tabs + availability filters ───────────── */}

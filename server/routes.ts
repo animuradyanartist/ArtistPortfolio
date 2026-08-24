@@ -22,6 +22,8 @@ import { isKnownAddressFor, knownAddresses } from "@shared/artworkAddress";
 import { isMissingArtworkPath } from "@shared/artworkNotFound";
 import { isMissingBlogPath } from "@shared/blogNotFound";
 import { isKnownRouteShape, markNotFoundHtml } from "@shared/publicRoutes";
+import { collectionBySlug, collectionMembers, COLLECTIONS } from "@shared/collections";
+import { renderCollectionHtml, collectionJsonLd, type CollectionRenderWork } from "@shared/collectionPrerender";
 import { measurePrimaryImage } from "./imageDimensions";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
@@ -1468,7 +1470,9 @@ Crawl-delay: 1
         { url: '/path', priority: '0.8', changefreq: 'monthly' },
         { url: '/exhibitions', priority: '0.8', changefreq: 'monthly' },
         { url: '/gallery', priority: '0.8', changefreq: 'monthly' },
-        { url: '/contact', priority: '0.7', changefreq: 'monthly' }
+        { url: '/contact', priority: '0.7', changefreq: 'monthly' },
+        // Buyer-intent collection landing pages — commercial-intent surfaces, high priority.
+        ...COLLECTIONS.map((c) => ({ url: `/collections/${c.slug}`, priority: '0.9', changefreq: 'weekly' as const })),
       ];
 
       let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -2049,6 +2053,63 @@ Crawl-delay: 1
             html = html.replace('<div id="root"></div>', `<div id="root">${ssr}</div>`);
           } catch (e) {
             console.error('[SSR] /path prerender failed:', e);
+          }
+        }
+
+        // COLLECTION LANDING PAGES — /collections/:slug.
+        //
+        // A buyer searches for what they want to hang, not for whose name it is, and Search
+        // Console shows this property appears for exactly one thing: the artist's own name.
+        // These pages are the missing commercial surfaces — an indexable URL per slice of the
+        // catalogue a buyer with intent would look for ("contemporary landscape paintings"),
+        // backed by the actual available works so it is a shop, not a doorway. Prerendered
+        // INSIDE #root like /path and /artworks/:slug, with CollectionPage + ItemList structured
+        // data so the collection is a fact a search engine and an AI assistant can read.
+        if (req.path.startsWith('/collections/')) {
+          const slug = req.path.slice('/collections/'.length).split('?')[0].split('#')[0];
+          const def = collectionBySlug(slug);
+          if (def) {
+            try {
+              const esc = (t: unknown) => String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+              const all = await storage.getAllArtworks().catch(() => []);
+              const members = collectionMembers(def, all as never[]);
+              const works: CollectionRenderWork[] = (members as any[]).map((a) => {
+                const raw = Array.isArray(a.images) && a.images[0] ? String(a.images[0]) : '';
+                const image = raw && /^https?:\/\//i.test(raw) ? raw : `${SEO_BASE_URL}/img/artwork/${a.id}/0`;
+                const priceLabel = a.availability === 'available' && a.price
+                  ? `${ARTWORK_PRICE_CURRENCY} ${Number(a.price).toLocaleString('en-US')}`
+                  : null;
+                return {
+                  title: String(a.title ?? ''),
+                  href: artworkCanonicalPath(a),
+                  image,
+                  medium: String(a.medium || 'Oil on Canvas'),
+                  dimensions: String(a.dimensions ?? ''),
+                  availability: String(a.availability ?? ''),
+                  priceLabel,
+                };
+              });
+              // Title + description, matching the constant the React page sets, so served and
+              // rendered <title> cannot drift (the /artworks lesson).
+              html = html.replace(/<title>[^<]*<\/title>/i, `<title>${esc(def.title)}</title>`);
+              const putMeta = (h: string, sel: string, val: string) => {
+                const re = new RegExp(`(<meta\\s+${sel}\\s+content=")[^"]*(">)`, 'i');
+                return re.test(h) ? h.replace(re, `$1${esc(val)}$2`) : h;
+              };
+              html = putMeta(html, 'name="description"', def.metaDescription);
+              html = putMeta(html, 'property="og:title"', def.title);
+              html = putMeta(html, 'property="og:description"', def.metaDescription);
+              html = html.replace('</head>', `  ${collectionJsonLd(def, works, SEO_BASE_URL)}\n</head>`);
+              html = html.replace('<div id="root"></div>', `<div id="root">${renderCollectionHtml(def, works)}</div>`);
+            } catch (e) {
+              console.error(`[SSR] /collections/${slug} prerender failed:`, e);
+            }
+          } else {
+            // A /collections/<slug> that names no real collection is not a page. Without this
+            // it would inherit the SPA shell as a 200 (its shape is "known") — the unbounded
+            // soft-404 the route-shape guard exists to prevent, arriving one level deeper.
+            res.status(404).setHeader('Content-Type', 'text/html');
+            return res.send(markNotFoundHtml(html));
           }
         }
 
