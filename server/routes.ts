@@ -36,6 +36,7 @@ import { PATH_NARRATIVE } from "@shared/pathNarrative";
 import { renderAboutHtml, renderExhibitionsHtml, renderGalleryHtml, renderContactHtml } from "./staticPagePrerender";
 import { buildInfo } from "./buildInfo";
 import { registerCommerceRoutes } from "./commerce/routes";
+import { registerTestCheckoutRoutes } from "./commerce/testCheckout";
 import { registerAdminCommerceRoutes } from "./commerce/adminRoutes";
 
 /**
@@ -189,6 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // changes behaviour when payment is unconfigured, which is what lets the whole system
   // ship and be verified before a Stripe key exists.
   registerCommerceRoutes(app);
+  registerTestCheckoutRoutes(app);
   registerAdminCommerceRoutes(app);
 
   // Any mutation invalidates the in-memory API response cache — both before
@@ -1431,6 +1433,7 @@ Allow: /contact
 
 Disallow: /admin
 Disallow: /api
+Disallow: /__test-purchase
 
 Sitemap: ${SEO_BASE_URL}/sitemap.xml
 Sitemap: ${SEO_BASE_URL}/image-sitemap.xml
