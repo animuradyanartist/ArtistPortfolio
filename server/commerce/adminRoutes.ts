@@ -14,11 +14,12 @@ import { hasDatabase } from "../db";
 import {
   listOrders, getOrder, setOrderStatus, setFulfilmentDetails,
   setExceptionState, setCustomerMessage, setInternalNotes,
+  markOrderPaid, setPaymentSource, recordPaymentCheck, logOrderAudit, listOrderAudit,
 } from "./orders";
-import { releaseExpiredReservations } from "./reservation";
-import { stripeMode } from "./stripeClient";
+import { releaseExpiredReservations, markSold } from "./reservation";
+import { stripeMode, stripeClient } from "./stripeClient";
 import {
-  sendShippedEmail, sendDeliveredEmail, sendPreparingEmail, sendManualUpdate,
+  sendOrderConfirmation, sendShippedEmail, sendDeliveredEmail, sendPreparingEmail, sendManualUpdate,
   resendConfirmation, listOrderEmails, emailConfigured,
 } from "../email";
 import { ADMIN_SETTABLE, nextStatuses, isExceptionState, type OrderStatus, type ExceptionState } from "@shared/commerce/orderStatus";
@@ -78,6 +79,8 @@ export function registerAdminCommerceRoutes(app: Express): void {
         // The email ledger for this order, and whether the mailer is configured at all.
         emails: await listOrderEmails(order.id),
         emailConfigured: emailConfigured(),
+        // The audit trail (reconciliation actions), so Admin sees who moved payment and why.
+        audit: await listOrderAudit(order.id),
       });
     } catch {
       res.status(500).json({ message: "Could not load this order." });
@@ -198,6 +201,98 @@ export function registerAdminCommerceRoutes(app: Express): void {
       res.json({ ok: result.status !== "failed", result });
     } catch {
       res.status(500).json({ message: "Could not send the email." });
+    }
+  });
+
+  // ── PAYMENT: read-only Stripe check ────────────────────────────────────────────────────
+  // Query Stripe server-side for this order's real payment state, cache it, stamp the check
+  // time. Marks NOTHING — it only lets Admin SEE Stripe's truth before deciding to reconcile.
+  app.post("/api/admin/orders/:id/check-payment", requireAdminAuth, async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      const order = await getOrder(id);
+      if (!order) return res.status(404).json({ message: "Not found" });
+      if (!order.stripe_checkout_session_id) {
+        return res.json({ ok: true, stripePaymentStatus: null, note: "This order has no Stripe checkout session." });
+      }
+      const stripe = stripeClient();
+      if (!stripe) return res.status(503).json({ message: "Stripe is not configured." });
+      let session;
+      try {
+        session = await stripe.checkout.sessions.retrieve(order.stripe_checkout_session_id, { expand: ["payment_intent"] });
+      } catch {
+        return res.status(502).json({ message: "Could not reach Stripe to check this payment." });
+      }
+      const stripeStatus = session.payment_status ?? null;
+      const pi = session.payment_intent;
+      const piStatus = pi && typeof pi === "object" ? pi.status : null;
+      await recordPaymentCheck(id, stripeStatus);
+      return res.json({
+        ok: true, stripePaymentStatus: stripeStatus, paymentIntentStatus: piStatus,
+        orderPaymentStatus: order.payment_status,
+      });
+    } catch {
+      return res.status(500).json({ message: "Could not check payment." });
+    }
+  });
+
+  // ── PAYMENT: reconcile (EMERGENCY fallback for a failed webhook) ─────────────────────────
+  //
+  // Payment is Stripe's fact, so this NEVER trusts a button: it retrieves the Checkout Session
+  // server-side, and only if Stripe itself says `paid` does it run the SAME idempotent flow the
+  // webhook runs — markOrderPaid → markSold → exactly one confirmation email. The webhook code
+  // is untouched; this simply reuses its helpers. markOrderPaid is atomic and once-only, so if
+  // the webhook arrives before or after, exactly one of the two does the work; the email is
+  // dedupe-guarded on top of that. An unpaid/failed Stripe payment can never be marked paid here.
+  app.post("/api/admin/orders/:id/reconcile", requireAdminAuth, async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      const order = await getOrder(id);
+      if (!order) return res.status(404).json({ message: "Not found" });
+      if (!order.stripe_checkout_session_id) {
+        return res.status(409).json({ message: "This order has no Stripe checkout session to reconcile." });
+      }
+      const stripe = stripeClient();
+      if (!stripe) return res.status(503).json({ message: "Stripe is not configured." });
+
+      let session;
+      try {
+        session = await stripe.checkout.sessions.retrieve(order.stripe_checkout_session_id, { expand: ["payment_intent"] });
+      } catch (e) {
+        await logOrderAudit(id, "reconcile", "error", `Stripe retrieve failed: ${e instanceof Error ? e.message : "unknown"}`);
+        return res.status(502).json({ message: "Could not reach Stripe to check this payment." });
+      }
+
+      const stripeStatus = session.payment_status ?? null; // 'paid' | 'unpaid' | 'no_payment_required'
+      const pi = session.payment_intent;
+      const piStatus = pi && typeof pi === "object" ? pi.status : null;
+      const piId = pi && typeof pi === "object" ? pi.id : (typeof pi === "string" ? pi : null);
+      await recordPaymentCheck(id, stripeStatus);
+
+      // Guard: never mark an unpaid/failed Stripe payment as paid.
+      if (stripeStatus !== "paid") {
+        await logOrderAudit(id, "reconcile", "not-paid", `Stripe payment_status=${stripeStatus}${piStatus ? `, payment_intent=${piStatus}` : ""}`);
+        return res.json({ ok: false, reason: "not-paid", stripePaymentStatus: stripeStatus, paymentIntentStatus: piStatus });
+      }
+
+      // The same once-only post-payment flow as the webhook.
+      const wasFirst = await markOrderPaid(order.id, piId);
+      let email: { status: string; reason?: string } | null = null;
+      if (wasFirst) {
+        if (order.artwork_id) await markSold(order.artwork_id, order.id); // also clears the reservation
+        await setPaymentSource(order.id, "reconcile");
+        const paidOrder = await getOrder(order.id);
+        if (paidOrder) email = await sendOrderConfirmation(paidOrder); // dedupe-guarded → exactly one
+      }
+      await logOrderAudit(
+        id, "reconcile", wasFirst ? "paid-by-reconcile" : "already-paid",
+        wasFirst
+          ? `Stripe confirmed paid; order marked paid, artwork sold, confirmation email: ${email?.status ?? "n/a"}.`
+          : "Stripe confirms paid; order was already paid (webhook or a prior reconcile) — no change made.",
+      );
+      return res.json({ ok: true, wasFirst, stripePaymentStatus: "paid", paymentIntentStatus: piStatus, email });
+    } catch {
+      return res.status(500).json({ message: "Reconciliation failed." });
     }
   });
 
