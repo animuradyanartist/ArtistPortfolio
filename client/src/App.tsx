@@ -9,6 +9,7 @@ import { updateCanonicalUrl } from "@/lib/seo";
 import HomePage from "@/pages/HomePage";
 import ArtworksPage from "@/pages/ArtworksPage";
 import ArtworkDetailPage from "@/pages/ArtworkDetailPage";
+import CollectionPage from "@/pages/CollectionPage";
 // import PrintsPage from "@/pages/PrintsPage";
 // import PrintArtworkPage from "@/pages/PrintArtworkPage";
 import AboutPage from "@/pages/AboutPage";
@@ -78,6 +79,7 @@ function Router() {
       <Route path="/admin/orders" component={AdminOrdersPage} />
       <Route path="/admin/orders/:id" component={AdminOrderDetailPage} />
       {/* Keep the catch-all LAST: /:seoSlug would otherwise swallow /blog. */}
+      <Route path="/collections/:slug" component={CollectionPage} />
       <Route path="/:seoSlug" component={SeoArtworkPage} />
       <Route component={NotFound} />
     </Switch>
