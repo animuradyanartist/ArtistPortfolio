@@ -141,12 +141,24 @@ export function registerTestCheckoutRoutes(app: Express): void {
         success_url: `${base}/order/${order.reference}?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${base}/__test-purchase?t=${encodeURIComponent(String(req.body.t))}`,
       });
+      const sessionUrl = session.url;
+      if (!sessionUrl) {
+        return res.status(502).json({ code: "stripe-no-url", message: "Stripe did not return a checkout URL." });
+      }
       const { pool } = await import("../db");
       await pool.query(
         `UPDATE orders SET stripe_checkout_session_id = $2, status = 'checkout_created', updated_at = now() WHERE id = $1`,
         [order.id, session.id],
       );
-      return res.json({ url: session.url, reference: order.reference });
+      // A real browser submits this page's <form> as application/x-www-form-urlencoded (or
+      // multipart), and a native form POST renders whatever the response body is — so returning
+      // JSON left the buyer staring at raw JSON instead of Stripe. Send those callers on to
+      // Stripe with a 303 (POST → GET) redirect. Programmatic/JSON callers (the curl path) still
+      // get the unchanged { url, reference } contract. This only affects the test harness route.
+      if (req.is("application/x-www-form-urlencoded") || req.is("multipart/form-data")) {
+        return res.redirect(303, sessionUrl);
+      }
+      return res.json({ url: sessionUrl, reference: order.reference });
     } catch (e) {
       return res.status(502).json({
         code: "stripe-unavailable",
