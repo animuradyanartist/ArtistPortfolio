@@ -13,8 +13,8 @@
  * SAFETY:
  *   • FAILS CLOSED. Both routes 404 unless `ENABLE_TEST_CHECKOUT === "1"`. Merged code is inert
  *     until the owner deliberately turns it on, and turning it off again is instant — no deploy.
- *   • TOKEN-GATED even when enabled: a constant-time comparison against `TEST_TOKEN`. The token
- *     lives in the repo only because the flag, not the token, is the security boundary.
+ *   • TOKEN-GATED even when enabled: a constant-time comparison against the TEST_CHECKOUT_TOKEN
+ *     production secret. The token is never committed; if it is missing the routes fail closed.
  *   • NO SHIPPING LINE, so the total is exactly the $1.00 item — $0.00 shipping without going
  *     anywhere near the shipping engine, and with no way for this to affect a real artwork.
  *   • NOT AN ARTWORK. No database artwork row, so it cannot appear in listings, collections,
@@ -33,19 +33,39 @@ export const TEST_ITEM = {
   currency: "usd",
 } as const;
 
-/** Baked token. Not the security boundary — the ENABLE flag is. Gates casual access when on. */
-const TEST_TOKEN = "tprod_8b1f4a9c7e2d6053_do_not_share";
-
-/** OFF unless explicitly enabled. This is the boundary: merged code stays dormant. */
-export function testCheckoutEnabled(): boolean {
-  return (process.env.ENABLE_TEST_CHECKOUT ?? "").trim() === "1";
+/**
+ * The token is a PRODUCTION SECRET, never committed. It is read only from the environment, so
+ * nothing in the repository — or in any conversation about the repository — is the real token.
+ */
+function expectedToken(): string {
+  return (process.env.TEST_CHECKOUT_TOKEN ?? "").trim();
 }
 
-function tokenOk(provided: unknown): boolean {
+/**
+ * ARMED only when BOTH secrets are set: the flag is exactly "1" AND a token secret exists.
+ * Missing either → the routes below 404. Merged code is inert until the owner sets both.
+ */
+export function testCheckoutEnabled(): boolean {
+  return (process.env.ENABLE_TEST_CHECKOUT ?? "").trim() === "1" && expectedToken().length > 0;
+}
+
+/**
+ * Constant-time token check. Fails closed when no token secret is configured, and never throws
+ * on a length mismatch (timingSafeEqual requires equal-length buffers). The token is never
+ * logged, echoed in an error, or returned.
+ */
+export function verifyToken(provided: unknown): boolean {
+  const expected = expectedToken();
+  if (!expected) return false;
   const p = typeof provided === "string" ? provided : "";
-  const a = Buffer.from(TEST_TOKEN);
+  const a = Buffer.from(expected);
   const b = Buffer.from(p);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (a.length !== b.length) {
+    // Compare against self so the timing does not leak the expected length.
+    crypto.timingSafeEqual(a, a);
+    return false;
+  }
+  return crypto.timingSafeEqual(a, b);
 }
 
 function siteBase(req: Request): string {
@@ -61,7 +81,7 @@ export function registerTestCheckoutRoutes(app: Express): void {
   // The private test page. Rendered only with the flag on AND the token correct; noindex either
   // way. Nothing links to it.
   app.get("/__test-purchase", (req: Request, res: Response) => {
-    if (!testCheckoutEnabled() || !tokenOk(req.query.t)) return res.status(404).type("text/plain").send("Not found");
+    if (!testCheckoutEnabled() || !verifyToken(req.query.t)) return res.status(404).type("text/plain").send("Not found");
     res.setHeader("X-Robots-Tag", "noindex, nofollow");
     res.type("text/html").send(
       `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
@@ -73,7 +93,7 @@ export function registerTestCheckoutRoutes(app: Express): void {
       `<ul style="line-height:1.9"><li>Item: <strong>$1.00 USD</strong></li><li>Shipping: <strong>$0.00</strong></li>` +
       `<li>Total: <strong>$1.00 USD</strong></li></ul>` +
       `<form method="POST" action="/api/commerce/test-checkout">` +
-      `<input type="hidden" name="t" value="${esc(TEST_TOKEN)}">` +
+      `<input type="hidden" name="t" value="${esc(String(req.query.t))}">` +
       `<button type="submit" style="background:#0f172a;color:#fff;border:0;border-radius:8px;` +
       `padding:0.8rem 1.4rem;font-size:1rem;cursor:pointer">Buy Now — $1.00 test</button></form>` +
       `<p style="color:#94a3b8;font-size:0.85rem;margin-top:1.5rem">You will be taken to Stripe's real checkout page.</p>` +
@@ -83,7 +103,7 @@ export function registerTestCheckoutRoutes(app: Express): void {
 
   // Creates a real order + real Stripe Checkout session. The existing webhook marks it paid.
   app.post("/api/commerce/test-checkout", async (req: Request, res: Response) => {
-    if (!testCheckoutEnabled() || !tokenOk(req.body?.t)) return res.status(404).json({ message: "Not found" });
+    if (!testCheckoutEnabled() || !verifyToken(req.body?.t)) return res.status(404).json({ message: "Not found" });
     const stripe = stripeClient();
     if (!stripe || !isCheckoutConfigured()) {
       return res.status(503).json({ code: "checkout-unconfigured", message: "Stripe is not configured." });
@@ -119,7 +139,7 @@ export function registerTestCheckoutRoutes(app: Express): void {
           // No shipping line item on purpose → total is exactly $1.00.
         ],
         success_url: `${base}/order/${order.reference}?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${base}/__test-purchase?t=${encodeURIComponent(TEST_TOKEN)}`,
+        cancel_url: `${base}/__test-purchase?t=${encodeURIComponent(String(req.body.t))}`,
       });
       const { pool } = await import("../db");
       await pool.query(
