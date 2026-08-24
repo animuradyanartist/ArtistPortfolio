@@ -11,10 +11,17 @@
 import type { Express } from "express";
 import { requireAdminAuth } from "../auth";
 import { hasDatabase } from "../db";
-import { listOrders, getOrder, setOrderStatus, setTracking } from "./orders";
+import {
+  listOrders, getOrder, setOrderStatus, setFulfilmentDetails,
+  setExceptionState, setCustomerMessage, setInternalNotes,
+} from "./orders";
 import { releaseExpiredReservations } from "./reservation";
 import { stripeMode } from "./stripeClient";
-import { ADMIN_SETTABLE, nextStatuses, type OrderStatus } from "@shared/commerce/orderStatus";
+import {
+  sendShippedEmail, sendDeliveredEmail, sendPreparingEmail, sendManualUpdate,
+  resendConfirmation, listOrderEmails, emailConfigured,
+} from "../email";
+import { ADMIN_SETTABLE, nextStatuses, isExceptionState, type OrderStatus, type ExceptionState } from "@shared/commerce/orderStatus";
 import { formatMoney, type Currency } from "@shared/commerce/money";
 
 export function registerAdminCommerceRoutes(app: Express): void {
@@ -32,16 +39,19 @@ export function registerAdminCommerceRoutes(app: Express): void {
       const rows = await listOrders();
       res.json(rows.map((o) => {
         const c = (o.currency as Currency) ?? "EUR";
-        const snap = o.artwork_snapshot ? safeParse(o.artwork_snapshot) : null;
+        const snap = o.artwork_snapshot ? safeParse(o.artwork_snapshot) as { title?: string; image?: string } | null : null;
         return {
           id: o.id, reference: o.reference, status: o.status, paymentStatus: o.payment_status,
           buyerName: o.buyer_name, buyerEmail: o.buyer_email,
-          artworkTitle: (snap as { title?: string } | null)?.title ?? null,
+          artworkTitle: snap?.title ?? null,
+          artworkImage: snap?.image ?? null,
           artworkId: o.artwork_id,
           country: o.ship_country,
           itemsFormatted: o.item_price_minor != null ? formatMoney(o.item_price_minor, c) : null,
           shippingFormatted: o.shipping_minor != null ? formatMoney(o.shipping_minor, c) : null,
           totalFormatted: o.total_minor != null ? formatMoney(o.total_minor, c) : null,
+          carrier: o.shipping_carrier, tracking: o.tracking_number,
+          exceptionState: o.exception_state,
           createdAt: o.created_at,
         };
       }));
@@ -65,6 +75,9 @@ export function registerAdminCommerceRoutes(app: Express): void {
         attribution: order.attribution ? safeParse(order.attribution) : null,
         // Only the moves the state machine actually permits from here.
         availableStatuses: nextStatuses(order.status as OrderStatus).filter((s) => ADMIN_SETTABLE.includes(s)),
+        // The email ledger for this order, and whether the mailer is configured at all.
+        emails: await listOrderEmails(order.id),
+        emailConfigured: emailConfigured(),
       });
     } catch {
       res.status(500).json({ message: "Could not load this order." });
@@ -73,26 +86,118 @@ export function registerAdminCommerceRoutes(app: Express): void {
 
   app.post("/api/admin/orders/:id/status", requireAdminAuth, async (req, res) => {
     try {
+      const id = Number.parseInt(String(req.params.id), 10);
       const to = String((req.body ?? {}).status ?? "") as OrderStatus;
       if (!ADMIN_SETTABLE.includes(to)) {
         return res.status(400).json({ message: "That is not a status this panel may set." });
       }
-      const r = await setOrderStatus(Number.parseInt(String(req.params.id), 10), to);
+      const before = await getOrder(id);
+      if (!before) return res.status(404).json({ message: "Not found" });
+      const r = await setOrderStatus(id, to);
       if (!r.ok) return res.status(409).json({ message: r.reason ?? "Not allowed" });
+
+      // LIFECYCLE EMAILS — only on a genuine transition into shipped/delivered (not on an
+      // idempotent re-save), and only for a paid order. Each is once-only per order anyway, and
+      // the send never throws, so a mail problem cannot fail this action.
+      let email: { status: string; reason?: string } | null = null;
+      if (to !== before.status && before.payment_status === "paid") {
+        const fresh = await getOrder(id);
+        if (fresh && to === "shipped") email = await sendShippedEmail(fresh);
+        else if (fresh && to === "delivered") email = await sendDeliveredEmail(fresh);
+      }
+      res.json({ ok: true, email });
+    } catch {
+      res.status(500).json({ message: "Could not update this order." });
+    }
+  });
+
+  // Carrier, tracking number, a clickable tracking link, and the two dates she can honestly
+  // promise. All fields optional; an empty value clears the field.
+  app.post("/api/admin/orders/:id/fulfilment", requireAdminAuth, async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      const b = (req.body ?? {}) as Record<string, unknown>;
+      await setFulfilmentDetails(id, {
+        carrier: trimOrNull(b.carrier),
+        trackingNumber: trimOrNull(b.trackingNumber),
+        trackingUrl: trimUrlOrNull(b.trackingUrl),
+        expectedDispatchAt: parseDateOrNull(b.expectedDispatch),
+        estimatedDeliveryAt: parseDateOrNull(b.estimatedDelivery),
+      });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ message: "Could not save fulfilment details." });
+    }
+  });
+
+  // Raise or clear the non-status exception overlay (delayed / delivery_issue).
+  app.post("/api/admin/orders/:id/exception", requireAdminAuth, async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      const raw = (req.body ?? {}).state;
+      let state: ExceptionState | null;
+      if (raw == null || raw === "") state = null;
+      else if (isExceptionState(raw)) state = raw;
+      else return res.status(400).json({ message: "Unknown exception state." });
+      await setExceptionState(id, state);
       res.json({ ok: true });
     } catch {
       res.status(500).json({ message: "Could not update this order." });
     }
   });
 
-  app.post("/api/admin/orders/:id/tracking", requireAdminAuth, async (req, res) => {
+  // The buyer-visible note shown on the tracking page (does NOT send an email by itself).
+  app.post("/api/admin/orders/:id/customer-message", requireAdminAuth, async (req, res) => {
     try {
-      const carrier = trimOrNull((req.body ?? {}).carrier);
-      const tracking = trimOrNull((req.body ?? {}).trackingNumber);
-      await setTracking(Number.parseInt(String(req.params.id), 10), carrier, tracking);
+      const id = Number.parseInt(String(req.params.id), 10);
+      await setCustomerMessage(id, trimLongOrNull((req.body ?? {}).message));
       res.json({ ok: true });
     } catch {
-      res.status(500).json({ message: "Could not save tracking." });
+      res.status(500).json({ message: "Could not save the update." });
+    }
+  });
+
+  // Private admin note. Never leaves the server.
+  app.post("/api/admin/orders/:id/internal-notes", requireAdminAuth, async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      await setInternalNotes(id, trimLongOrNull((req.body ?? {}).notes));
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ message: "Could not save the note." });
+    }
+  });
+
+  // Send a buyer email on demand: resend confirmation, a preparing note, a delay note, or a
+  // free-form message. Delay/manual messages are also stored as the tracking-page note so the
+  // page and the email agree.
+  app.post("/api/admin/orders/:id/email", requireAdminAuth, async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      const order = await getOrder(id);
+      if (!order) return res.status(404).json({ message: "Not found" });
+      const b = (req.body ?? {}) as { kind?: string; subject?: string; message?: string };
+      const kind = String(b.kind ?? "");
+      const message = typeof b.message === "string" ? b.message.trim() : "";
+      const subject = typeof b.subject === "string" ? b.subject.trim() : "";
+
+      let result;
+      switch (kind) {
+        case "resend_confirmation": result = await resendConfirmation(order); break;
+        case "preparing":           result = await sendPreparingEmail(order); break;
+        case "delay":
+        case "manual": {
+          if (!message) return res.status(400).json({ message: "A message is required." });
+          const subj = subject || (kind === "delay" ? `An update on your order ${order.reference}` : `A note about your order ${order.reference}`);
+          await setCustomerMessage(id, message.slice(0, 2000)); // keep the tracking page in step
+          result = await sendManualUpdate(order, { subject: subj, message, kind });
+          break;
+        }
+        default: return res.status(400).json({ message: "Unknown email type." });
+      }
+      res.json({ ok: result.status !== "failed", result });
+    } catch {
+      res.status(500).json({ message: "Could not send the email." });
     }
   });
 
@@ -108,4 +213,21 @@ function safeParse(s: string): unknown {
 function trimOrNull(v: unknown): string | null {
   const s = typeof v === "string" ? v.trim() : "";
   return s ? s.slice(0, 120) : null;
+}
+function trimLongOrNull(v: unknown): string | null {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s ? s.slice(0, 2000) : null;
+}
+/** Accept only http(s) links; anything else is cleared rather than stored. */
+function trimUrlOrNull(v: unknown): string | null {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (!s) return null;
+  return /^https?:\/\//i.test(s) ? s.slice(0, 500) : null;
+}
+/** "YYYY-MM-DD" (or empty) → a Date at UTC midnight, or null to clear. Never throws. */
+function parseDateOrNull(v: unknown): Date | null {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (!s) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
 }

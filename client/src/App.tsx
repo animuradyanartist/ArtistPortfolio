@@ -26,6 +26,7 @@ import NotFound from "@/pages/not-found";
 import CartPage from "@/pages/CartPage";
 import CheckoutPage from "@/pages/CheckoutPage";
 import OrderConfirmationPage from "@/pages/OrderConfirmationPage";
+import TrackOrderPage from "@/pages/TrackOrderPage";
 import AdminOrdersPage from "@/pages/AdminOrdersPage";
 import AdminOrderDetailPage from "@/pages/AdminOrderDetailPage";
 import { CartProvider } from "@/lib/cart";
@@ -76,6 +77,7 @@ function Router() {
       <Route path="/cart" component={CartPage} />
       <Route path="/checkout" component={CheckoutPage} />
       <Route path="/order/:reference" component={OrderConfirmationPage} />
+      <Route path="/track/:token" component={TrackOrderPage} />
       <Route path="/admin/orders" component={AdminOrdersPage} />
       <Route path="/admin/orders/:id" component={AdminOrderDetailPage} />
       {/* Keep the catch-all LAST: /:seoSlug would otherwise swallow /blog. */}

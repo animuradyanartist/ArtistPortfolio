@@ -6,8 +6,9 @@
  * have seen a migration, and the guards that make them safe (conditional WHEREs, the ON
  * CONFLICT below) are clearer written out than assembled.
  */
+import crypto from "node:crypto";
 import { pool, hasDatabase } from "../db";
-import type { OrderStatus, PaymentStatus } from "@shared/commerce/orderStatus";
+import type { OrderStatus, PaymentStatus, ExceptionState } from "@shared/commerce/orderStatus";
 import { canTransition } from "@shared/commerce/orderStatus";
 
 export interface OrderRow {
@@ -20,8 +21,11 @@ export interface OrderRow {
   total_minor: number | null; shipping_basis: string | null; shipping_calculation: string | null;
   stripe_checkout_session_id: string | null; stripe_payment_intent_id: string | null;
   reserved_at: Date | null; reservation_expires_at: Date | null; paid_at: Date | null;
-  shipping_carrier: string | null; tracking_number: string | null;
-  shipped_at: Date | null; delivered_at: Date | null; attribution: string | null;
+  shipping_carrier: string | null; tracking_number: string | null; tracking_url: string | null;
+  packed_at: Date | null; shipped_at: Date | null; delivered_at: Date | null;
+  expected_dispatch_at: Date | null; estimated_delivery_at: Date | null;
+  exception_state: string | null; customer_message: string | null; internal_notes: string | null;
+  tracking_token: string | null; attribution: string | null;
   created_at: Date; updated_at: Date;
 }
 
@@ -71,6 +75,14 @@ export async function getOrderBySession(sessionId: string): Promise<OrderRow | n
   return (rows[0] as OrderRow) ?? null;
 }
 
+export async function getOrderByPaymentIntent(paymentIntentId: string): Promise<OrderRow | null> {
+  if (!hasDatabase || !paymentIntentId) return null;
+  const { rows } = await pool.query(
+    `SELECT * FROM orders WHERE stripe_payment_intent_id = $1`, [paymentIntentId],
+  );
+  return (rows[0] as OrderRow) ?? null;
+}
+
 export async function listOrders(limit = 200): Promise<OrderRow[]> {
   if (!hasDatabase) return [];
   const { rows } = await pool.query(
@@ -92,8 +104,9 @@ export async function setOrderStatus(id: number, to: OrderStatus): Promise<{ ok:
     return { ok: false, reason: `cannot move an order from ${order.status} to ${to}` };
   }
   const stamps: string[] = [];
-  if (to === "shipped") stamps.push("shipped_at = now()");
-  if (to === "delivered") stamps.push("delivered_at = now()");
+  if (to === "packed") stamps.push("packed_at = coalesce(packed_at, now())");
+  if (to === "shipped") stamps.push("shipped_at = coalesce(shipped_at, now())");
+  if (to === "delivered") stamps.push("delivered_at = coalesce(delivered_at, now())");
   await pool.query(
     `UPDATE orders SET status = $2, updated_at = now()${stamps.length ? ", " + stamps.join(", ") : ""}
       WHERE id = $1`, [id, to],
@@ -106,6 +119,95 @@ export async function setTracking(id: number, carrier: string | null, tracking: 
     `UPDATE orders SET shipping_carrier = $2, tracking_number = $3, updated_at = now() WHERE id = $1`,
     [id, carrier, tracking],
   );
+}
+
+/**
+ * The fuller fulfilment record Admin edits: carrier, tracking number + a clickable link, and
+ * the two dates she can honestly promise. `undefined` leaves a field untouched; an explicit
+ * `null` clears it. Never touches status or payment.
+ */
+export interface FulfilmentPatch {
+  carrier?: string | null;
+  trackingNumber?: string | null;
+  trackingUrl?: string | null;
+  expectedDispatchAt?: Date | null;
+  estimatedDeliveryAt?: Date | null;
+}
+export async function setFulfilmentDetails(id: number, patch: FulfilmentPatch): Promise<void> {
+  const map: Record<string, keyof FulfilmentPatch> = {
+    shipping_carrier: "carrier",
+    tracking_number: "trackingNumber",
+    tracking_url: "trackingUrl",
+    expected_dispatch_at: "expectedDispatchAt",
+    estimated_delivery_at: "estimatedDeliveryAt",
+  };
+  const sets: string[] = [];
+  const vals: unknown[] = [id];
+  for (const [col, key] of Object.entries(map)) {
+    if (patch[key] !== undefined) { vals.push(patch[key]); sets.push(`${col} = $${vals.length}`); }
+  }
+  if (!sets.length) return;
+  await pool.query(`UPDATE orders SET ${sets.join(", ")}, updated_at = now() WHERE id = $1`, vals);
+}
+
+/** Raise or clear the non-status exception overlay (delayed / delivery_issue / null). */
+export async function setExceptionState(id: number, state: ExceptionState | null): Promise<void> {
+  await pool.query(
+    `UPDATE orders SET exception_state = $2, updated_at = now() WHERE id = $1`, [id, state],
+  );
+}
+
+/** The latest buyer-visible note. Shown on the tracking page; may accompany a manual email. */
+export async function setCustomerMessage(id: number, message: string | null): Promise<void> {
+  await pool.query(
+    `UPDATE orders SET customer_message = $2, updated_at = now() WHERE id = $1`, [id, message],
+  );
+}
+
+/** Private admin note. NEVER returned by a public endpoint. */
+export async function setInternalNotes(id: number, notes: string | null): Promise<void> {
+  await pool.query(
+    `UPDATE orders SET internal_notes = $2, updated_at = now() WHERE id = $1`, [id, notes],
+  );
+}
+
+export async function getOrderByTrackingToken(token: string): Promise<OrderRow | null> {
+  if (!hasDatabase || !token) return null;
+  const { rows } = await pool.query(`SELECT * FROM orders WHERE tracking_token = $1`, [token]);
+  return (rows[0] as OrderRow) ?? null;
+}
+
+/**
+ * The unguessable handle for the buyer's tracking page — generated lazily and stored once, so
+ * the URL is stable across every email and page for the life of the order. 32 random bytes,
+ * URL-safe. The partial unique index guarantees no collision persists.
+ */
+export async function ensureTrackingToken(id: number): Promise<string | null> {
+  const existing = await getOrder(id);
+  if (!existing) return null;
+  if (existing.tracking_token) return existing.tracking_token;
+  const token = crypto.randomBytes(24).toString("base64url");
+  const { rows } = await pool.query(
+    `UPDATE orders SET tracking_token = $2, updated_at = now()
+      WHERE id = $1 AND tracking_token IS NULL RETURNING tracking_token`,
+    [id, token],
+  );
+  // If a concurrent caller won, re-read the value it wrote rather than overwriting it.
+  if (rows.length === 1) return rows[0].tracking_token as string;
+  return (await getOrder(id))?.tracking_token ?? null;
+}
+
+/**
+ * Refund is a Stripe fact, recorded from the signature-verified webhook — not an admin button.
+ * Idempotent: only the first delivery that flips a non-refunded order returns true.
+ */
+export async function markOrderRefunded(orderId: number): Promise<boolean> {
+  const { rows } = await pool.query(
+    `UPDATE orders SET payment_status = 'refunded', status = 'refunded', updated_at = now()
+      WHERE id = $1 AND payment_status <> 'refunded' RETURNING id`,
+    [orderId],
+  );
+  return rows.length === 1;
 }
 
 /**

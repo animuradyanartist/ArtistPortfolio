@@ -460,8 +460,24 @@ export const orders = pgTable("orders", {
   // ── fulfilment ──
   shippingCarrier: text("shipping_carrier"),
   trackingNumber: text("tracking_number"),
+  /** A clickable carrier tracking link, so the buyer never copy/pastes a number. */
+  trackingUrl: text("tracking_url"),
+  packedAt: timestamp("packed_at"),
   shippedAt: timestamp("shipped_at"),
   deliveredAt: timestamp("delivered_at"),
+  /** Dates Ani can promise without lying: when she expects to dispatch, and the courier's ETA.
+   *  Both optional — a delivery date is never fabricated when it cannot be known. */
+  expectedDispatchAt: timestamp("expected_dispatch_at"),
+  estimatedDeliveryAt: timestamp("estimated_delivery_at"),
+  /** A non-status overlay for exceptional situations: null | 'delayed' | 'delivery_issue'.
+   *  Kept off the status machine so it can be raised and cleared without a fake transition. */
+  exceptionState: text("exception_state"),
+  /** The latest buyer-visible note ("Packed and collected by the courier this morning."). */
+  customerMessage: text("customer_message"),
+  /** Private to Admin — never sent to the buyer or returned by a public endpoint. */
+  internalNotes: text("internal_notes"),
+  /** The unguessable handle for the buyer's tracking page. Not the sequential reference. */
+  trackingToken: text("tracking_token"),
 
   /** Where the buyer came from, when the page knew — utm_* and the landing path. JSON.
    *  Kept so search and image traffic can eventually be judged against sales, not clicks. */
@@ -479,6 +495,10 @@ export const orders = pgTable("orders", {
   sessionUnique: uniqueIndex("orders_stripe_session_unique")
     .on(t.stripeCheckoutSessionId)
     .where(sql`${t.stripeCheckoutSessionId} IS NOT NULL`),
+  // PARTIAL, matching the boot DDL exactly (same reasoning as the session index above).
+  trackingTokenUnique: uniqueIndex("orders_tracking_token_unique")
+    .on(t.trackingToken)
+    .where(sql`${t.trackingToken} IS NOT NULL`),
 }));
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
@@ -505,3 +525,38 @@ export const stripeEvents = pgTable("stripe_events", {
   eventUnique: uniqueIndex("stripe_events_event_id_unique").on(t.eventId),
 }));
 export type StripeEvent = typeof stripeEvents.$inferSelect;
+
+/**
+ * EVERY TRANSACTIONAL EMAIL WE HAVE SENT (OR TRIED TO), PER ORDER.
+ *
+ * Two jobs in one table:
+ *   1. HISTORY — Admin can see, per order, which emails went out, when, and whether the
+ *      provider accepted them. A failed send is recorded, not swallowed.
+ *   2. IDEMPOTENCY — automatic emails (the payment confirmation above all) claim a
+ *      `dedupeKey` before sending. The unique index means a Stripe webhook retry, or two
+ *      concurrent deliveries, can never send the same confirmation twice: the second INSERT
+ *      loses the race and the caller sends nothing. Manual/repeatable emails leave `dedupeKey`
+ *      NULL (Postgres unique indexes ignore NULLs), so a resend is always allowed.
+ */
+export const orderEmails = pgTable("order_emails", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull(),
+  /** e.g. order_confirmation | shipped | delivered | delay | manual | preparing */
+  kind: text("kind").notNull(),
+  toEmail: text("to_email"),
+  subject: text("subject"),
+  /** sent | failed | skipped */
+  status: text("status").notNull().default("sent"),
+  /** The provider's message id, for support/debugging. */
+  providerId: text("provider_id"),
+  error: text("error"),
+  /** Set for once-only emails (`${orderId}:${kind}`); NULL for repeatable ones. */
+  dedupeKey: text("dedupe_key"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  dedupeUnique: uniqueIndex("order_emails_dedupe_unique")
+    .on(t.dedupeKey)
+    .where(sql`${t.dedupeKey} IS NOT NULL`),
+  orderIdx: index("order_emails_order_idx").on(t.orderId),
+}));
+export type OrderEmail = typeof orderEmails.$inferSelect;

@@ -87,6 +87,10 @@ export async function bootstrapWebhookEndpoint(publicBaseUrl: string): Promise<
         "checkout.session.expired",
         "checkout.session.async_payment_succeeded",
         "checkout.session.async_payment_failed",
+        // Refunds are Stripe-authoritative: a refund issued in the Stripe dashboard flows back
+        // here and marks the order refunded. If the endpoint already existed, add this event to
+        // it in the Stripe dashboard so refund reflection works.
+        "charge.refunded",
       ],
       description: "animuradyan.com — direct artwork sales",
     });
