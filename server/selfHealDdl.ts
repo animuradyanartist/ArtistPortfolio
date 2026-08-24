@@ -125,6 +125,20 @@ export const SELF_HEAL_DDL: readonly string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS order_emails_dedupe_unique
         ON order_emails (dedupe_key) WHERE dedupe_key IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS order_emails_order_idx ON order_emails (order_id)`,
+  // ── payment reconciliation (must mirror shared/schema.ts orders + order_audit) ──
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_source text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_payment_status text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS last_payment_check_at timestamp`,
+  `CREATE TABLE IF NOT EXISTS order_audit (
+        id serial PRIMARY KEY,
+        order_id integer NOT NULL,
+        action text NOT NULL,
+        result text,
+        detail text,
+        actor text,
+        created_at timestamp DEFAULT now()
+      )`,
+  `CREATE INDEX IF NOT EXISTS order_audit_order_idx ON order_audit (order_id)`,
   `CREATE TABLE IF NOT EXISTS stripe_events (
         id serial PRIMARY KEY,
         event_id text NOT NULL,

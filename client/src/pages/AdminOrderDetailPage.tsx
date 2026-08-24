@@ -13,6 +13,7 @@ import { ORDER_STATUS_LABEL, type OrderStatus } from "@shared/commerce/orderStat
 import { useToast } from "@/hooks/use-toast";
 
 interface EmailRow { id: number; kind: string; to_email: string | null; subject: string | null; status: string; provider_id: string | null; error: string | null; created_at: string }
+interface AuditRow { id: number; action: string; result: string | null; detail: string | null; actor: string | null; created_at: string }
 
 function toDateInput(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -72,6 +73,24 @@ export default function AdminOrderDetailPage() {
       toast({ title: "Status updated", description: es === "sent" ? "Buyer email sent." : es === "skipped" ? "Status saved (no email sent)." : es === "failed" ? "Status saved, but the email failed — see the email log." : "Saved." });
     },
     onError: (e: Error) => toast({ title: "Couldn't update", description: e.message, variant: "destructive" }),
+  });
+  const checkPayment = useMutation({
+    mutationFn: () => post(`/check-payment`, {}),
+    onSuccess: (d: { stripePaymentStatus?: string | null; paymentIntentStatus?: string | null; note?: string }) => {
+      done();
+      toast({ title: "Stripe checked", description: d?.note ?? `Stripe payment: ${d?.stripePaymentStatus ?? "unknown"}${d?.paymentIntentStatus ? ` · intent ${d.paymentIntentStatus}` : ""}` });
+    },
+    onError: (e: Error) => toast({ title: "Couldn't check Stripe", description: e.message, variant: "destructive" }),
+  });
+  const reconcile = useMutation({
+    mutationFn: () => post(`/reconcile`, {}),
+    onSuccess: (d: { ok?: boolean; wasFirst?: boolean; stripePaymentStatus?: string | null; email?: { status: string } | null }) => {
+      done();
+      if (d?.ok === false) toast({ title: "Not reconciled", description: `Stripe says this payment is “${d?.stripePaymentStatus ?? "not paid"}”. The order was NOT marked paid.`, variant: "destructive" });
+      else if (d?.wasFirst) toast({ title: "Payment reconciled", description: `Order marked paid, artwork sold, confirmation email: ${d?.email?.status ?? "n/a"}.` });
+      else toast({ title: "Already paid", description: "Stripe confirms paid; the order was already paid — no change." });
+    },
+    onError: (e: Error) => toast({ title: "Reconcile failed", description: e.message, variant: "destructive" }),
   });
   const saveFulfil = useMutation({
     mutationFn: () => post(`/fulfilment`, { carrier, trackingNumber: tracking, trackingUrl, expectedDispatch: expDispatch, estimatedDelivery: estDelivery }),
@@ -153,6 +172,52 @@ export default function AdminOrderDetailPage() {
           <p className="text-xs text-stone-500 mt-2">Refunds are issued in Stripe and reflect here automatically.</p>
         </Card>
       </div>
+
+      {/* Payment — Stripe is the source of truth; Reconcile is the emergency fallback. */}
+      <Panel title="Payment">
+        <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 mb-5">
+          <PayRow k="Order payment status" v={
+            <span className={o.payment_status === "paid" ? "text-emerald-700" : o.payment_status === "failed" ? "text-red-700" : o.payment_status === "refunded" ? "text-stone-600" : "text-amber-700"}>{o.payment_status}</span>
+          } />
+          <PayRow k="Stripe payment status" v={o.stripe_payment_status ?? <span className="text-stone-400">not checked yet</span>} />
+          <PayRow k="Paid via" v={o.payment_status === "paid" ? (o.payment_source === "reconcile" ? "Manual reconciliation" : "Stripe webhook") : "—"} />
+          <PayRow k="Last Stripe check" v={o.last_payment_check_at ? new Date(o.last_payment_check_at).toLocaleString("en-GB") : <span className="text-stone-400">never</span>} />
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button onClick={() => checkPayment.mutate()} disabled={checkPayment.isPending}
+            className="border border-stone-800 px-4 py-2 text-[11px] tracking-[0.16em] uppercase hover:bg-stone-900 hover:text-white transition-colors disabled:opacity-50">Check Stripe status</button>
+          {o.payment_status !== "paid" && (
+            <button
+              onClick={() => { if (window.confirm("Reconcile payment?\n\nThis queries Stripe and — ONLY if Stripe confirms the payment is genuinely paid — marks this order paid, marks the artwork sold, and sends one confirmation email. An unpaid/failed Stripe payment can never be marked paid.")) reconcile.mutate(); }}
+              disabled={reconcile.isPending}
+              className="bg-amber-600 text-white px-4 py-2 text-[11px] tracking-[0.16em] uppercase hover:bg-amber-700 transition-colors disabled:opacity-50">Reconcile payment (emergency)</button>
+          )}
+        </div>
+        <p className="mt-3 text-xs text-stone-500 max-w-2xl">
+          Payment is Stripe's fact. Reconcile is an emergency fallback for a failed webhook — it never marks an unpaid payment paid, and it can't double-sell or double-email: it shares the webhook's once-only guards, so whichever arrives second does nothing.
+        </p>
+
+        {(o.audit ?? []).length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-2">Audit history</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-stone-500"><tr><th className="py-1 pr-4 font-medium">When</th><th className="py-1 pr-4 font-medium">Action</th><th className="py-1 pr-4 font-medium">Result</th><th className="py-1 font-medium">Detail</th></tr></thead>
+                <tbody>
+                  {(o.audit as AuditRow[]).map((a) => (
+                    <tr key={a.id} className="border-t border-stone-100">
+                      <td className="py-1.5 pr-4 whitespace-nowrap text-stone-500">{new Date(a.created_at).toLocaleString("en-GB")}</td>
+                      <td className="py-1.5 pr-4">{a.action}</td>
+                      <td className="py-1.5 pr-4">{a.result}</td>
+                      <td className="py-1.5 text-stone-600 max-w-[320px]">{a.detail}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Panel>
 
       {/* Fulfilment */}
       <Panel title="Fulfilment">
@@ -299,6 +364,14 @@ function Row({ k, v }: { k: string; v?: string | null }) {
     <div className="flex justify-between gap-4 text-sm py-1">
       <dt className="text-stone-500">{k}</dt>
       <dd className="text-stone-900 text-right break-all">{v || "—"}</dd>
+    </div>
+  );
+}
+function PayRow({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4 text-sm">
+      <span className="text-stone-500">{k}</span>
+      <span className="text-stone-900 text-right">{v}</span>
     </div>
   );
 }

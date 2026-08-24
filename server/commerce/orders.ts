@@ -25,7 +25,9 @@ export interface OrderRow {
   packed_at: Date | null; shipped_at: Date | null; delivered_at: Date | null;
   expected_dispatch_at: Date | null; estimated_delivery_at: Date | null;
   exception_state: string | null; customer_message: string | null; internal_notes: string | null;
-  tracking_token: string | null; attribution: string | null;
+  tracking_token: string | null;
+  payment_source: string | null; stripe_payment_status: string | null; last_payment_check_at: Date | null;
+  attribution: string | null;
   created_at: Date; updated_at: Date;
 }
 
@@ -208,6 +210,44 @@ export async function markOrderRefunded(orderId: number): Promise<boolean> {
     [orderId],
   );
   return rows.length === 1;
+}
+
+/**
+ * Record that a manual reconciliation — not the webhook — was the thing that moved this order to
+ * paid. Only ever called by the reconcile action, and only when ITS markOrderPaid won the race,
+ * so a webhook-paid order is never mislabelled.
+ */
+export async function setPaymentSource(id: number, source: "reconcile"): Promise<void> {
+  await pool.query(`UPDATE orders SET payment_source = $2, updated_at = now() WHERE id = $1`, [id, source]);
+}
+
+/** Cache the last Stripe payment_status seen by a server-side check, and stamp the check time. */
+export async function recordPaymentCheck(id: number, stripeStatus: string | null): Promise<void> {
+  await pool.query(
+    `UPDATE orders SET stripe_payment_status = $2, last_payment_check_at = now(), updated_at = now() WHERE id = $1`,
+    [id, stripeStatus],
+  );
+}
+
+export interface OrderAuditRow {
+  id: number; action: string; result: string | null; detail: string | null; actor: string | null; created_at: Date;
+}
+export async function logOrderAudit(
+  orderId: number, action: string, result: string | null, detail: string | null, actor = "admin",
+): Promise<void> {
+  if (!hasDatabase) return;
+  await pool.query(
+    `INSERT INTO order_audit (order_id, action, result, detail, actor) VALUES ($1, $2, $3, $4, $5)`,
+    [orderId, action, result, detail ? detail.slice(0, 500) : null, actor],
+  );
+}
+export async function listOrderAudit(orderId: number): Promise<OrderAuditRow[]> {
+  if (!hasDatabase) return [];
+  const { rows } = await pool.query(
+    `SELECT id, action, result, detail, actor, created_at FROM order_audit WHERE order_id = $1 ORDER BY created_at DESC`,
+    [orderId],
+  );
+  return rows as OrderAuditRow[];
 }
 
 /**

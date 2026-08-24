@@ -479,6 +479,15 @@ export const orders = pgTable("orders", {
   /** The unguessable handle for the buyer's tracking page. Not the sequential reference. */
   trackingToken: text("tracking_token"),
 
+  // ── payment reconciliation (an emergency fallback for a failed webhook) ──
+  /** How the order became paid: null (webhook, the normal path) | 'reconcile' (Admin queried
+   *  Stripe server-side and confirmed the payment). Payment status itself stays Stripe's fact. */
+  paymentSource: text("payment_source"),
+  /** The last Stripe payment_status seen by a server-side check ('paid' | 'unpaid' | …). */
+  stripePaymentStatus: text("stripe_payment_status"),
+  /** When Admin last queried Stripe for this order's payment. */
+  lastPaymentCheckAt: timestamp("last_payment_check_at"),
+
   /** Where the buyer came from, when the page knew — utm_* and the landing path. JSON.
    *  Kept so search and image traffic can eventually be judged against sales, not clicks. */
   attribution: text("attribution"),
@@ -560,3 +569,27 @@ export const orderEmails = pgTable("order_emails", {
   orderIdx: index("order_emails_order_idx").on(t.orderId),
 }));
 export type OrderEmail = typeof orderEmails.$inferSelect;
+
+/**
+ * AN AUDIT TRAIL FOR SENSITIVE ORDER ACTIONS — reconciliation above all.
+ *
+ * Every manual reconciliation writes a row here (what was attempted, what Stripe said, what
+ * happened), so there is a durable record that Admin — not a webhook — moved an order to paid,
+ * and why. Append-only; Admin shows it on the order.
+ */
+export const orderAudit = pgTable("order_audit", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull(),
+  /** e.g. reconcile | check-payment */
+  action: text("action").notNull(),
+  /** e.g. paid-by-reconcile | already-paid | not-paid | error */
+  result: text("result"),
+  /** Human-readable detail (Stripe status, email outcome, error message). */
+  detail: text("detail"),
+  /** Who did it. Admin auth is a single session, so 'admin' unless richer identity exists. */
+  actor: text("actor"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  orderIdx: index("order_audit_order_idx").on(t.orderId),
+}));
+export type OrderAudit = typeof orderAudit.$inferSelect;
