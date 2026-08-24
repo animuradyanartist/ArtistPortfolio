@@ -873,7 +873,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllArtworks(): Promise<Artwork[]> {
-    return healArtworkOp(() => db.select().from(artworks).orderBy(artworks.position));
+    const rows = await healArtworkOp(() => db.select().from(artworks).orderBy(artworks.position));
+    // TEST HARNESS: production-test items never appear in any public list, sitemap, SSR page or
+    // search — only at their own /artworks/:id URL (Buy-Now reads by id via getArtwork, so the
+    // purchase is unaffected). Remove together with server/commerce/testArtwork.ts.
+    return rows.filter((a) => a.source !== "production-test");
   }
 
   async getArtworkAddressIndex(): Promise<ArtworkAddress[]> {

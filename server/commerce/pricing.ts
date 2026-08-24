@@ -117,8 +117,15 @@ export async function priceOrder(
   const currency = currencies[0] ?? DEFAULT_CURRENCY;
 
   const provider = shippingProvider();
+
+  // TEST HARNESS ($1.00 / $0.00 / $1.00 production-journey item). A `production-test` item ships
+  // FREE, and must not depend on the estimator (which could refuse an odd destination). Real
+  // catalogue rows are never source="production-test", so this is inert for every real sale.
+  // Remove together with server/commerce/testArtwork.ts.
+  const isTestItem = artworks.length === 1 && artworks[0]!.source === "production-test";
+
   const cart = await provider.quoteCart(artworks.map(toShippable), countryCode);
-  if (!cart.ok) return { ok: false, error: { kind: "shipping-unavailable", quote: cart.failed } };
+  if (!cart.ok && !isTestItem) return { ok: false, error: { kind: "shipping-unavailable", quote: cart.failed } };
 
   const lines = artworks.map((a, i) => ({
     artwork: a,
@@ -126,13 +133,13 @@ export async function priceOrder(
     shipping: cart.perArtwork[i]!,
   }));
   const itemsMinor = lines.reduce((t, l) => t + l.priceMinor, 0);
-  const shippingMinor = cart.amountMinor;
+  const shippingMinor = isTestItem ? 0 : (cart.ok ? cart.amountMinor : 0);
 
   // "Estimated" is true if ANY line was estimated — a total is only as certain as its least
   // certain part, and the label the buyer sees must not overstate.
-  const shippingEstimated = lines.some((l) => l.shipping.ok && l.shipping.estimated);
+  const shippingEstimated = !isTestItem && lines.some((l) => l.shipping.ok && l.shipping.estimated);
   const firstOk = lines.find((l) => l.shipping.ok);
-  const shippingBasis = firstOk && firstOk.shipping.ok ? firstOk.shipping.basis : "unknown";
+  const shippingBasis = isTestItem ? "test-free-shipping" : (firstOk && firstOk.shipping.ok ? firstOk.shipping.basis : "unknown");
 
   return {
     ok: true, currency, itemsMinor, shippingMinor,

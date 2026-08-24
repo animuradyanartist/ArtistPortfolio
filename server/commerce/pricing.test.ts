@@ -34,6 +34,24 @@ describe("priceOrder", () => {
     expect(r.shippingEstimated).toBe(true);
   });
 
+  it("ships the production-test item FREE — exactly $1.00 total in USD (test harness)", async () => {
+    const r = await priceOrder([artwork({ source: "production-test", websitePriceMinor: 100, websiteCurrency: "USD" })], "US");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.itemsMinor).toBe(100);
+    expect(r.shippingMinor).toBe(0);
+    expect(r.totalMinor).toBe(100);
+    expect(r.currency).toBe("USD");
+    expect(r.shippingEstimated).toBe(false);
+  });
+
+  it("leaves a normal work's shipping positive — the test branch is inert for real sales", async () => {
+    const r = await priceOrder([artwork()], "DE");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.shippingMinor).toBeGreaterThan(0);
+  });
+
   it("REFUSES a sold work — the case that must never reach Stripe", async () => {
     const r = await priceOrder([artwork({ availability: "sold" })], "DE");
     expect(r.ok).toBe(false);

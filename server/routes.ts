@@ -37,6 +37,7 @@ import { renderAboutHtml, renderExhibitionsHtml, renderGalleryHtml, renderContac
 import { buildInfo } from "./buildInfo";
 import { registerCommerceRoutes } from "./commerce/routes";
 import { registerTestCheckoutRoutes } from "./commerce/testCheckout";
+import { registerTestArtworkRoutes } from "./commerce/testArtwork";
 import { registerAdminCommerceRoutes } from "./commerce/adminRoutes";
 
 /**
@@ -191,6 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ship and be verified before a Stripe key exists.
   registerCommerceRoutes(app);
   registerTestCheckoutRoutes(app);
+  registerTestArtworkRoutes(app);
   registerAdminCommerceRoutes(app);
 
   // Any mutation invalidates the in-memory API response cache — both before
