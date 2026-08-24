@@ -1,45 +1,39 @@
 /**
- * AFTER PAYMENT — and careful about what it claims.
+ * AFTER PAYMENT — the premium confirmation, and careful about what it claims.
  *
  * Landing here means Stripe redirected the browser. It does NOT mean money moved: the redirect
  * is a navigation, and a person can reach this URL by pressing back, refreshing, or pasting a
  * link. So this page reads OUR order row — written only by a signature-verified webhook — and
- * says exactly what that row says.
+ * says exactly what that row says. It polls briefly while the webhook and redirect race.
  *
- * The webhook and the redirect race, and either can win. When the redirect arrives first the
- * row still reads `unpaid`, which is why this polls briefly and says "confirming" rather than
- * either lying that it is done or alarming somebody whose payment is fine.
+ * The durable tracking link is returned by the API only when the `session_id` from Stripe's
+ * redirect matches this order, so a stranger who guesses a reference never gets one.
  */
-import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "wouter";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useParams, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Eyebrow } from "@/components/editorial";
+import { ArtworkHeader, ExceptionBanner, OrderTimeline, ShipmentPanel, StudioNote } from "@/components/orderJourney";
 import { useCart } from "@/lib/cart";
 import { trackPurchaseOnce } from "@/lib/commerceAnalytics";
-
-interface OrderView {
-  reference: string; status: string; paymentStatus: string;
-  artwork: { id: number; title: string; dimensions: string; image: string } | null;
-  itemsFormatted: string | null; shippingFormatted: string | null; totalFormatted: string | null;
-  ship: { name: string | null; country: string | null; city: string | null; address1: string | null;
-    address2: string | null; region: string | null; postalCode: string | null };
-  carrier: string | null; tracking: string | null;
-}
+import { minorFromFormatted, nextUpdateHint, type OrderView } from "@/lib/orderView";
 
 export default function OrderConfirmationPage() {
   const { reference } = useParams<{ reference: string }>();
+  const search = useSearch();
+  const sessionId = useMemo(() => new URLSearchParams(search).get("session_id") ?? "", [search]);
   const cart = useCart();
   const [tries, setTries] = useState(0);
 
   const { data } = useQuery<OrderView>({
-    queryKey: ["/api/commerce/order", reference],
+    queryKey: ["/api/commerce/order", reference, sessionId],
     queryFn: async () => {
-      const r = await fetch(`/api/commerce/order/${encodeURIComponent(reference)}`);
+      const qs = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : "";
+      const r = await fetch(`/api/commerce/order/${encodeURIComponent(reference)}${qs}`);
       if (!r.ok) throw new Error("not found");
       return r.json();
     },
-    // Poll only while payment is still unconfirmed, and only for about a minute — a webhook
-    // that has not arrived by then is an operational matter, not something to spin on.
+    // Poll only while payment is still unconfirmed, and only for about a minute.
     refetchInterval: (q) => {
       const d = q.state.data as OrderView | undefined;
       return d && d.paymentStatus === "unpaid" && tries < 20 ? 3000 : false;
@@ -52,74 +46,84 @@ export default function OrderConfirmationPage() {
   useEffect(() => {
     if (data?.paymentStatus === "paid" && !fired.current) {
       fired.current = true;
-      // Only now, and only once per reference even across refreshes.
       trackPurchaseOnce({
         reference: data.reference,
-        totalMinor: money(data.totalFormatted), shippingMinor: money(data.shippingFormatted),
-        currency: "EUR",
-        items: data.artwork ? [{ id: data.artwork.id, title: data.artwork.title }] : [],
+        totalMinor: minorFromFormatted(data.totalFormatted),
+        shippingMinor: minorFromFormatted(data.shippingFormatted),
+        currency: data.currency || "EUR",
+        items: data.artwork?.id ? [{ id: data.artwork.id, title: data.artwork.title ?? "" }] : [],
       });
-      if (data.artwork) cart.remove(data.artwork.id);
+      if (data.artwork?.id) cart.remove(data.artwork.id);
     }
   }, [data, cart]);
 
-  if (!data) {
-    return <Shell><p className="text-stone-500">Looking up your order…</p></Shell>;
-  }
+  if (!data) return <Shell><p className="text-stone-500">Looking up your order…</p></Shell>;
 
   const paid = data.paymentStatus === "paid";
+  const destination = [data.destination.city, data.destination.country].filter(Boolean).join(", ");
+  const heading =
+    data.phase === "refunded" ? "Your order has been refunded."
+    : data.phase === "cancelled" ? "This order was cancelled."
+    : data.phase === "payment_failed" ? "Payment didn't go through."
+    : paid ? `Thank you${data.buyerFirstName ? `, ${data.buyerFirstName}` : ""}.`
+    : "Almost there.";
+  const intro =
+    data.phase !== "normal" ? null
+    : paid
+      ? "Your painting is now yours. I'll prepare it with care in my Yerevan studio and keep you updated at every step from here to your door."
+      : "I'm confirming your payment with the bank. This page will update on its own — there's no need to pay again.";
 
   return (
     <Shell>
       <div className="max-w-2xl">
-        <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">
-          {paid ? "Thank you." : "Almost there."}
-        </h1>
-        <p className="text-stone-700 leading-relaxed mb-10">
-          {paid
-            ? "Your payment has been received and the painting is now yours. Ani will be in touch about crating and collection."
-            : "We are confirming your payment with the bank. This page will update on its own — there is no need to pay again."}
-        </p>
+        <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">{heading}</h1>
+        {intro && <p className="text-stone-700 leading-relaxed mb-10">{intro}</p>}
+
+        <ExceptionBanner o={data} />
+        <ArtworkHeader o={data} />
 
         <dl className="border-t border-stone-300">
           <Row label="Order" value={data.reference} />
-          {data.artwork && <Row label="Work" value={data.artwork.title} />}
-          {data.artwork && <Row label="Dimensions" value={data.artwork.dimensions} />}
-          <Row label="Work price" value={data.itemsFormatted ?? "—"} />
-          <Row label="Shipping" value={data.shippingFormatted ?? "—"} />
-          <Row label="Total" value={data.totalFormatted ?? "—"} />
-          <Row label="Payment" value={paid ? "Received" : "Confirming"} />
-          {data.tracking && <Row label="Tracking" value={`${data.carrier ?? ""} ${data.tracking}`.trim()} />}
+          <Row label="Artwork" value={data.itemsFormatted ?? "—"} />
+          <Row label="Shipping" value={data.shippingFormatted ?? (data.itemsFormatted ? "Included" : "—")} />
+          <Row label="Total paid" value={data.totalFormatted ?? "—"} strong />
+          <Row label="Payment" value={paid ? "Confirmed" : "Confirming"} />
+          <Row label="Status" value={data.statusLabel} />
+          {destination && <Row label="Shipping to" value={destination} />}
         </dl>
 
-        <div className="mt-10">
-          <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-3">Shipping to</p>
-          <p className="text-sm text-stone-800 leading-relaxed">
-            {[data.ship.name, data.ship.address1, data.ship.address2, data.ship.city,
-              data.ship.region, data.ship.postalCode, data.ship.country].filter(Boolean).join(", ")}
-          </p>
-        </div>
+        {data.phase === "normal" && (
+          <div className="mt-10 border-t border-stone-300 pt-8">
+            <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-3">What happens next</p>
+            <p className="text-sm text-stone-700 leading-relaxed">{nextUpdateHint(data)}</p>
+          </div>
+        )}
 
-        <div className="mt-10 border-t border-stone-300 pt-8">
-          <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-3">What happens next</p>
-          <p className="text-sm text-stone-700 leading-relaxed">
-            The work is crated by hand in Yerevan and dispatched by courier. Ani will email you
-            with the tracking number once it is on its way. Import duties or taxes charged by
-            your country are payable on delivery.
-          </p>
-        </div>
+        {paid && <OrderTimeline o={data} />}
+        <ShipmentPanel o={data} />
+        <StudioNote o={data} />
 
-        <Link href="/artworks" className="mt-10 inline-block border border-stone-800 px-8 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-900 hover:bg-stone-900 hover:text-stone-50 transition-colors">Back to the paintings</Link>
+        <div className="mt-12 flex flex-wrap items-center gap-4">
+          {data.trackingToken ? (
+            <Link
+              href={`/track/${data.trackingToken}`}
+              className="inline-block bg-[#26221c] px-8 py-3 text-[11px] tracking-[0.2em] uppercase text-[#f5f1ea] hover:bg-stone-800 transition-colors"
+            >
+              Track your order
+            </Link>
+          ) : paid ? (
+            <p className="text-sm text-stone-500">Your tracking link is in your confirmation email.</p>
+          ) : null}
+          <Link
+            href="/artworks"
+            className="inline-block border border-stone-800 px-8 py-3 text-[11px] tracking-[0.2em] uppercase text-stone-900 hover:bg-stone-900 hover:text-stone-50 transition-colors"
+          >
+            Back to the paintings
+          </Link>
+        </div>
       </div>
     </Shell>
   );
-}
-
-/** The formatted strings are what the API returns; this recovers minor units for analytics. */
-function money(formatted: string | null): number {
-  if (!formatted) return 0;
-  const n = Number(formatted.replace(/[^0-9.]/g, ""));
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -133,11 +137,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="flex justify-between gap-6 border-b border-stone-300 py-4">
       <dt className="text-[11px] tracking-[0.2em] uppercase text-stone-500">{label}</dt>
-      <dd className="text-sm text-right text-stone-800 tabular-nums">{value}</dd>
+      <dd className={`text-right tabular-nums ${strong ? "text-base font-medium text-stone-900" : "text-sm text-stone-800"}`}>{value}</dd>
     </div>
   );
 }

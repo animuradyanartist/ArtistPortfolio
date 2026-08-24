@@ -99,6 +99,32 @@ export const SELF_HEAL_DDL: readonly string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS orders_reference_unique ON orders (reference)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session_unique
         ON orders (stripe_checkout_session_id) WHERE stripe_checkout_session_id IS NOT NULL`,
+  // ── order-lifecycle additions (must mirror shared/schema.ts orders exactly) ──
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS packed_at timestamp`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS expected_dispatch_at timestamp`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_delivery_at timestamp`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS exception_state text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_message text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS internal_notes text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_token text`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS orders_tracking_token_unique
+        ON orders (tracking_token) WHERE tracking_token IS NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS order_emails (
+        id serial PRIMARY KEY,
+        order_id integer NOT NULL,
+        kind text NOT NULL,
+        to_email text,
+        subject text,
+        status text NOT NULL DEFAULT 'sent',
+        provider_id text,
+        error text,
+        dedupe_key text,
+        created_at timestamp DEFAULT now()
+      )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS order_emails_dedupe_unique
+        ON order_emails (dedupe_key) WHERE dedupe_key IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS order_emails_order_idx ON order_emails (order_id)`,
   `CREATE TABLE IF NOT EXISTS stripe_events (
         id serial PRIMARY KEY,
         event_id text NOT NULL,

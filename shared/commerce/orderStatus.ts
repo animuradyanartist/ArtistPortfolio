@@ -16,6 +16,7 @@ export const ORDER_STATUSES = [
   "checkout_created",  // Stripe session created, artwork reserved, awaiting payment
   "paid",              // webhook confirmed payment; artwork Sold
   "preparing",         // she is crating it
+  "packed",            // crated and ready for the courier
   "shipped",
   "delivered",
   "cancelled",         // abandoned/expired checkout, or cancelled before payment
@@ -35,8 +36,9 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 const TRANSITIONS: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = Object.freeze({
   pending:          ["checkout_created", "cancelled"],
   checkout_created: ["paid", "cancelled"],
-  paid:             ["preparing", "shipped", "refunded"],
-  preparing:        ["shipped", "refunded"],
+  paid:             ["preparing", "packed", "shipped", "refunded"],
+  preparing:        ["packed", "shipped", "refunded"],
+  packed:           ["shipped", "refunded"],
   shipped:          ["delivered", "refunded"],
   delivered:        ["refunded"],
   cancelled:        [],
@@ -52,8 +54,10 @@ export function nextStatuses(from: OrderStatus): readonly OrderStatus[] {
   return TRANSITIONS[from] ?? [];
 }
 
-/** Statuses Admin may set by hand. Payment outcomes are excluded by construction. */
-export const ADMIN_SETTABLE: readonly OrderStatus[] = ["preparing", "shipped", "delivered", "cancelled"];
+/** Statuses Admin may set by hand. Payment outcomes are excluded by construction.
+ *  `refunded` is intentionally absent — a refund is a Stripe fact, applied by the webhook,
+ *  not a button that moves money. */
+export const ADMIN_SETTABLE: readonly OrderStatus[] = ["preparing", "packed", "shipped", "delivered", "cancelled"];
 
 export function isTerminal(s: OrderStatus): boolean {
   return (TRANSITIONS[s] ?? []).length === 0;
@@ -64,8 +68,62 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   checkout_created: "Checkout started",
   paid: "Paid",
   preparing: "Preparing",
+  packed: "Packed",
   shipped: "Shipped",
   delivered: "Delivered",
   cancelled: "Cancelled",
   refunded: "Refunded",
 };
+
+/**
+ * EXCEPTIONAL SITUATIONS THAT ARE NOT A STATUS.
+ *
+ * A delay or a delivery problem can happen at any point without changing where the order IS in
+ * its journey, so they live in a separate nullable `exception_state` overlay rather than the
+ * linear machine — raised and cleared freely, and shown to the buyer as a calm note, never as a
+ * broken timeline. `payment failed` and `refunded`/`cancelled` are already represented (a
+ * failed payment_status, and the terminal statuses), so they are not repeated here.
+ */
+export const EXCEPTION_STATES = ["delayed", "delivery_issue"] as const;
+export type ExceptionState = (typeof EXCEPTION_STATES)[number];
+
+export const EXCEPTION_STATE_LABEL: Record<ExceptionState, string> = {
+  delayed: "Shipping delayed",
+  delivery_issue: "Delivery issue",
+};
+
+export function isExceptionState(v: unknown): v is ExceptionState {
+  return typeof v === "string" && (EXCEPTION_STATES as readonly string[]).includes(v);
+}
+
+/**
+ * THE BUYER-FACING TIMELINE, derived from status — the one place that maps our internal
+ * statuses onto the six steps a collector sees:
+ *   Order confirmed → Preparing → Packed → Shipped → In transit → Delivered
+ * "In transit" is not a stored status; it is the lived period between shipped and delivered.
+ * Terminal/exception statuses (cancelled, refunded) are handled by the page, not this ladder.
+ */
+export const BUYER_TIMELINE_STEPS = [
+  { key: "confirmed", label: "Order confirmed" },
+  { key: "preparing", label: "Preparing artwork" },
+  { key: "packed", label: "Packed" },
+  { key: "shipped", label: "Shipped" },
+  { key: "in_transit", label: "In transit" },
+  { key: "delivered", label: "Delivered" },
+] as const;
+export type BuyerTimelineKey = (typeof BUYER_TIMELINE_STEPS)[number]["key"];
+
+/** How far along the buyer timeline a given order status has reached (index into the steps). */
+export function timelineReachedIndex(status: OrderStatus): number {
+  switch (status) {
+    case "pending":
+    case "checkout_created": return -1;          // not yet confirmed
+    case "paid":             return 0;           // Order confirmed
+    case "preparing":        return 1;
+    case "packed":           return 2;
+    case "shipped":          return 4;           // shipped implies "in transit" is live
+    case "delivered":        return 5;
+    case "cancelled":
+    case "refunded":         return -1;          // handled as an exceptional state by the UI
+  }
+}

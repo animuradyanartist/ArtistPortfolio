@@ -19,9 +19,12 @@ import { validateBuyer, validateArtworkIds, sanitiseAttribution } from "./valida
 import { stripeClient, stripeMode, isCheckoutConfigured, checkoutBlockedReason } from "./stripeClient";
 import { reserveArtwork, releaseReservation, markSold, releaseExpiredReservations, RESERVATION_MINUTES } from "./reservation";
 import {
-  createOrder, getOrder, getOrderByReference, getOrderBySession, nextReference, recentUnpaidOrderCount,
-  markOrderPaid, markOrderCancelled, markOrderFailed, claimStripeEvent,
+  createOrder, getOrder, getOrderByReference, getOrderBySession, getOrderByPaymentIntent,
+  getOrderByTrackingToken, ensureTrackingToken, nextReference, recentUnpaidOrderCount,
+  markOrderPaid, markOrderCancelled, markOrderFailed, markOrderRefunded, claimStripeEvent,
 } from "./orders";
+import { sendOrderConfirmation } from "../email";
+import { publicOrderView, publicTrackingView } from "./orderView";
 import { clientIpOf } from "../loginRateLimit";
 
 /**
@@ -403,6 +406,18 @@ export function registerCommerceRoutes(app: Express): void {
     if (!first) return res.json({ received: true, duplicate: true });
 
     try {
+      // A refund arrives as a Charge, not a checkout session — matched by payment intent. It is
+      // the ONLY thing that may say "refunded", exactly as the webhook is the only thing that may
+      // say "paid". Idempotent via markOrderRefunded's guard.
+      if (event.type === "charge.refunded") {
+        const charge = event.data.object as { payment_intent?: string | null };
+        const pi = typeof charge.payment_intent === "string" ? charge.payment_intent : null;
+        const refunded = pi ? await getOrderByPaymentIntent(pi) : null;
+        if (!refunded) return res.json({ received: true, unmatched: true });
+        await markOrderRefunded(refunded.id);
+        return res.json({ received: true });
+      }
+
       const session = event.data.object as { id: string; metadata?: Record<string, string> | null;
         payment_intent?: string | null; payment_status?: string };
       const orderId = Number.parseInt(session.metadata?.orderId ?? "", 10);
@@ -416,6 +431,14 @@ export function registerCommerceRoutes(app: Express): void {
           if (session.payment_status && session.payment_status !== "paid") break;
           const wasFirst = await markOrderPaid(order.id, session.payment_intent ?? null);
           if (wasFirst && order.artwork_id) await markSold(order.artwork_id, order.id);
+          // The confirmation email is sent exactly once — gated on the same `wasFirst` that
+          // makes fulfilment fire once. A retry updates zero rows, so `wasFirst` is false and no
+          // second email is attempted; the email ledger's dedupe key is a second guarantee.
+          // `sendOrderConfirmation` never throws, so it cannot turn a paid order into a 500.
+          if (wasFirst) {
+            const paidOrder = await getOrder(order.id);
+            if (paidOrder) await sendOrderConfirmation(paidOrder);
+          }
           break;
         }
         case "checkout.session.expired": {
@@ -438,27 +461,33 @@ export function registerCommerceRoutes(app: Express): void {
   });
 
   // ── Confirmation. Reads OUR state, never the redirect's word for it. ──────────────────
+  // Reached by the sequential reference, so it returns only the buyer-safe core (no street
+  // address). The durable tracking token is handed back ONLY when the caller proves it just
+  // finished THIS checkout, by presenting the matching Stripe session id — so a stranger who
+  // guesses a reference gets a status, never a permanent tracking link or an address.
   app.get("/api/commerce/order/:reference", async (req, res) => {
     try {
       const order = await getOrderByReference(String(req.params.reference));
       if (!order) return res.status(404).json({ message: "Not found" });
-      const currency = (order.currency as Currency) ?? "EUR";
-      return res.json({
-        reference: order.reference,
-        status: order.status,
-        paymentStatus: order.payment_status,
-        artwork: order.artwork_snapshot ? JSON.parse(order.artwork_snapshot) : null,
-        itemsFormatted: order.item_price_minor != null ? formatMoney(order.item_price_minor, currency) : null,
-        shippingFormatted: order.shipping_minor != null ? formatMoney(order.shipping_minor, currency) : null,
-        totalFormatted: order.total_minor != null ? formatMoney(order.total_minor, currency) : null,
-        ship: {
-          name: order.buyer_name, country: order.ship_country, city: order.ship_city,
-          address1: order.ship_address1, address2: order.ship_address2,
-          region: order.ship_region, postalCode: order.ship_postal_code,
-        },
-        carrier: order.shipping_carrier, tracking: order.tracking_number,
-        createdAt: order.created_at,
-      });
+      const sessionId = typeof req.query.session_id === "string" ? req.query.session_id : "";
+      let trackToken: string | null = null;
+      if (sessionId && order.stripe_checkout_session_id && sessionId === order.stripe_checkout_session_id) {
+        trackToken = await ensureTrackingToken(order.id);
+      }
+      return res.json(publicOrderView(order, { trackToken }));
+    } catch {
+      return res.status(500).json({ message: "Could not load this order." });
+    }
+  });
+
+  // ── The secure tracking surface. Reached only by the unguessable token, never by id. ──
+  app.get("/api/commerce/track/:token", async (req, res) => {
+    try {
+      const token = String(req.params.token || "");
+      if (token.length < 16) return res.status(404).json({ message: "Not found" });
+      const order = await getOrderByTrackingToken(token);
+      if (!order) return res.status(404).json({ message: "Not found" });
+      return res.json(publicTrackingView(order));
     } catch {
       return res.status(500).json({ message: "Could not load this order." });
     }

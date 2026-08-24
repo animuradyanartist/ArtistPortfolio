@@ -771,16 +771,28 @@ export default function AdminPage() {
               Content Management
             </h1>
           </div>
-          <Button 
-            onClick={handleLogout} 
-            variant="outline"
-            className="h-10 px-6 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl"
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Logout
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => setLocation("/admin/orders")}
+              variant="outline"
+              className="h-10 px-6 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              Orders
+            </Button>
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              className="h-10 px-6 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* Modern Tabs */}
