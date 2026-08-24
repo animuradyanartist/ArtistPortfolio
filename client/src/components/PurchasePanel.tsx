@@ -84,8 +84,45 @@ export function PurchasePanel({ artworkId, marketplaceUrl, marketplaceLabel = "V
     }
   }, [data, reported]);
 
-  // Not for direct sale: say nothing at all and let the page's existing enquiry route stand.
-  if (isLoading || !data || !data.purchasable) return null;
+  // Not our surface at all: no public price, or direct sale is off entirely → say nothing and
+  // let the page's existing enquiry route stand, exactly as before.
+  if (isLoading || !data) return null;
+  if (!data.priceFormatted || data.reasons?.includes("direct-sale-disabled")) return null;
+
+  // It IS a direct-sale work with a public price but is not purchasable right now (a hold, a
+  // sale, a commitment). Show the PRICE and the correct state rather than vanishing — vanishing
+  // is exactly what made the price "disappear" during a reservation. Never a Buy button here,
+  // and never a misleading payable price on a sold work.
+  if (!data.purchasable) {
+    const sold = data.reasons?.includes("not-available");
+    const reserved = data.reasons?.includes("reserved");
+    const committed = data.reasons?.includes("committed");
+    if (sold) {
+      return (
+        <section className="mt-10 border-t border-stone-300 pt-8" aria-label="Purchase">
+          <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500">Status</p>
+          <p className="font-playfair text-3xl text-stone-900 mt-1">Sold</p>
+          <p className="mt-3 text-sm text-stone-600 leading-relaxed">This original is now in a private collection.</p>
+        </section>
+      );
+    }
+    return (
+      <section className="mt-10 border-t border-stone-300 pt-8" aria-label="Purchase">
+        <div className="flex items-baseline justify-between gap-6">
+          <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500">Price</p>
+          <p className="font-playfair text-3xl text-stone-900">{data.priceFormatted}</p>
+        </div>
+        <p className="mt-4 text-sm text-stone-700 leading-relaxed">
+          {reserved
+            ? "Currently reserved — a checkout is in progress. Please check back shortly."
+            : committed
+              ? "This work is promised to a gallery or collector."
+              : "This work isn't open for direct purchase right now."}{" "}
+          <Link href="/contact" className="border-b border-stone-400 hover:border-stone-800">Enquire</Link>.
+        </p>
+      </section>
+    );
+  }
 
   const inCart = cart.has(artworkId);
   const shipping = data.shipping;

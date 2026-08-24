@@ -165,6 +165,39 @@ export function artworkOffer(a: SsrArtwork, baseUrl: string): Record<string, unk
   };
 }
 
+/**
+ * THE PUBLIC PRICE A BUYER CAN ACTUALLY PAY, and its currency.
+ *
+ * Website retail price where direct sale is on (the figure the Buy button charges), otherwise
+ * the marketplace price. NEVER the artist/net price — that column is not read here at all. Null
+ * for a work that is not on sale at a stated price, so no caller can show a misleading number.
+ * The Offer node and the visible price line both read this, so structured data and the words on
+ * the page can never name different prices for one painting.
+ */
+export function artworkPublicPrice(a: SsrArtwork): { amount: number; currency: string } | null {
+  if (a.directSaleEnabled && typeof a.websitePriceMinor === "number" && a.websitePriceMinor > 0) {
+    return { amount: a.websitePriceMinor / 100, currency: a.websiteCurrency || "EUR" };
+  }
+  if (a.availability === "available" && typeof a.price === "number" && a.price > 0) {
+    return { amount: a.price, currency: ARTWORK_PRICE_CURRENCY };
+  }
+  return null;
+}
+
+/**
+ * "USD 2,370" / "EUR 2,400" — the public price formatted for the crawlable body.
+ *
+ * The `CODE amount` shape is kept deliberately: it is the one this module and the /artworks
+ * labels have always used, and one machine-readable format for the price is the whole point of
+ * this file. (The hydrated client panel formats the same figure with a currency symbol; it
+ * replaces this on load.) Null when there is no price to show.
+ */
+export function formatArtworkPrice(p: { amount: number; currency: string } | null): string | null {
+  if (!p) return null;
+  const amount = p.amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return `${p.currency} ${amount}`;
+}
+
 /** VisualArtwork structured data for one painting. */
 export function artworkJsonLd(a: SsrArtwork, baseUrl: string): Record<string, unknown> {
   const url = artworkCanonicalUrl(baseUrl, a);
@@ -239,10 +272,11 @@ export function renderArtworkHtml(a: SsrArtwork, baseUrl: string, imageSize?: Ss
   // with and tell Google the shape of the picture; the CSS above still governs how it is
   // actually laid out, so adding them changes no visual result.
   const sizeAttrs = imageSize ? ` width="${imageSize.width}" height="${imageSize.height}"` : "";
-  const priceLine = isPurchasable(a)
-    ? `<p style="font-size:1.05rem;color:#0f172a;margin-bottom:0.25rem"><strong>${e(ARTWORK_PRICE_CURRENCY)} ${e(
-        Number(a.price).toLocaleString("en-US"),
-      )}</strong></p>`
+  // The public price a buyer can actually pay — website retail where direct sale is on, else the
+  // marketplace figure — shown only while the work is on sale, so a sold page states no price.
+  const priceShown = a.availability !== "sold" ? formatArtworkPrice(artworkPublicPrice(a)) : null;
+  const priceLine = priceShown
+    ? `<p style="font-size:1.05rem;color:#0f172a;margin-bottom:0.25rem"><strong>${e(priceShown)}</strong></p>`
     : "";
 
   return (
