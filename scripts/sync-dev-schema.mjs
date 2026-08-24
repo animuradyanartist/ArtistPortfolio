@@ -52,7 +52,10 @@ try {
     await pool.query(s);
     applied++;
   }
-  // Report what matters, so the operator sees the thing that was missing.
+  // Report what matters, so the operator sees the thing that was missing. This now covers the
+  // ORDER-LIFECYCLE objects too (added in #61) — the exact ones a stale dev database made the
+  // publish preview offer to DROP. If any count below is short, development is still behind and
+  // publishing would let Replit delete those objects from production.
   const { rows } = await pool.query(`
     SELECT
       (SELECT count(*) FROM information_schema.columns
@@ -62,15 +65,26 @@ try {
          'packing_margin_cm','fulfilment_notes','reserved_until','reserved_by_order_id',
          'has_commitment','commitment_type','commitment_details','commitment_until'))::int AS commerce_cols,
       (SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename IN ('orders','stripe_events'))::int AS commerce_tables,
-      (SELECT count(*) FROM pg_indexes WHERE indexname='artworks_reserved_until_idx')::int AS sweeper_index`);
+      (SELECT count(*) FROM pg_indexes WHERE indexname='artworks_reserved_until_idx')::int AS sweeper_index,
+      (SELECT count(*) FROM information_schema.columns
+        WHERE table_name='orders' AND column_name IN
+        ('tracking_url','packed_at','expected_dispatch_at','estimated_delivery_at',
+         'exception_state','customer_message','internal_notes','tracking_token'))::int AS lifecycle_cols,
+      (SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename='order_emails')::int AS order_emails_table,
+      (SELECT count(*) FROM pg_indexes
+        WHERE indexname IN ('orders_tracking_token_unique','order_emails_dedupe_unique','order_emails_order_idx'))::int AS lifecycle_indexes`);
   const r = rows[0];
   console.log(`  ${applied}/${list.length} applied`);
   console.log(`  commerce columns on artworks : ${r.commerce_cols}/15`);
   console.log(`  commerce tables              : ${r.commerce_tables}/2  (orders, stripe_events)`);
   console.log(`  sweeper index                : ${r.sweeper_index}/1`);
-  const ok = r.commerce_cols === 15 && r.commerce_tables === 2 && r.sweeper_index === 1;
+  console.log(`  order-lifecycle columns      : ${r.lifecycle_cols}/8  (tracking_url, tracking_token, …)`);
+  console.log(`  order_emails table           : ${r.order_emails_table}/1`);
+  console.log(`  order-lifecycle indexes      : ${r.lifecycle_indexes}/3`);
+  const ok = r.commerce_cols === 15 && r.commerce_tables === 2 && r.sweeper_index === 1 &&
+    r.lifecycle_cols === 8 && r.order_emails_table === 1 && r.lifecycle_indexes === 3;
   console.log(ok
-    ? "\nDevelopment now matches what production has. A publish preview should propose no drops."
+    ? "\nDevelopment now matches what production has, including the order-lifecycle schema.\nA publish preview should propose NO drops."
     : "\nSTILL INCOMPLETE — do not publish. Something above is short; report the numbers.");
   process.exitCode = ok ? 0 : 1;
 } catch (e) {
