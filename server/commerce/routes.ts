@@ -112,6 +112,24 @@ export function registerCommerceRoutes(app: Express): void {
       // A country is optional — the page renders a price before it knows where you are.
       if (!country) return res.json({ ...base, shipping: null });
 
+      // TEST HARNESS: the production-journey item ships FREE on the display too, so the artwork
+      // page shows $0.00 shipping / $1.00 total — matching what checkout actually charges
+      // (priceOrder zeroes it). This is the ONLY shipping-display path that does not go through
+      // priceOrder, so without this the page priced the estimator's figure while Stripe charged
+      // $1.00. Inert for every real work; remove with server/commerce/testArtwork.ts.
+      if (artwork.source === "production-test") {
+        const zone = zoneFor(country);
+        return res.json({
+          ...base,
+          shipping: {
+            ok: true, amountMinor: 0, amountFormatted: formatMoney(0, currency), estimated: false,
+            zone, zoneLabel: zone ? ZONE_LABEL[zone] : null,
+            totalMinor: base.priceMinor ?? 0, totalFormatted: base.priceFormatted,
+            dutiesMayApply: false,
+          },
+        });
+      }
+
       const quote = await shippingProvider().quote(toShippable(artwork), country);
       const zone = zoneFor(country);
       return res.json({
