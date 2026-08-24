@@ -79,7 +79,16 @@ export function isPurchasable(a: SsrArtwork): boolean {
  */
 export function artworkImageUrl(a: SsrArtwork, baseUrl: string): string {
   const first = Array.isArray(a.images) ? a.images.find((i) => typeof i === "string" && i.trim()) : null;
-  return first && /^https?:\/\//i.test(first) ? first : `${baseUrl}/img/artwork/${a.id}/0`;
+  if (!first) return `${baseUrl}/img/artwork/${a.id}/0`;
+  // An absolute URL is used as-is. A SITE-RELATIVE path is preserved verbatim — including any
+  // `?v=<hash>` cache-buster — so the URL a crawler is given here is byte-for-byte the one the
+  // hydrated page renders and Google Images actually indexes. Rebuilding the clean path (the
+  // old behaviour) produced a SECOND address for the same picture: the sitemap and the SSR
+  // declared /img/artwork/40/0 while the rendered <img> pointed at /img/artwork/40/0?v=…, so
+  // Google saw two URLs for one image. Only a data: URL (or a bare token) is synthesised.
+  if (/^https?:\/\//i.test(first)) return first;
+  if (first.startsWith("/")) return `${baseUrl}${first}`;
+  return `${baseUrl}/img/artwork/${a.id}/0`;
 }
 
 /** "Oil on Canvas · 79x71cm · 2026" — only the parts that exist. */
@@ -164,7 +173,16 @@ export function artworkJsonLd(a: SsrArtwork, baseUrl: string): Record<string, un
     "@type": "VisualArtwork",
     name: a.title,
     description: artworkNarrative(a),
-    image: artworkImageUrl(a, baseUrl),
+    // An ImageObject, not a bare URL — so the picture carries its own contentUrl and a caption
+    // Google Images can read, rather than a naked link. `representativeOfPage` marks it as THE
+    // image of this artwork, which is exactly what a single-work page is.
+    image: {
+      "@type": "ImageObject",
+      contentUrl: artworkImageUrl(a, baseUrl),
+      url: artworkImageUrl(a, baseUrl),
+      caption: `${a.title} — ${a.medium || "oil on canvas"} painting by Ani Muradyan`,
+      representativeOfPage: true,
+    },
     url,
     artform: "Painting",
     artMedium: a.medium || "oil on canvas",

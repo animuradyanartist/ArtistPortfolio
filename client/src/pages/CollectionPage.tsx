@@ -5,6 +5,7 @@ import type { Artwork } from "@shared/schema";
 import { collectionBySlug, collectionMembers } from "@shared/collections";
 import { artworkCommerceDisplay } from "@shared/commerce/display";
 import { artworkPath, generateArtworkAlt, updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
+import { artworkDimensions } from "@shared/artworkSsr";
 import { Eyebrow, OutlineButton } from "@/components/editorial";
 
 /**
@@ -59,6 +60,8 @@ export default function CollectionPage() {
                     <img
                       src={artwork.images[0]}
                       alt={generateArtworkAlt(artwork.title, artwork.medium)}
+                      width={artworkDimensions(artwork as never)?.width}
+                      height={artworkDimensions(artwork as never)?.height}
                       className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                       loading="lazy"
                     />

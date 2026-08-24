@@ -21,6 +21,10 @@ export interface CollectionRenderWork {
   dimensions: string;
   availability: string;
   priceLabel: string | null;
+  /** Aspect from the physical dimensions, so the browser reserves the right box (no layout
+   *  shift) and Google is told the shape of the picture. Absent when dimensions are unknown. */
+  width?: number;
+  height?: number;
 }
 
 const esc = (t: unknown): string =>
@@ -47,7 +51,9 @@ export function renderCollectionHtml(def: CollectionDef, works: readonly Collect
         works.map((w) =>
           `<li>` +
           `<a href="${esc(w.href)}" style="text-decoration:none;color:inherit">` +
-          `<img src="${esc(w.image)}" alt="${esc(w.title)} — ${esc(w.medium)} by Ani Muradyan" loading="lazy" style="width:100%;height:auto;border-radius:8px;margin-bottom:0.5rem" />` +
+          `<img src="${esc(w.image)}" alt="${esc(w.title)} — ${esc(w.medium)} by Ani Muradyan"` +
+          `${w.width && w.height ? ` width="${w.width}" height="${w.height}"` : ""}` +
+          ` loading="lazy" style="width:100%;height:auto;border-radius:8px;margin-bottom:0.5rem" />` +
           `<span style="${NAME}">${esc(w.title)}</span>` +
           `</a>` +
           `<div style="${META}">${esc(w.medium)} · ${esc(w.dimensions)}` +

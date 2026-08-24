@@ -24,6 +24,7 @@ import { isMissingBlogPath } from "@shared/blogNotFound";
 import { isKnownRouteShape, markNotFoundHtml } from "@shared/publicRoutes";
 import { collectionBySlug, collectionMembers, COLLECTIONS } from "@shared/collections";
 import { renderCollectionHtml, collectionJsonLd, type CollectionRenderWork } from "@shared/collectionPrerender";
+import { artworkDimensions } from "@shared/artworkSsr";
 import { measurePrimaryImage } from "./imageDimensions";
 import { db, hasDatabase } from "./db";
 import { eq, sql } from "drizzle-orm";
@@ -1574,7 +1575,7 @@ Crawl-delay: 1
         //
         // The rule itself lives in shared/artworkSsr so the sitemap and the page cannot
         // disagree about which images an artwork has.
-        artworkSitemapImageLocs(artwork.id, artwork.images, SEO_BASE_URL).forEach((imgUrl: string) => {
+        artworkSitemapImageLocs(artwork.id, refifyImages("artwork", artwork).images, SEO_BASE_URL).forEach((imgUrl: string) => {
           xml += '    <image:image>\n';
           xml += `      <image:loc>${escXml(imgUrl)}</image:loc>\n`;
           // Every image previously claimed to be an "abstract realism PORTRAIT painting",
@@ -1779,7 +1780,11 @@ Crawl-delay: 1
         ? artworkNarrative(a).slice(0, 300)
         : `${artworkNarrative(a)} ${availLine}`;
       const raw = Array.isArray(a.images) ? a.images[0] : undefined;
-      const image = raw && /^https?:\/\//i.test(raw) ? raw : `${SEO_BASE_URL}/img/artwork/${a.id}/0`;
+      // Same URL the SSR <img>, the JSON-LD and the rendered page use — a site-relative
+      // /img/...?v=<hash> path is preserved so every surface names one image, not two.
+      const image = raw && /^https?:\/\//i.test(raw) ? raw
+        : raw && raw.startsWith('/') ? `${SEO_BASE_URL}${raw}`
+        : `${SEO_BASE_URL}/img/artwork/${a.id}/0`;
       // Canonical URL: prefer /{seoSlug} (matches sitemap.xml + client canonical),
       // fall back to /artworks/{titleSlug}-{id} only when seoSlug is absent.
       // Feeds BOTH the canonical <link> and og:url below (single source).
@@ -1808,7 +1813,11 @@ Crawl-delay: 1
       // for the same 35 works — so one of the site's two machine-readable prices was
       // always wrong. There is now one definition and no way to state a second.
       const jsonStr = JSON.stringify(artworkJsonLd(a, SEO_BASE_URL)).replace(/</g, '\\u003c');
-      html = html.replace('</head>', `  <script type="application/ld+json">${jsonStr}</script>\n</head>`);
+      // id="artwork-jsonld": the id the React page's injectJsonLd() targets. Without it the
+      // server block and the client block are two separate <script>s — duplicate VisualArtwork
+      // structured data, and until now with two different image URLs. Sharing the id means the
+      // client UPDATES this one in place, so the rendered page carries exactly one.
+      html = html.replace('</head>', `  <script type="application/ld+json" id="artwork-jsonld">${jsonStr}</script>\n</head>`);
       return html;
     };
 
@@ -1847,7 +1856,8 @@ Crawl-delay: 1
         if (req.path === "/artworks") {
           try {
             const all = await storage.getAllArtworks();
-            const items = all.slice(0, 60).map((a, i) => {
+            const items = all.slice(0, 60).map((rawA, i) => {
+              const a = refifyImages("artwork", rawA);
               const medium = a.medium || "Oil on canvas";
               const item: Record<string, unknown> = {
                 "@type": "VisualArtwork",
@@ -2074,11 +2084,13 @@ Crawl-delay: 1
               const all = await storage.getAllArtworks().catch(() => []);
               const members = collectionMembers(def, all as never[]);
               const works: CollectionRenderWork[] = (members as any[]).map((a) => {
-                const raw = Array.isArray(a.images) && a.images[0] ? String(a.images[0]) : '';
-                const image = raw && /^https?:\/\//i.test(raw) ? raw : `${SEO_BASE_URL}/img/artwork/${a.id}/0`;
+                const refImgs = refifyImages('artwork', a as { id: number; images: string[] }).images;
+                const refImg = Array.isArray(refImgs) && refImgs[0] ? String(refImgs[0]) : '';
+                const image = /^https?:\/\//i.test(refImg) ? refImg : refImg.startsWith('/') ? `${SEO_BASE_URL}${refImg}` : `${SEO_BASE_URL}/img/artwork/${a.id}/0`;
                 const priceLabel = a.availability === 'available' && a.price
                   ? `${ARTWORK_PRICE_CURRENCY} ${Number(a.price).toLocaleString('en-US')}`
                   : null;
+                const dims = artworkDimensions(a as never);
                 return {
                   title: String(a.title ?? ''),
                   href: artworkCanonicalPath(a),
@@ -2087,6 +2099,8 @@ Crawl-delay: 1
                   dimensions: String(a.dimensions ?? ''),
                   availability: String(a.availability ?? ''),
                   priceLabel,
+                  width: dims?.width,
+                  height: dims?.height,
                 };
               });
               // Title + description, matching the constant the React page sets, so served and
@@ -2312,13 +2326,17 @@ Crawl-delay: 1
             }
 
             if (artwork) {
-              html = injectArtworkMeta(html, artwork);
+              // Refify FIRST, so the meta tags, the SSR <img>, the JSON-LD and the sitemap all
+              // name the same /img/...?v=<hash> URL the rendered page and the preload use — one
+              // address per image, matching what Google actually indexes.
+              const artworkRef = refifyImages("artwork", artwork);
+              html = injectArtworkMeta(html, artworkRef);
               // Measured from the actual bytes, or absent. Never inferred from the physical
               // canvas size — that is centimetres of painting, not pixels of photograph.
               const imageSize = await measurePrimaryImage(artwork.images as (string | null)[] | null);
               html = html.replace(
                 '<div id="root"></div>',
-                `<div id="root">${renderArtworkHtml(artwork, SEO_BASE_URL, imageSize)}</div>`,
+                `<div id="root">${renderArtworkHtml(artworkRef, SEO_BASE_URL, imageSize)}</div>`,
               );
 
               // THE PAINTING IS ALREADY IN THIS RESPONSE — SO DO NOT MAKE THE BROWSER ASK FOR IT.
@@ -2334,8 +2352,7 @@ Crawl-delay: 1
               // query would have fetched — /img/artwork/:id/:idx references, never base64. React
               // Query still revalidates in the background, so an edit is never more than one
               // refresh behind.
-              const preloaded = JSON.stringify(refifyImages("artwork", artwork))
-                .replace(/</g, '\\u003c');
+              const preloaded = JSON.stringify(artworkRef).replace(/</g, '\\u003c');
               html = html.replace(
                 '</head>',
                 `  <script>window.__PRELOADED_ARTWORK__=${preloaded};</script>\n</head>`,

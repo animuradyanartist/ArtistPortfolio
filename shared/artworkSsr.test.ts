@@ -19,6 +19,8 @@ import {
   artworkDimensions,
   artworkFactLine,
   artworkJsonLd,
+  artworkSitemapImageLocs,
+  artworkImageUrl,
   artworkNarrative,
   artworkOffer,
   isPurchasable,
@@ -160,5 +162,51 @@ describe("untrusted text cannot break out of the markup", () => {
     const html = renderArtworkHtml(artwork({ title: '<script>alert("x")</script>' }), BASE);
     expect(html).not.toContain("<script>alert");
     expect(html).toContain("&lt;script&gt;");
+  });
+});
+
+describe("ONE image URL across every surface (Google Images)", () => {
+  // Google renders the page and indexes the URL in the rendered <img>. The site's data path
+  // serves /img/artwork/:id/0?v=<hash> (a content cache-buster the /img route needs, because
+  // it answers immutable/1-year). If the SSR <img>, the JSON-LD and the sitemap declare the
+  // CLEAN /img/artwork/:id/0 instead, Google sees two URLs for one picture. These pin the fix:
+  // when the row already carries the ?v= path, every surface preserves it verbatim.
+  const refified = (over: Partial<SsrArtwork> = {}) =>
+    artwork({ images: ["/img/artwork/42/0?v=abc123"], ...over });
+
+  it("artworkImageUrl preserves a site-relative /img path, including its ?v= cache-buster", () => {
+    expect(artworkImageUrl(refified(), BASE)).toBe(`${BASE}/img/artwork/42/0?v=abc123`);
+  });
+
+  it("still uses an absolute URL as-is, and synthesises only for a data: row", () => {
+    expect(artworkImageUrl(artwork({ images: ["https://cdn.example.com/x.jpg"] }), BASE))
+      .toBe("https://cdn.example.com/x.jpg");
+    expect(artworkImageUrl(artwork({ images: ["data:image/jpeg;base64,AAAA"] }), BASE))
+      .toBe(`${BASE}/img/artwork/42/0`);
+  });
+
+  it("the sitemap loc carries the same ?v= URL the rendered <img> uses", () => {
+    const [loc] = artworkSitemapImageLocs(42, ["/img/artwork/42/0?v=abc123"], BASE);
+    expect(loc).toBe(`${BASE}/img/artwork/42/0?v=abc123`);
+  });
+
+  it("the SSR <img> and the JSON-LD name the identical URL", () => {
+    const a = refified();
+    const html = renderArtworkHtml(a, BASE);
+    const url = `${BASE}/img/artwork/42/0?v=abc123`;
+    expect(html).toContain(`<img src="${url}"`);
+    const ld = artworkJsonLd(a, BASE).image as Record<string, unknown>;
+    expect(ld.contentUrl).toBe(url);
+  });
+});
+
+describe("the artwork image is an ImageObject a crawler can read", () => {
+  it("is an ImageObject with contentUrl, a caption, and representativeOfPage", () => {
+    const img = artworkJsonLd(artwork(), BASE).image as Record<string, unknown>;
+    expect(img["@type"]).toBe("ImageObject");
+    expect(typeof img.contentUrl).toBe("string");
+    expect(img.caption).toContain("Blue Detachment");
+    expect(img.caption).toContain("Ani Muradyan");
+    expect(img.representativeOfPage).toBe(true);
   });
 });
