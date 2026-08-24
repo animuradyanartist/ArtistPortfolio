@@ -6,6 +6,7 @@ import type { Artwork } from "@shared/schema";
 import { PurchasePanel } from "@/components/PurchasePanel";
 import { artworkCommerceDisplay } from "@shared/commerce/display";
 import { isKnownAddressFor } from "@shared/artworkAddress";
+import { artworkJsonLd, artworkDimensions, type SsrArtwork } from "@shared/artworkSsr";
 import { ArtworkMissingError, isMissingResponse, meansArtworkMissing, artworkViewState } from "@shared/artworkAvailability";
 import { useAfterPaint } from "@/lib/afterPaint";
 import {
@@ -129,55 +130,17 @@ export default function ArtworkDetailPage() {
         `${artwork.title} – original ${artwork.medium} painting by Armenian contemporary artist Ani Muradyan. ${artwork.dimensions}, ${artwork.year}. ${artwork.availability === "available" ? "Available for purchase." : ""}`
       );
 
-      injectJsonLd("artwork-jsonld", {
-        "@context": "https://schema.org",
-        "@type": "VisualArtwork",
-        name: artwork.title,
-        description: artwork.description,
-        artMedium: artwork.medium || "Oil on canvas",
-        artform: "Painting",
-        artworkSurface: "Canvas",
-        dateCreated: artwork.year?.toString(),
-        height: artwork.dimensions,
-        image: artwork.images?.[0]
-          ? artwork.images[0].startsWith("http")
-            ? artwork.images[0]
-            : `${BASE_URL}${artwork.images[0]}`
-          : undefined,
-        url: `${BASE_URL}${canonicalPath}`,
-        creator: {
-          "@type": ["Person", "VisualArtist"],
-          name: "Ani Muradyan",
-          url: BASE_URL,
-          nationality: { "@type": "Country", name: "Armenia" },
-        },
-        // THE OFFER FOLLOWS WHAT IS ACTUALLY BUYABLE.
-        //
-        // When direct sale is on and priced, the Offer states THAT price and THAT currency —
-        // the figure a buyer can really pay here, in the currency they will really be charged.
-        // Otherwise the existing marketplace Offer is left exactly as it was, because changing
-        // it would be a claim this site cannot honour. A sold work publishes no Offer at all,
-        // which is unchanged and is what stops Google advertising a painting that is gone.
-        offers:
-          artwork.availability !== "available"
-            ? undefined
-            : directSale
-              ? {
-                  "@type": "Offer",
-                  price: (artwork.websitePriceMinor as number) / 100,
-                  priceCurrency: artwork.websiteCurrency ?? "EUR",
-                  availability: "https://schema.org/InStock",
-                  url: `${BASE_URL}${canonicalPath}`,
-                }
-              : SHOW_PRICES && artwork.price
-                ? {
-                    "@type": "Offer",
-                    price: artwork.price,
-                    priceCurrency: "USD",
-                    availability: "https://schema.org/InStock",
-                  }
-                : undefined,
-      });
+      // THE SAME BUILDER THE SERVER USES — artworkJsonLd from @shared/artworkSsr.
+      //
+      // This block used to be hand-rolled here, which made it diverge from the server's
+      // VisualArtwork in three ways at once: a different image URL (?v= vs clean), a malformed
+      // `height` (the "89x79cm" string in a numeric field), and no width. And because the
+      // server injects its block WITHOUT sharing this id, the two coexisted — duplicate,
+      // conflicting structured data on the rendered page. Using the shared builder makes this
+      // byte-identical to the server's, and injectJsonLd updates the server's #artwork-jsonld
+      // in place, so the page carries exactly one correct VisualArtwork. artwork.images already
+      // carry the ?v=<hash> the builder preserves, so the image URL matches the rendered <img>.
+      injectJsonLd("artwork-jsonld", artworkJsonLd(artwork as unknown as SsrArtwork, BASE_URL));
 
       if (location !== canonicalPath) {
         window.history.replaceState(null, "", canonicalPath);
@@ -259,6 +222,8 @@ export default function ArtworkDetailPage() {
                   src={images[currentImageIndex]}
                   alt={generateArtworkAlt(artwork.title, artwork.medium)}
                   title={`${artwork.title} – ${artwork.medium} by Ani Muradyan`}
+                  width={artworkDimensions(artwork as unknown as SsrArtwork)?.width}
+                  height={artworkDimensions(artwork as unknown as SsrArtwork)?.height}
                   className="w-full object-cover aspect-[4/5]"
                   loading="eager"
                 />
