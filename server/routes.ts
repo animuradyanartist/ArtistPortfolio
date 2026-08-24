@@ -22,7 +22,8 @@ import { isKnownAddressFor, knownAddresses } from "@shared/artworkAddress";
 import { isMissingArtworkPath } from "@shared/artworkNotFound";
 import { isMissingBlogPath } from "@shared/blogNotFound";
 import { isKnownRouteShape, markNotFoundHtml } from "@shared/publicRoutes";
-import { collectionBySlug, collectionMembers, COLLECTIONS } from "@shared/collections";
+import { collectionBySlug, collectionMembers, COLLECTIONS, isLandscape } from "@shared/collections";
+import { buildLlmsTxt } from "@shared/llmsTxt";
 import { renderCollectionHtml, collectionJsonLd, type CollectionRenderWork } from "@shared/collectionPrerender";
 import { artworkDimensions } from "@shared/artworkSsr";
 import { measurePrimaryImage } from "./imageDimensions";
@@ -1434,8 +1435,56 @@ Disallow: /api
 Sitemap: ${SEO_BASE_URL}/sitemap.xml
 Sitemap: ${SEO_BASE_URL}/image-sitemap.xml
 
+# Plain-language facts for AI assistants and answer engines:
+# ${SEO_BASE_URL}/llms.txt
+
 Crawl-delay: 1
 `);
+  });
+
+  // /llms.txt — a short, correct, plain-language index of the facts for AI assistants and
+  // answer engines (already this site's largest referral source). Every figure is derived
+  // from the live catalogue, so it cannot drift from what the pages actually say. Registered
+  // here, before the SPA catch-all, so the well-known path serves a real text file rather than
+  // the HTML shell it used to return with a 200.
+  app.get("/llms.txt", async (_req, res) => {
+    try {
+      const [artworks, exhibitions, bio] = await Promise.all([
+        storage.getAllArtworks().catch(() => []),
+        storage.getAllExhibitions().catch(() => []),
+        storage.getArtistBio().catch(() => undefined),
+      ]);
+      const available = artworks.filter((a) => a.availability === "available");
+      const priced = available.map((a) => Number(a.price)).filter((n) => Number.isFinite(n) && n > 0);
+      const mediums = Array.from(
+        new Set(artworks.map((a) => (a.medium || "").trim()).filter(Boolean).map((m) => m.replace(/\s+/g, " "))),
+      ).slice(0, 6);
+      const isLand = (a: typeof artworks[number]) => isLandscape({ title: a.title, description: a.description });
+      const years = exhibitions.map((e) => e.year || 0).filter((y) => y > 0);
+      const body = buildLlmsTxt({
+        baseUrl: SEO_BASE_URL,
+        totalWorks: artworks.length,
+        availableWorks: available.length,
+        landscapeAvailable: available.filter(isLand).length,
+        figurativeAvailable: available.filter((a) => !isLand(a)).length,
+        largeAvailable: available.filter((a) => a.size === "large").length,
+        priceMin: priced.length ? Math.min(...priced) : null,
+        priceMax: priced.length ? Math.max(...priced) : null,
+        currency: ARTWORK_PRICE_CURRENCY,
+        mediums,
+        exhibitionCount: exhibitions.length,
+        latestExhibitionYear: years.length ? Math.max(...years) : null,
+        bio: bio?.description ?? null,
+        statement: bio?.statement ?? null,
+        collectionSlugs: COLLECTIONS.map((c) => ({ slug: c.slug, heading: c.heading })),
+      });
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.send(body);
+    } catch (e) {
+      console.error("[llms.txt] generation failed:", e);
+      res.status(500).setHeader("Content-Type", "text/plain").send("");
+    }
   });
 
   /**
