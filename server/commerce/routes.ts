@@ -355,7 +355,10 @@ export function registerCommerceRoutes(app: Express): void {
             },
           ],
           success_url: `${base}/order/${order.reference}?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${base}/artworks`,
+          // Cancel lands on OUR route, which releases the hold at once (see below) so the work
+          // is buyable again the moment the buyer backs out — rather than staying held for the
+          // full window. Stripe substitutes the session id, which the route verifies.
+          cancel_url: `${base}/api/commerce/checkout/cancel?ref=${encodeURIComponent(order.reference)}&session_id={CHECKOUT_SESSION_ID}`,
         });
 
         await import("../db").then(({ pool }) => pool.query(
@@ -381,6 +384,32 @@ export function registerCommerceRoutes(app: Express): void {
     } catch {
       return res.status(500).json({ message: "Checkout could not be started." });
     }
+  });
+
+  // ── Cancel / abandon: release the hold AT ONCE, so the work is buyable again ──────────
+  //
+  // Stripe's cancel_url lands here with the reference and the session id it substitutes in.
+  // We verify that session id matches OUR order — an unguessable proof the caller actually
+  // started this checkout — before releasing anything, so nobody can free a stranger's hold by
+  // guessing a reference. Only an UNPAID order is touched, and the release is scoped to this
+  // order (releaseReservation checks reserved_by_order_id), so a DIFFERENT live checkout's hold
+  // can never be released here. This does not weaken the two-buyer guard: markSold still refuses
+  // to sell an unavailable work, and a released hold simply becomes re-reservable.
+  app.get("/api/commerce/checkout/cancel", async (req, res) => {
+    const ref = String(req.query.ref ?? "");
+    const sessionId = String(req.query.session_id ?? "");
+    let redirect = "/artworks";
+    try {
+      const order = ref ? await getOrderByReference(ref) : null;
+      if (order?.artwork_id) redirect = `/artworks/${order.artwork_id}`;
+      if (order && sessionId && order.stripe_checkout_session_id === sessionId && order.payment_status === "unpaid") {
+        if (order.artwork_id) await releaseReservation(order.artwork_id, order.id);
+        await markOrderCancelled(order.id);
+      }
+    } catch {
+      // A cancel that cannot be processed must still land the visitor somewhere sensible.
+    }
+    return res.redirect(302, redirect);
   });
 
   // ── The webhook. The only thing in this system that may say "paid". ───────────────────

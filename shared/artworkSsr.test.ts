@@ -23,6 +23,8 @@ import {
   artworkImageUrl,
   artworkNarrative,
   artworkOffer,
+  artworkPublicPrice,
+  formatArtworkPrice,
   isPurchasable,
   renderArtworkHtml,
   type SsrArtwork,
@@ -91,6 +93,46 @@ describe("an offer is only made when the work can actually be bought", () => {
     const html = renderArtworkHtml(artwork({ availability: "sold" }), BASE);
     expect(html).toContain("private collection");
     expect(html).not.toContain("USD 2,370");
+  });
+});
+
+describe("the public price is the website retail price where direct sale is on", () => {
+  it("uses the website price + currency, never the marketplace figure, for a direct-sale work", () => {
+    const a = artwork({ directSaleEnabled: true, websitePriceMinor: 240000, websiteCurrency: "EUR", price: 2370 });
+    expect(artworkPublicPrice(a)).toEqual({ amount: 2400, currency: "EUR" });
+    const html = renderArtworkHtml(a, BASE);
+    expect(html).toContain("EUR 2,400");     // the website price a buyer can pay
+    expect(html).not.toContain("USD 2,370"); // NOT the marketplace figure
+  });
+
+  it("falls back to the marketplace figure only when direct sale is off", () => {
+    expect(artworkPublicPrice(artwork())).toEqual({ amount: 2370, currency: "USD" });
+  });
+
+  it("never reads a private/net price — only websitePriceMinor or the public marketplace price", () => {
+    // A direct-sale work with NO website price shows nothing here rather than leaking `price`.
+    expect(artworkPublicPrice(artwork({ directSaleEnabled: true, websitePriceMinor: null, price: 9999, availability: "sold" }))).toBeNull();
+  });
+
+  it("shows no price on a sold work, even with a website price set", () => {
+    const a = artwork({ availability: "sold", directSaleEnabled: true, websitePriceMinor: 240000, websiteCurrency: "EUR" });
+    const html = renderArtworkHtml(a, BASE);
+    expect(html).not.toContain("EUR 2,400");
+    expect(html).toContain("private collection");
+  });
+
+  it("the visible SSR price and the JSON-LD offer name the same currency for a direct-sale work", () => {
+    const a = artwork({ directSaleEnabled: true, websitePriceMinor: 240000, websiteCurrency: "EUR" });
+    const offer = artworkOffer(a, BASE)!;
+    expect(offer.priceCurrency).toBe("EUR");
+    expect(offer.price).toBe(2400);
+    expect(renderArtworkHtml(a, BASE)).toContain("EUR 2,400");
+  });
+
+  it("formats an exact-dollar test item as its website price", () => {
+    const a = artwork({ directSaleEnabled: true, websitePriceMinor: 100, websiteCurrency: "USD", price: 1 });
+    expect(formatArtworkPrice(artworkPublicPrice(a))).toBe("USD 1");
+    expect(renderArtworkHtml(a, BASE)).toContain("USD 1");
   });
 });
 
