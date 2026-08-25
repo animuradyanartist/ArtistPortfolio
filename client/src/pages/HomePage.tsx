@@ -435,7 +435,7 @@ export default function HomePage() {
             <ul className="space-y-2 text-sm text-stone-700">
               <li>
                 <a
-                  href="https://www.instagram.com/animoria.art/"
+                  href="https://www.instagram.com/animuradyan.art/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-stone-900 transition-colors"

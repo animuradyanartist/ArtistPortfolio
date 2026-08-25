@@ -190,14 +190,14 @@ export default function ContactPage() {
               <ul className="space-y-3">
                 <li>
                   <a
-                    href="https://www.instagram.com/animoria.art/"
+                    href="https://www.instagram.com/animuradyan.art/"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="group flex items-center gap-3 text-sm text-stone-700 hover:text-stone-900 transition-colors"
                   >
                     <Instagram className="h-4 w-4 text-stone-500 group-hover:text-stone-800" />
                     <span className="border-b border-transparent group-hover:border-stone-800">
-                      Instagram · @animoria.art
+                      Instagram · @animuradyan.art
                     </span>
                   </a>
                 </li>

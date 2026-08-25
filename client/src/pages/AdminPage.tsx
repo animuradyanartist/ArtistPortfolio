@@ -2017,7 +2017,7 @@ export default function AdminPage() {
                         <FormItem>
                           <FormLabel>Instagram URL</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="https://www.instagram.com/animoria.art/" data-testid="input-instagram-url" />
+                            <Input {...field} placeholder="https://www.instagram.com/animuradyan.art/" data-testid="input-instagram-url" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -2031,7 +2031,7 @@ export default function AdminPage() {
                         <FormItem>
                           <FormLabel>Instagram Handle</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="@animoria.art" data-testid="input-instagram-handle" />
+                            <Input {...field} placeholder="@animuradyan.art" data-testid="input-instagram-handle" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

@@ -169,7 +169,7 @@ export function renderContactHtml(): string {
     `<p style="${BODY}">Location: Yerevan, Armenia</p>` +
     `<h2>Follow the Work</h2>` +
     `<ul>` +
-    `<li><a href="https://www.instagram.com/animoria.art/" style="${LINK}">Instagram · @animoria.art</a></li>` +
+    `<li><a href="https://www.instagram.com/animuradyan.art/" style="${LINK}">Instagram · @animuradyan.art</a></li>` +
     `<li><a href="https://www.saatchiart.com/account/profile/1980379" style="${LINK}">Saatchi Art · Shop originals</a></li>` +
     `<li><a href="https://www.singulart.com/en/artist/ani-muradyan-62448" style="${LINK}">Singulart · Verified artist</a></li>` +
     `</ul>` +
