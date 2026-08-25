@@ -162,7 +162,7 @@ describe('/contact states how to reach her', () => {
   });
 
   it('carries the three real profiles', () => {
-    expect(html).toContain('https://www.instagram.com/animoria.art/');
+    expect(html).toContain('https://www.instagram.com/animuradyan.art/');
     expect(html).toContain('https://www.saatchiart.com/account/profile/1980379');
     expect(html).toContain('https://www.singulart.com/en/artist/ani-muradyan-62448');
   });
