@@ -161,6 +161,97 @@ export const prints = pgTable("prints", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+/**
+ * PRINT VARIANTS — the purchasable configurations of a print. The `prints` row is the product
+ * (one per artwork); a variant is a specific material × size × frame. This lives in the ONE
+ * commerce system; a print purchase is an `orders` row with item_type 'print' referencing a
+ * variant here. `eligible` (the master passed the resolution engine) AND `enabled` (an admin
+ * turned it on) must both be true before a customer can buy it — so a low-res master can never
+ * be sold, and nothing goes live by accident.
+ */
+export const printVariants = pgTable("print_variants", {
+  id: serial("id").primaryKey(),
+  printId: integer("print_id").notNull(),
+  material: text("material").notNull(), // 'german-etching' | 'photo-rag'
+  prodigiSku: text("prodigi_sku").notNull(),
+  sizeLabel: text("size_label").notNull(), // 'S' | 'M' | 'L'
+  widthCm: integer("width_cm").notNull(),
+  heightCm: integer("height_cm").notNull(),
+  framed: boolean("framed").notNull().default(false),
+  frameColour: text("frame_colour"), // 'natural' | 'black' | 'white' | null
+  border: text("border"),
+  retailMinor: integer("retail_minor"),
+  currency: text("currency").notNull().default("EUR"),
+  baseCostMinor: integer("base_cost_minor"),
+  printReadyAssetUrl: text("print_ready_asset_url"),
+  mockups: text("mockups").array(),
+  effectiveDpi: integer("effective_dpi"),
+  minDpi: integer("min_dpi"),
+  eligible: boolean("eligible").notNull().default(false),
+  enabled: boolean("enabled").notNull().default(false),
+  /**
+   * PRODIGI RECONCILIATION STATE. False means the `prodigiSku` + attributes are our own
+   * PROVISIONAL configuration, not yet checked against a live Prodigi product response. It flips
+   * true only after a real sandbox/live catalogue call confirms the SKU, its attributes and its
+   * required print resolution. A public purchase is NEVER gated on this alone (a master must be
+   * ready), but the configurator and admin show a provisional variant as unverified so an
+   * invented SKU can never masquerade as confirmed.
+   */
+  prodigiVerified: boolean("prodigi_verified").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  printIdx: index("print_variants_print_idx").on(t.printId),
+}));
+
+export const insertPrintVariantSchema = createInsertSchema(printVariants).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsertPrintVariant = z.infer<typeof insertPrintVariantSchema>;
+export type PrintVariant = typeof printVariants.$inferSelect;
+
+/**
+ * PRINT MASTERS — the readiness record for the ONE thing a print product cannot fake: a
+ * genuine high-resolution source file. A master belongs to an ARTWORK (the source photograph of
+ * the original painting), independent of whether a `prints` product exists yet.
+ *
+ * TODAY EVERY ARTWORK'S ONLY IMAGE IS THE ~1280px WEB FILE, WHICH IS NOT A MASTER. So no row
+ * here has `status: 'ready'` and nothing is publicly purchasable. This table is the interface
+ * that lets a real master be added LATER — its pixel dimensions drive the eligibility engine,
+ * its print-ready derived URL is what fulfilment sends to Prodigi — without any storefront
+ * rewrite. Nothing here upscales or pretends a web image is a master.
+ */
+export const printMasters = pgTable("print_masters", {
+  id: serial("id").primaryKey(),
+  /** One master per artwork. */
+  artworkId: integer("artwork_id").notNull(),
+  /** Longest/short edge in pixels of the real master. Null until a master is actually supplied. */
+  widthPx: integer("width_px"),
+  heightPx: integer("height_px"),
+  /** The print-ready, colour-managed derived asset URL fulfilment sends to Prodigi. Never a web image. */
+  printReadyAssetUrl: text("print_ready_asset_url"),
+  /** MD5 of the print-ready asset, passed to Prodigi so it can verify the file it downloaded. */
+  checksumMd5: text("checksum_md5"),
+  /**
+   * Readiness, and it fails closed. 'missing' = no real master (the default, and the truth for
+   * the whole catalogue today). 'provisional' = a candidate uploaded but not yet confirmed
+   * print-ready. 'ready' = a verified master whose dimensions clear the eligibility floor — the
+   * ONLY state in which its variants may be publicly purchasable.
+   */
+  status: text("status").notNull().default("missing"), // 'missing' | 'provisional' | 'ready'
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  artworkIdx: uniqueIndex("print_masters_artwork_unique").on(t.artworkId),
+}));
+
+export const insertPrintMasterSchema = createInsertSchema(printMasters).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsertPrintMaster = z.infer<typeof insertPrintMasterSchema>;
+export type PrintMaster = typeof printMasters.$inferSelect;
+
 export const exhibitions = pgTable("exhibitions", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -472,6 +563,18 @@ export const orders = pgTable("orders", {
   /** A non-status overlay for exceptional situations: null | 'delayed' | 'delivery_issue'.
    *  Kept off the status machine so it can be raised and cleared without a fake transition. */
   exceptionState: text("exception_state"),
+
+  // ── print fulfilment via a provider (Prodigi). Null on original-artwork orders, which Ani
+  //    fulfils herself. A print order carries the variant it bought and the provider order id, so
+  //    fulfilment extends the verified-paid path without a second commerce system. ──
+  fulfilmentProvider: text("fulfilment_provider"), // 'prodigi' | null
+  printVariantId: integer("print_variant_id"),
+  prodigiOrderId: text("prodigi_order_id"),
+  fulfilmentStatus: text("fulfilment_status"), // pending | created | inproduction | shipped | complete | failed | cancelled
+  /** One stable key per internal order, reused on every retry so duplicate webhooks never double-produce. */
+  fulfilmentIdempotencyKey: text("fulfilment_idempotency_key"),
+  fulfilmentError: text("fulfilment_error"),
+  fulfilmentRetryCount: integer("fulfilment_retry_count").default(0),
   /** The latest buyer-visible note ("Packed and collected by the courier this morning."). */
   customerMessage: text("customer_message"),
   /** Private to Admin — never sent to the buyer or returned by a public endpoint. */

@@ -17,6 +17,19 @@ interface Row {
   country: string | null; itemsFormatted: string | null; shippingFormatted: string | null;
   totalFormatted: string | null; carrier: string | null; tracking: string | null;
   exceptionState: string | null; createdAt: string;
+  // print fulfilment (null on original-artwork orders)
+  itemType?: string; fulfilmentProvider?: string | null; fulfilmentStatus?: string | null;
+  fulfilmentError?: string | null; prodigiOrderId?: string | null;
+}
+
+/** A paid PRINT order that has not reached a healthy provider state yet — the thing to surface. */
+function printNeedsAttention(o: Row): boolean {
+  return (
+    o.itemType === "print" &&
+    o.paymentStatus === "paid" &&
+    (o.fulfilmentStatus == null ||
+      ["pending", "config_missing", "failed"].includes(o.fulfilmentStatus))
+  );
 }
 
 type Bucket = "all" | "new" | "preparing" | "packed" | "shipped" | "delivered" | "closed";
@@ -138,7 +151,15 @@ export default function AdminOrdersPage() {
                           ? <img src={o.artworkImage} alt="" className="h-9 w-9 object-cover border border-stone-200" loading="lazy" />
                           : <span className="h-9 w-9 bg-stone-100 border border-stone-200 inline-block" />}
                         <span className="text-stone-800">{o.artworkTitle ?? "—"}</span>
+                        {o.itemType === "print" && (
+                          <span className="text-[9px] font-semibold tracking-wide uppercase bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Print</span>
+                        )}
                       </div>
+                      {printNeedsAttention(o) && (
+                        <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                          Paid · unfulfilled{o.fulfilmentStatus ? ` (${o.fulfilmentStatus})` : ""}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-stone-900">{o.buyerName ?? "—"}</div>

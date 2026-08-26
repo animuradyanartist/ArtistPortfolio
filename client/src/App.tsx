@@ -10,8 +10,8 @@ import HomePage from "@/pages/HomePage";
 import ArtworksPage from "@/pages/ArtworksPage";
 import ArtworkDetailPage from "@/pages/ArtworkDetailPage";
 import CollectionPage from "@/pages/CollectionPage";
-// import PrintsPage from "@/pages/PrintsPage";
-// import PrintArtworkPage from "@/pages/PrintArtworkPage";
+import PrintsPage from "@/pages/PrintsPage";
+import PrintDetailPage from "@/pages/PrintDetailPage";
 import AboutPage from "@/pages/AboutPage";
 import PathPage from "@/pages/PathPage";
 import ExhibitionsPage from "@/pages/ExhibitionsPage";
@@ -58,8 +58,8 @@ function Router() {
       <Route path="/" component={HomePage} />
       <Route path="/artworks" component={ArtworksPage} />
       <Route path="/artworks/:id" component={ArtworkDetailPage} />{/* :id accepts both numeric IDs and slug strings */}
-      <Route path="/prints">{() => <Redirect to="/" />}</Route>
-      <Route path="/prints/:id">{() => <Redirect to="/" />}</Route>
+      <Route path="/prints" component={PrintsPage} />
+      <Route path="/prints/:slug" component={PrintDetailPage} />
       <Route path="/about" component={AboutPage} />
       <Route path="/path" component={PathPage} />
       <Route path="/exhibitions" component={ExhibitionsPage} />

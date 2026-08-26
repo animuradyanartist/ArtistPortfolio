@@ -28,7 +28,74 @@ export interface OrderRow {
   tracking_token: string | null;
   payment_source: string | null; stripe_payment_status: string | null; last_payment_check_at: Date | null;
   attribution: string | null;
+  // ── print fulfilment (Prodigi). Null on original-artwork orders. ──
+  fulfilment_provider: string | null; print_variant_id: number | null; prodigi_order_id: string | null;
+  fulfilment_status: string | null; fulfilment_idempotency_key: string | null;
+  fulfilment_error: string | null; fulfilment_retry_count: number | null;
   created_at: Date; updated_at: Date;
+}
+
+/**
+ * Persist the outcome of a print fulfilment attempt onto the order. Called only from the paid
+ * webhook path (and the admin retry, which reuses the same idempotency key). Pure DB write; the
+ * decision of WHAT to write is made by `createPrintFulfilment`.
+ */
+export async function setPrintFulfilment(
+  id: number,
+  patch: {
+    provider?: string | null;
+    prodigiOrderId?: string | null;
+    fulfilmentStatus?: string | null;
+    idempotencyKey?: string | null;
+    error?: string | null;
+    carrier?: string | null;
+    trackingNumber?: string | null;
+    trackingUrl?: string | null;
+    incrementRetry?: boolean;
+  },
+): Promise<void> {
+  await pool.query(
+    `UPDATE orders SET
+        fulfilment_provider = COALESCE($2, fulfilment_provider),
+        prodigi_order_id = COALESCE($3, prodigi_order_id),
+        fulfilment_status = COALESCE($4, fulfilment_status),
+        fulfilment_idempotency_key = COALESCE($5, fulfilment_idempotency_key),
+        fulfilment_error = $6,
+        shipping_carrier = COALESCE($7, shipping_carrier),
+        tracking_number = COALESCE($8, tracking_number),
+        tracking_url = COALESCE($9, tracking_url),
+        fulfilment_retry_count = fulfilment_retry_count + $10,
+        updated_at = now()
+      WHERE id = $1`,
+    [
+      id,
+      patch.provider ?? null,
+      patch.prodigiOrderId ?? null,
+      patch.fulfilmentStatus ?? null,
+      patch.idempotencyKey ?? null,
+      patch.error ?? null,
+      patch.carrier ?? null,
+      patch.trackingNumber ?? null,
+      patch.trackingUrl ?? null,
+      patch.incrementRetry ? 1 : 0,
+    ],
+  );
+}
+
+/** Ensure a stable fulfilment idempotency key exists for a print order; returns it. */
+export async function ensureFulfilmentIdempotencyKey(id: number, reference: string): Promise<string> {
+  const existing = await pool.query(
+    `SELECT fulfilment_idempotency_key AS k FROM orders WHERE id = $1`, [id],
+  );
+  const current = existing.rows[0]?.k as string | null | undefined;
+  if (current) return current;
+  const key = `am-print-${reference}`;
+  await pool.query(
+    `UPDATE orders SET fulfilment_idempotency_key = $2, updated_at = now()
+       WHERE id = $1 AND fulfilment_idempotency_key IS NULL`,
+    [id, key],
+  );
+  return key;
 }
 
 /**
@@ -73,6 +140,13 @@ export async function getOrderBySession(sessionId: string): Promise<OrderRow | n
   if (!hasDatabase) return null;
   const { rows } = await pool.query(
     `SELECT * FROM orders WHERE stripe_checkout_session_id = $1`, [sessionId],
+  );
+  return (rows[0] as OrderRow) ?? null;
+}
+
+export async function getOrderByProdigiOrderId(prodigiOrderId: string): Promise<OrderRow | null> {
+  const { rows } = await pool.query(
+    `SELECT * FROM orders WHERE prodigi_order_id = $1 LIMIT 1`, [prodigiOrderId],
   );
   return (rows[0] as OrderRow) ?? null;
 }

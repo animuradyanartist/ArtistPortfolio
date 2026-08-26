@@ -146,5 +146,75 @@ export const SELF_HEAL_DDL: readonly string[] = [
         received_at timestamp DEFAULT now()
       )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS stripe_events_event_id_unique ON stripe_events (event_id)`,
-  `CREATE INDEX IF NOT EXISTS artworks_reserved_until_idx ON artworks (reserved_until)`
+  `CREATE INDEX IF NOT EXISTS artworks_reserved_until_idx ON artworks (reserved_until)`,
+  // ── PRINT FULFILMENT via a provider (Prodigi). One commerce system: these live on the orders
+  //    table and are null on original-artwork orders. Must mirror shared/schema.ts orders exactly. ──
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment_provider text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS print_variant_id integer`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS prodigi_order_id text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment_status text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment_idempotency_key text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment_error text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment_retry_count integer DEFAULT 0`,
+  // The print PRODUCT (one per artwork). Predates the variant model; CREATE IF NOT EXISTS is a
+  // no-op where it already exists in production.
+  `CREATE TABLE IF NOT EXISTS prints (
+        id serial PRIMARY KEY,
+        title text NOT NULL,
+        slug text,
+        description text NOT NULL,
+        images text[] NOT NULL,
+        artwork_id integer,
+        available_sizes text NOT NULL,
+        preferred_material text NOT NULL DEFAULT 'paper',
+        status text NOT NULL DEFAULT 'active',
+        featured boolean DEFAULT false,
+        position integer DEFAULT 0,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+  // PRINT VARIANTS — the purchasable material × size × frame configurations of a print. Both
+  // eligible (master cleared the resolution engine) AND enabled (an admin turned it on) must be
+  // true before a customer can buy it. prodigi_verified records SKU reconciliation state.
+  `CREATE TABLE IF NOT EXISTS print_variants (
+        id serial PRIMARY KEY,
+        print_id integer NOT NULL,
+        material text NOT NULL,
+        prodigi_sku text NOT NULL,
+        size_label text NOT NULL,
+        width_cm integer NOT NULL,
+        height_cm integer NOT NULL,
+        framed boolean NOT NULL DEFAULT false,
+        frame_colour text,
+        border text,
+        retail_minor integer,
+        currency text NOT NULL DEFAULT 'EUR',
+        base_cost_minor integer,
+        print_ready_asset_url text,
+        mockups text[],
+        effective_dpi integer,
+        min_dpi integer,
+        eligible boolean NOT NULL DEFAULT false,
+        enabled boolean NOT NULL DEFAULT false,
+        prodigi_verified boolean NOT NULL DEFAULT false,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+  `ALTER TABLE print_variants ADD COLUMN IF NOT EXISTS prodigi_verified boolean NOT NULL DEFAULT false`,
+  `CREATE INDEX IF NOT EXISTS print_variants_print_idx ON print_variants (print_id)`,
+  // PRINT MASTERS — the readiness record for the high-resolution source. Fails closed: default
+  // status 'missing' means nothing is publicly purchasable until a real master is supplied.
+  `CREATE TABLE IF NOT EXISTS print_masters (
+        id serial PRIMARY KEY,
+        artwork_id integer NOT NULL,
+        width_px integer,
+        height_px integer,
+        print_ready_asset_url text,
+        checksum_md5 text,
+        status text NOT NULL DEFAULT 'missing',
+        note text,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS print_masters_artwork_unique ON print_masters (artwork_id)`
 ];

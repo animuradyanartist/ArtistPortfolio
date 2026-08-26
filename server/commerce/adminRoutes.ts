@@ -17,6 +17,7 @@ import {
   markOrderPaid, setPaymentSource, recordPaymentCheck, logOrderAudit, listOrderAudit,
 } from "./orders";
 import { releaseExpiredReservations, markSold } from "./reservation";
+import { fulfilPrintOrder, canRetryPrintFulfilment } from "./prints/printFulfilmentService";
 import { stripeMode, stripeClient } from "./stripeClient";
 import {
   sendOrderConfirmation, sendShippedEmail, sendDeliveredEmail, sendPreparingEmail, sendManualUpdate,
@@ -53,6 +54,13 @@ export function registerAdminCommerceRoutes(app: Express): void {
           totalFormatted: o.total_minor != null ? formatMoney(o.total_minor, c) : null,
           carrier: o.shipping_carrier, tracking: o.tracking_number,
           exceptionState: o.exception_state,
+          // ── item type + print fulfilment, so the list can badge PRINT and surface a paid-but-
+          //    unfulfilled order at a glance. Null on original-artwork orders. ──
+          itemType: o.item_type,
+          fulfilmentProvider: o.fulfilment_provider,
+          fulfilmentStatus: o.fulfilment_status,
+          fulfilmentError: o.fulfilment_error,
+          prodigiOrderId: o.prodigi_order_id,
           createdAt: o.created_at,
         };
       }));
@@ -74,6 +82,17 @@ export function registerAdminCommerceRoutes(app: Express): void {
         artworkSnapshot: order.artwork_snapshot ? safeParse(order.artwork_snapshot) : null,
         shippingCalculation: order.shipping_calculation ? safeParse(order.shipping_calculation) : null,
         attribution: order.attribution ? safeParse(order.attribution) : null,
+        // ── print fulfilment, camelCase for the UI (the raw snake_case fields are also spread
+        //    above). `itemSnapshot` is the parsed variant snapshot; for a print it carries
+        //    material/size/frame/sku/quantity. `canRetryFulfilment` gates the retry button. ──
+        isPrint: order.item_type === "print",
+        fulfilmentProvider: order.fulfilment_provider,
+        fulfilmentStatus: order.fulfilment_status,
+        fulfilmentError: order.fulfilment_error,
+        fulfilmentRetryCount: order.fulfilment_retry_count ?? 0,
+        prodigiOrderId: order.prodigi_order_id,
+        printVariantId: order.print_variant_id,
+        canRetryFulfilment: canRetryPrintFulfilment(order),
         // Only the moves the state machine actually permits from here.
         availableStatuses: nextStatuses(order.status as OrderStatus).filter((s) => ADMIN_SETTABLE.includes(s)),
         // The email ledger for this order, and whether the mailer is configured at all.
@@ -293,6 +312,41 @@ export function registerAdminCommerceRoutes(app: Express): void {
       return res.json({ ok: true, wasFirst, stripePaymentStatus: "paid", paymentIntentStatus: piStatus, email });
     } catch {
       return res.status(500).json({ message: "Reconciliation failed." });
+    }
+  });
+
+  // ── PRINT: retry fulfilment (for a paid-but-unfulfilled print order) ─────────────────────
+  //
+  // Reuses the SAME fulfilment service the webhook uses, which reuses the SAME stable idempotency
+  // key — so a retry can only reconcile to the existing provider order, never create a second one.
+  // Guarded to print orders that are paid and do NOT already carry a provider order id.
+  app.post("/api/admin/orders/:id/retry-fulfilment", requireAdminAuth, async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      const order = await getOrder(id);
+      if (!order) return res.status(404).json({ message: "Not found" });
+      if (!canRetryPrintFulfilment(order)) {
+        return res.status(409).json({
+          message:
+            order.item_type !== "print" ? "This is not a print order."
+            : order.payment_status !== "paid" ? "Only a paid order can be fulfilled."
+            : "This order already has a provider order — retrying is disabled to avoid a duplicate.",
+        });
+      }
+      const proto = (req.headers["x-forwarded-proto"] as string) ?? req.protocol ?? "https";
+      const base = process.env.PUBLIC_BASE_URL?.trim() || `${proto}://${req.get("host")}`;
+      await fulfilPrintOrder(order, base);
+      const fresh = await getOrder(id);
+      await logOrderAudit(id, "retry-fulfilment", fresh?.fulfilment_status ?? "unknown",
+        `Retry fulfilment invoked; fulfilment_status=${fresh?.fulfilment_status ?? "n/a"}, prodigi_order_id=${fresh?.prodigi_order_id ?? "none"}.`);
+      return res.json({
+        ok: true,
+        fulfilmentStatus: fresh?.fulfilment_status ?? null,
+        prodigiOrderId: fresh?.prodigi_order_id ?? null,
+        fulfilmentError: fresh?.fulfilment_error ?? null,
+      });
+    } catch {
+      return res.status(500).json({ message: "Could not retry fulfilment." });
     }
   });
 

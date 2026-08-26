@@ -26,6 +26,9 @@ import {
 import { sendOrderConfirmation } from "../email";
 import { publicOrderView, publicTrackingView } from "./orderView";
 import { clientIpOf } from "../loginRateLimit";
+import { getVariantForCheckout } from "./prints/printRepo";
+import { validatePrintSelection, planPrintCheckout } from "./prints/printCheckout";
+import { fulfilPrintOrder, paidActionFor } from "./prints/printFulfilmentService";
 
 /**
  * A small fixed-window limiter for the endpoints that create rows.
@@ -71,6 +74,122 @@ function siteBaseUrl(req: Request): string {
   if (configured) return configured.replace(/\/+$/, "");
   const proto = (req.headers["x-forwarded-proto"] as string) ?? req.protocol ?? "https";
   return `${proto}://${req.get("host")}`;
+}
+
+/**
+ * The print checkout. Same orders table, same Stripe client, same webhook as originals — a
+ * different item. NO reservation (a print has unlimited supply). The server resolves the variant
+ * and its price from the database; nothing about price or availability is trusted from the client.
+ */
+async function handlePrintCheckout(req: Request, res: Response, stripe: NonNullable<ReturnType<typeof stripeClient>>) {
+  const sel = validatePrintSelection((req.body ?? {}).print);
+  if (!sel.ok) return res.status(400).json({ message: "Please choose a valid print option", errors: sel.errors });
+
+  const buyer = validateBuyer((req.body ?? {}).buyer);
+  if (!buyer.ok) return res.status(400).json({ message: "Please check your details", errors: buyer.errors });
+
+  // FRESH ROWS. The server re-reads the variant, its print and its master immediately before it
+  // asks Stripe for anything — the client's word for none of it is trusted.
+  const resolved = await getVariantForCheckout(sel.value!.variantId);
+  if (!resolved) {
+    return res.status(409).json({ code: "missing", message: "This print option is no longer available." });
+  }
+
+  const plan = planPrintCheckout({
+    print: {
+      id: resolved.print.id,
+      title: resolved.print.title,
+      artworkId: resolved.print.artworkId,
+      images: resolved.print.images,
+    },
+    variant: resolved.variant,
+    master: resolved.master,
+    quantity: sel.value!.quantity,
+  });
+  if (!plan.ok) {
+    return res.status(409).json({
+      code: plan.refusal.kind,
+      message: plan.refusal.kind === "not-purchasable"
+        ? "This print is not available to buy yet."
+        : "This print cannot be purchased right now.",
+      detail: plan.refusal.reason,
+    });
+  }
+
+  const recent = await recentUnpaidOrderCount(buyer.value.email);
+  if (recent >= 5) {
+    return res.status(429).json({
+      code: "too-many-checkouts",
+      message: "There are several unfinished checkouts on this email address. Please complete or abandon one before starting another.",
+    });
+  }
+
+  const reference = await nextReference();
+  const order = await createOrder({
+    reference,
+    status: "pending",
+    payment_status: "unpaid",
+    buyer_name: buyer.value.name, buyer_email: buyer.value.email, buyer_phone: buyer.value.phone,
+    ship_country: buyer.value.country, ship_address1: buyer.value.address1,
+    ship_address2: buyer.value.address2, ship_city: buyer.value.city,
+    ship_region: buyer.value.region, ship_postal_code: buyer.value.postalCode,
+    item_type: "print",
+    artwork_id: resolved.print.artworkId,          // the SOURCE painting, so fulfilment + "view the original" can find it
+    print_variant_id: resolved.variant.id,
+    fulfilment_provider: "prodigi",
+    fulfilment_status: "pending",
+    // The print item snapshot is the historical record of the exact variant bought — the print
+    // equivalent of artwork_snapshot, stored in the same generic item-snapshot column.
+    artwork_snapshot: JSON.stringify(plan.plan.snapshot),
+    item_price_minor: plan.plan.itemsMinor,
+    currency: plan.plan.currency,
+    shipping_minor: plan.plan.shippingMinor,
+    total_minor: plan.plan.totalMinor,
+    shipping_basis: plan.plan.shippingBasis,
+    attribution: sanitiseAttribution((req.body ?? {}).attribution),
+  } as never);
+
+  const base = siteBaseUrl(req);
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: buyer.value.email,
+      client_reference_id: order.reference,
+      metadata: {
+        orderId: String(order.id), reference: order.reference,
+        itemType: "print", printVariantId: String(resolved.variant.id),
+      },
+      line_items: [
+        {
+          quantity: plan.plan.stripeLineItem.quantity,
+          price_data: {
+            currency: plan.plan.currency.toLowerCase(),
+            unit_amount: plan.plan.stripeLineItem.unitAmountMinor,
+            product_data: {
+              name: plan.plan.stripeLineItem.name,
+              description: plan.plan.stripeLineItem.description,
+            },
+          },
+        },
+      ],
+      success_url: `${base}/order/${order.reference}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${base}/api/commerce/checkout/cancel?ref=${encodeURIComponent(order.reference)}&session_id={CHECKOUT_SESSION_ID}`,
+    });
+
+    await import("../db").then(({ pool }) => pool.query(
+      `UPDATE orders SET stripe_checkout_session_id = $2, status = 'checkout_created', updated_at = now() WHERE id = $1`,
+      [order.id, session.id],
+    ));
+
+    return res.json({ url: session.url, reference: order.reference });
+  } catch (e) {
+    await markOrderCancelled(order.id);
+    return res.status(502).json({
+      code: "stripe-unavailable",
+      message: "Payment could not be started just now. Nothing has been charged — please try again.",
+      detail: e instanceof Error ? e.message.slice(0, 200) : undefined,
+    });
+  }
 }
 
 export function registerCommerceRoutes(app: Express): void {
@@ -238,6 +357,13 @@ export function registerCommerceRoutes(app: Express): void {
       const stripe = stripeClient();
       if (!stripe) {
         return res.status(503).json({ code: "checkout-unconfigured", message: "Online payment is not available yet." });
+      }
+
+      // ── PRINT BRANCH. The same route, the same orders table, the same webhook — a different
+      //    item. A print request carries `print: { variantId, quantity }`; an original carries
+      //    `artworkIds`. The original path below is untouched. ──────────────────────────────
+      if ((req.body ?? {}).print != null) {
+        return await handlePrintCheckout(req, res, stripe);
       }
 
       const ids = validateArtworkIds((req.body ?? {}).artworkIds);
@@ -477,7 +603,18 @@ export function registerCommerceRoutes(app: Express): void {
           // `completed` fires for unpaid sessions too when the method is asynchronous.
           if (session.payment_status && session.payment_status !== "paid") break;
           const wasFirst = await markOrderPaid(order.id, session.payment_intent ?? null);
-          if (wasFirst && order.artwork_id) await markSold(order.artwork_id, order.id);
+          if (wasFirst) {
+            // BRANCH ON ITEM TYPE (via the pure, unit-tested `paidActionFor`). A PRINT sale must
+            // NEVER mark the source painting sold — the original stays for sale. Only an ORIGINAL
+            // order marks its artwork sold. A print order instead invokes provider fulfilment
+            // (idempotent, fails closed).
+            const action = paidActionFor(order);
+            if (action === "fulfil-print") {
+              await fulfilPrintOrder(order, siteBaseUrl(req));
+            } else if (action === "mark-sold" && order.artwork_id) {
+              await markSold(order.artwork_id, order.id);
+            }
+          }
           // The confirmation email is sent exactly once — gated on the same `wasFirst` that
           // makes fulfilment fire once. A retry updates zero rows, so `wasFirst` is false and no
           // second email is attempted; the email ledger's dedupe key is a second guarantee.
