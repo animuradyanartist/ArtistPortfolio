@@ -22,6 +22,7 @@ import CreateArtworkPage from "@/pages/CreateArtworkPage";
 import EditArtworkPage from "@/pages/EditArtworkPage";
 import CreatePrintPage from "@/pages/CreatePrintPage";
 import EditPrintPage from "@/pages/EditPrintPage";
+import AdminPrintVariantsPage from "@/pages/AdminPrintVariantsPage";
 import NotFound from "@/pages/not-found";
 import CartPage from "@/pages/CartPage";
 import CheckoutPage from "@/pages/CheckoutPage";
@@ -70,6 +71,7 @@ function Router() {
       <Route path="/admin/edit-artwork/:id" component={EditArtworkPage} />
       <Route path="/admin/create-print" component={CreatePrintPage} />
       <Route path="/admin/edit-print/:id" component={EditPrintPage} />
+      <Route path="/admin/edit-print/:id/variants" component={AdminPrintVariantsPage} />
       <Route path="/blog" component={BlogPage} />
       <Route path="/blog/:slug" component={BlogPostPage} />
       {/* Direct sales. Declared BEFORE the /:seoSlug catch-all, which would otherwise

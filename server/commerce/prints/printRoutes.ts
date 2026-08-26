@@ -14,6 +14,7 @@ import {
   getPrintDetailBySlug,
   getPrintFeedInputs,
   printSlugOf,
+  purchasablePrintSlugForArtwork,
 } from "./printRepo";
 import { assessVariant, isPubliclyPurchasable, startingPriceMinor } from "@shared/commerce/printProduct";
 import { buildFeedTsv } from "@shared/commerce/printFeed";
@@ -34,6 +35,20 @@ export function registerPrintRoutes(app: Express): void {
       return res.json({ prints: cards });
     } catch {
       return res.status(500).json({ message: "Could not load prints." });
+    }
+  });
+
+  // ── Cross-link data: does this ORIGINAL artwork have a PURCHASABLE print? (registered before
+  //    :slug so the extra path segment resolves here). Returns null while nothing is sellable. ──
+  app.get("/api/commerce/prints/for-artwork/:artworkId", async (req, res) => {
+    try {
+      const artworkId = Number.parseInt(String(req.params.artworkId), 10);
+      if (!Number.isInteger(artworkId)) return res.status(400).json({ slug: null });
+      const slug = await purchasablePrintSlugForArtwork(artworkId);
+      res.set("Cache-Control", "public, max-age=60");
+      return res.json({ available: slug != null, slug });
+    } catch {
+      return res.status(500).json({ slug: null });
     }
   });
 

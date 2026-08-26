@@ -156,6 +156,19 @@ export async function getPurchasablePrintCollection(): Promise<PrintCollectionCa
   return cards;
 }
 
+/** The slug of a PURCHASABLE print product for a given artwork, or null. Powers the original →
+ *  "Available as a fine-art print" cross-link — which only appears when a print can actually be bought. */
+export async function purchasablePrintSlugForArtwork(artworkId: number): Promise<string | null> {
+  if (!hasDatabase) return null;
+  const { rows } = await pool.query(`SELECT * FROM prints WHERE status = 'active' AND artwork_id = $1`, [artworkId]);
+  for (const r of rows) {
+    const print = mapPrint(r);
+    const [variants, master] = await Promise.all([variantsFor(print.id), masterFor(print.artworkId)]);
+    if (hasPurchasableVariant(variants, master)) return printSlugOf(print);
+  }
+  return null;
+}
+
 export interface CheckoutVariant {
   print: PrintProductRow;
   variant: PrintVariantView;

@@ -34,7 +34,7 @@ function variant(over: Partial<PrintVariantView> = {}): PrintVariantView {
     id: 1,
     printId: 10,
     material: "german-etching",
-    prodigiSku: "GLOBAL-FAP-16x24",
+    prodigiSku: "GLOBAL-HGE-12X16",
     sizeLabel: "M",
     widthCm: 70,
     heightCm: 47,
@@ -85,6 +85,14 @@ describe("assessVariant — the sale-state gate", () => {
     expect(assessVariant(variant({ eligible: false }), readyMaster).state).toBe("unavailable");
   });
 
+  it("is UNAVAILABLE when the Prodigi SKU is not a verified active-launch SKU", () => {
+    // an invented SKU, the 404'd GLOBAL-PR-*, and non-launch Enhanced Matte all fail the SKU gate
+    expect(assessVariant(variant({ prodigiSku: "MADE-UP-SKU" }), readyMaster).state).toBe("unavailable");
+    expect(assessVariant(variant({ prodigiSku: "GLOBAL-PR-16X20" }), readyMaster).reason).toBe("Unverified Prodigi SKU");
+    expect(assessVariant(variant({ prodigiSku: "GLOBAL-FAP-16X24" }), readyMaster).state).toBe("unavailable");
+    expect(isPubliclyPurchasable(variant({ prodigiSku: "GLOBAL-FAP-16X24" }), readyMaster)).toBe(false);
+  });
+
   it("uses the variant's own asset, else the master's, as the print-ready file", () => {
     expect(printReadyAssetOf(variant({ printReadyAssetUrl: "v.tif" }), readyMaster)).toBe("v.tif");
     expect(printReadyAssetOf(variant({ printReadyAssetUrl: null }), readyMaster)).toBe(readyMaster.printReadyAssetUrl);
@@ -131,7 +139,7 @@ describe("price + snapshot", () => {
       sizeLabel: "M",
       framed: true,
       frameColour: "black",
-      prodigiSku: "GLOBAL-FAP-16x24",
+      prodigiSku: "GLOBAL-HGE-12X16",
       quantity: 3,
       unitPriceMinor: 6500,
       currency: "EUR",

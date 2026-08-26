@@ -329,6 +329,10 @@ export default function ArtworkDetailPage() {
             <PurchasePanel artworkId={artwork.id} marketplaceUrl={commerce.marketplaceUrl}
               marketplaceLabel={commerce.marketplaceLabel} />
 
+            {/* Cross-link to a fine-art print — appears ONLY when this artwork has a genuinely
+                purchasable print. The original stays the premium, one-of-a-kind work. */}
+            <PrintAvailability artworkId={artwork.id} />
+
             {/* The existing marketplace actions, shown when direct sale is NOT the route. */}
             {!directSale && artwork.availability === "available" && (
               <div className="flex flex-wrap items-center gap-4">
@@ -400,5 +404,29 @@ export default function ArtworkDetailPage() {
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Subtle "Available as a fine-art print" cross-link. Renders NOTHING unless the artwork has a
+ * genuinely purchasable print (the server gates that). Today nothing is purchasable, so this is
+ * invisible — it lights up automatically once a real master + enabled variant exists.
+ */
+function PrintAvailability({ artworkId }: { artworkId: number }) {
+  const { data } = useQuery<{ available: boolean; slug: string | null }>({
+    queryKey: [`/api/commerce/prints/for-artwork/${artworkId}`],
+    queryFn: async () => {
+      const r = await fetch(`/api/commerce/prints/for-artwork/${artworkId}`);
+      if (!r.ok) return { available: false, slug: null };
+      return r.json();
+    },
+  });
+  if (!data?.available || !data.slug) return null;
+  return (
+    <Link href={`/prints/${data.slug}`}>
+      <a className="inline-flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase text-stone-600 border-b border-stone-400 hover:border-stone-800">
+        Available as a fine-art print →
+      </a>
+    </Link>
   );
 }

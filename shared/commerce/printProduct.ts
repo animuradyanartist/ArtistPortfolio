@@ -20,6 +20,8 @@
  * checkout may charge; a Singulart/original-artwork price is never a substitute here.
  */
 
+import { isActiveLaunchSku } from "./prodigiProducts";
+
 export type MasterStatus = "missing" | "provisional" | "ready";
 
 export interface PrintMasterView {
@@ -82,6 +84,12 @@ export function assessVariant(v: PrintVariantView, master: PrintMasterView | nul
   // engine, is never even offered as provisional.
   if (!v.enabled) {
     return { state: "unavailable", reason: "Not enabled", masterReady, prodigiVerified: v.prodigiVerified };
+  }
+  // THE SKU GATE. The variant's Prodigi SKU must be a sandbox-verified, active-launch product.
+  // An invented, mistyped, or non-launch SKU (e.g. the 404'd GLOBAL-PR-*, or Enhanced Matte which
+  // is not in the launch) can never be sold — this is the single point that enforces it everywhere.
+  if (!isActiveLaunchSku(v.prodigiSku)) {
+    return { state: "unavailable", reason: "Unverified Prodigi SKU", masterReady, prodigiVerified: v.prodigiVerified };
   }
   if (!v.eligible) {
     return {

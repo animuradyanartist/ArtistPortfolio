@@ -188,7 +188,7 @@ export default function PrintDetailPage() {
 
         {/* Configurator */}
         <div>
-          <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-2">Fine-Art Print · Open edition</p>
+          <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-2">Fine-Art Print · Open edition · Unsigned</p>
           <h1 className="font-playfair text-3xl md:text-4xl text-stone-900 mb-4">{data.title}</h1>
           <p className="text-stone-700 leading-relaxed mb-8">
             A museum-quality giclée reproduction on archival Hahnemühle paper, printed to order with

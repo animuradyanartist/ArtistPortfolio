@@ -15,7 +15,7 @@ const readyMaster: PrintMasterView = {
 
 function variant(over: Partial<PrintVariantView> = {}): PrintVariantView {
   return {
-    id: 7, printId: 10, material: "photo-rag", prodigiSku: "GLOBAL-FAP-A2", sizeLabel: "L",
+    id: 7, printId: 10, material: "photo-rag", prodigiSku: "GLOBAL-HGE-A2", sizeLabel: "L",
     widthCm: 100, heightCm: 67, framed: false, frameColour: null, retailMinor: 12000, currency: "EUR",
     printReadyAssetUrl: null, mockups: ["m.jpg"], effectiveDpi: 300, eligible: true, enabled: true,
     prodigiVerified: false, ...over,
@@ -78,6 +78,14 @@ describe("planPrintCheckout — the server sets the price", () => {
     if (r.ok) return;
     expect(r.refusal.kind).toBe("not-purchasable"); // provisional (unpriced) → not purchasable
   });
+
+  it("REFUSES an unverified / non-launch Prodigi SKU (invented or 404'd)", () => {
+    for (const sku of ["MADE-UP-SKU", "GLOBAL-PR-16X20", "GLOBAL-FAP-16X24"]) {
+      const r = planPrintCheckout({ print, variant: variant({ prodigiSku: sku }), master: readyMaster, quantity: 1 });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.refusal.kind).toBe("not-purchasable");
+    }
+  });
 });
 
 function order(over: Partial<OrderRow> = {}): OrderRow {
@@ -90,7 +98,7 @@ function order(over: Partial<OrderRow> = {}): OrderRow {
     artwork_snapshot: JSON.stringify({
       itemType: "print", printId: 10, printVariantId: 7, artworkId: 42, title: "Blue Hour",
       material: "photo-rag", sizeLabel: "L", widthCm: 100, heightCm: 67, framed: true, frameColour: "black",
-      prodigiSku: "GLOBAL-FAP-A2", printReadyAssetUrl: "https://cdn.example.com/master/1.tif",
+      prodigiSku: "GLOBAL-HGE-A2", printReadyAssetUrl: "https://cdn.example.com/master/1.tif",
       quantity: 2, unitPriceMinor: 12000, currency: "EUR", image: "/img/artwork/42/0",
     }),
     item_price_minor: 24000, currency: "EUR", shipping_minor: 0, total_minor: 24000,
@@ -113,7 +121,7 @@ describe("printOrderToInternal — paid order → provider request", () => {
   it("maps a valid paid print order, carrying frame attributes + copies", () => {
     const internal = printOrderToInternal(order(), { idempotencyKey: "am-print-AM-2026-0100", callbackUrl: "https://x/cb/t" });
     expect(internal).not.toBeNull();
-    expect(internal!.variant.prodigiSku).toBe("GLOBAL-FAP-A2");
+    expect(internal!.variant.prodigiSku).toBe("GLOBAL-HGE-A2");
     expect(internal!.variant.copies).toBe(2);
     expect(internal!.variant.attributes).toEqual({ frameColour: "black" });
     expect(internal!.ship.country).toBe("DE");

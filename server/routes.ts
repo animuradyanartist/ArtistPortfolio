@@ -40,6 +40,7 @@ import { registerTestCheckoutRoutes } from "./commerce/testCheckout";
 import { registerTestArtworkRoutes } from "./commerce/testArtwork";
 import { registerAdminCommerceRoutes } from "./commerce/adminRoutes";
 import { registerPrintRoutes } from "./commerce/prints/printRoutes";
+import { registerAdminPrintRoutes } from "./commerce/prints/adminPrintRoutes";
 import { registerProdigiCallbackRoute } from "./commerce/prodigi/prodigiCallbackRoute";
 
 /**
@@ -199,6 +200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Print storefront read API + Pinterest feed, and the Prodigi fulfilment callback endpoint.
   // One commerce system — these extend it; they never introduce a second checkout or order store.
   registerPrintRoutes(app);
+  registerAdminPrintRoutes(app);
   registerProdigiCallbackRoute(app);
 
   // Any mutation invalidates the in-memory API response cache — both before

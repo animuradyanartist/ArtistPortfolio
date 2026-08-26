@@ -101,3 +101,37 @@ describe("status + tracking mapping", () => {
     expect(extractTracking(resp())).toBeNull(); // no shipments yet
   });
 });
+
+describe("reconciled against the REAL sandbox order (ord_1169093, verified 2026)", () => {
+  // The exact shape the sandbox returned for a fresh create: outcome Created, stage InProgress,
+  // no shipments yet. Locks our client's interpretation to the verified reality.
+  const sandboxCreate: ProdigiOrderResponse = {
+    outcome: "Created",
+    order: { id: "ord_1169093", status: { stage: "InProgress", details: {} }, shipments: [] },
+  };
+
+  it("a freshly-created sandbox order maps to 'created' with no tracking", () => {
+    expect(mapProdigiStatus(sandboxCreate)).toBe("created");
+    expect(extractTracking(sandboxCreate)).toBeNull();
+  });
+
+  it("createPrintFulfilment records the provider order id + 'created' state (idempotency key carried)", async () => {
+    const client: ProdigiPort = { createOrder: vi.fn(async () => sandboxCreate) };
+    const out = await createPrintFulfilment(order(), { prodigi: client, configured: () => true });
+    expect(out.state).toBe("created");
+    expect(out.prodigiOrderId).toBe("ord_1169093");
+    expect(out.fulfilmentStatus).toBe("created");
+    expect(out.tracking).toBeNull();
+    // the body Prodigi received carried our stable idempotency key as a BODY field
+    const req = (client.createOrder as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(req.idempotencyKey).toBe("idem-abc-123");
+  });
+
+  it("a duplicate create returns Prodigi 'alreadyExists' and reconciles rather than double-producing", async () => {
+    const dup: ProdigiOrderResponse = { ...sandboxCreate, outcome: "alreadyExists" };
+    const client: ProdigiPort = { createOrder: vi.fn(async () => dup) };
+    const out = await createPrintFulfilment(order(), { prodigi: client, configured: () => true });
+    expect(out.state).toBe("already_exists");
+    expect(out.prodigiOrderId).toBe("ord_1169093");
+  });
+});
