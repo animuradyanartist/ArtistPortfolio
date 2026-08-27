@@ -1,0 +1,147 @@
+Diagnose and fix the SEO admin API routing bug. Do not guess and do not change unrelated code.
+
+Current branch:
+feat/print-business-prodigi
+
+Confirmed runtime evidence from Replit:
+
+curl -i http://localhost:5000/api/admin/seo/status
+
+returns:
+
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html>
+...
+
+So /api/admin/seo/status is NOT reaching the SEO Express router. It is falling through to the Vite/SPA index.html fallback.
+
+This is why every /admin/seo tab shows:
+
+"Couldn’t load this data.
+Failed to execute 'json' on 'Response': Unexpected token '<', '<!DOCTYPE '... is not valid JSON"
+
+TASK
+
+1. Trace the actual server startup and route registration order.
+
+Inspect at minimum:
+- server/index.ts
+- server/routes.ts
+- server/seo/seoAdminRoutes.ts
+- Vite/static SPA fallback registration
+- registerRoutes() or equivalent
+- the actual route prefix used by seoAdminRoutes
+
+2. Determine exactly why:
+
+GET /api/admin/seo/status
+
+falls through to index.html instead of the SEO router.
+
+Do not assume the router is registered merely because server/routes.ts contains an import/call. Verify that the running Express app actually executes that registration before the SPA fallback.
+
+3. Fix the root cause with the smallest safe change.
+
+Required behavior:
+
+GET /api/admin/seo/status
+
+must reach the SEO backend route.
+
+For an unauthenticated request, a JSON 401 response is acceptable/expected if requireAdminAuth protects the endpoint.
+
+It must NEVER return index.html.
+
+Likewise all these routes must be reachable as API routes:
+
+/api/admin/seo/status
+/api/admin/seo/overview
+/api/admin/seo/opportunities
+/api/admin/seo/page-map
+/api/admin/seo/actions
+/api/admin/seo/images
+/api/admin/seo/print-seo
+/api/admin/seo/usage
+/api/admin/seo/initial-scan
+/api/admin/seo/initial-scan/live
+/api/admin/seo/next-batch
+
+4. Check for common causes, but verify rather than assuming:
+
+- SEO router mounted with the wrong prefix
+- router defined as /api/admin/seo/... and mounted again under /api/admin/seo
+- registerSeoAdminRoutes() never actually called
+- async registerRoutes flow not executing it
+- SPA/Vite catch-all registered before API routes
+- a second Express app/router being used
+- dev server middleware intercepting the route
+- route registration conditional that is false in Replit
+
+5. Add a regression test proving that an unknown/missing SEO route cannot silently become HTML and that /api/admin/seo/status reaches the SEO router.
+
+6. After the fix, run the app and perform REAL runtime verification with curl.
+
+Required verification:
+
+curl -i http://localhost:5000/api/admin/seo/status
+
+Expected:
+Content-Type: application/json
+
+It may be 401 JSON when unauthenticated. That is fine.
+
+Then authenticate using the existing admin auth mechanism and verify:
+
+GET /api/admin/seo/status
+GET /api/admin/seo/images
+GET /api/admin/seo/overview
+
+all return JSON.
+
+Do NOT trigger:
+- initial-scan/live
+- DataForSEO paid calls
+- SERP calls
+- db:push
+- deployment
+- merge to main
+
+7. Also improve the frontend API error parser defensively:
+
+If an API endpoint unexpectedly returns non-JSON, do not expose:
+"Unexpected token '<'"
+
+Instead report something useful such as:
+"SEO API returned HTML instead of JSON (HTTP 200). Check server route registration."
+
+But this frontend improvement is secondary. Fix the backend routing root cause first.
+
+8. Run:
+- SEO tests
+- relevant route tests
+- npm run check
+- npm run build
+
+Maintain the known baseline: 59 pre-existing TypeScript errors must not increase.
+
+9. Commit and push ONLY to:
+feat/print-business-prodigi
+
+Never main. Do not deploy.
+
+FINAL REPORT:
+
+- ROOT CAUSE
+- EXACT FIX
+- ROUTE REGISTRATION ORDER BEFORE/AFTER
+- REAL curl result for /api/admin/seo/status
+- authenticated results for status/images/overview
+- whether Content-Type is now application/json
+- tests
+- typecheck baseline
+- build
+- files changed
+- commit hash
+- confirmation: no DataForSEO paid call, no db:push, no deploy, no main merge
