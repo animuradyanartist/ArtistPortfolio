@@ -1425,6 +1425,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // API requests are never pages. Keep this after every API route and before every
+  // public-page/SPA fallback so a typo or missing backend route cannot masquerade as a
+  // successful HTML response and then fail in the browser's JSON parser.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "API route not found" });
+  });
+
   // Slug helper: toSlug is imported from @shared/canonical (single source).
 
   // SEO Routes
