@@ -149,6 +149,18 @@ describe("the page is readable by a crawler", () => {
     expect(html).toContain('alt="Blue Detachment — Oil on Canvas painting — by Ani Muradyan"');
   });
 
+  it("links a LANDSCAPE work to the collection it belongs to (internal-linking for /collections/landscape-paintings)", () => {
+    const landscape = renderArtworkHtml(artwork({ title: "Road to Tuscany" }), BASE); // "road" ∈ landscape words
+    expect(landscape).toContain('href="/collections/landscape-paintings"');
+    expect(landscape).toContain(">Contemporary Landscape Paintings</a>");
+  });
+
+  it("does NOT add the collection link to a non-landscape work", () => {
+    // Title + description with no landscape cues (the isLandscape predicate reads both).
+    const figurative = renderArtworkHtml(artwork({ title: "Quiet Portrait", description: "A close study of a face in repose." }), BASE);
+    expect(figurative).not.toContain("/collections/landscape-paintings");
+  });
+
   it("falls back to this site's image route when the row holds a stored image", () => {
     const html = renderArtworkHtml(artwork({ images: ["data:image/jpeg;base64,AAAA"] }), BASE);
     expect(html).toContain(`src="${BASE}/img/artwork/42/0"`);

@@ -27,6 +27,7 @@
  *    one constant is what stops that from being expressible again.
  */
 import { artworkCanonicalUrl, type CanonicalArtwork } from "./canonical";
+import { isLandscape } from "./collections";
 
 /**
  * The currency the stored `price` integer is denominated in.
@@ -289,6 +290,11 @@ export function renderArtworkHtml(a: SsrArtwork, baseUrl: string, imageSize?: Ss
     priceLine +
     `<p style="color:#475569;margin-bottom:2rem">${e(artworkAvailabilityLine(a))}</p>` +
     `<p><a href="/artworks" style="color:#1d4ed8;text-decoration:underline">See all original paintings</a>` +
+    // A landscape work links to the collection it belongs to (same isLandscape predicate the
+    // collection uses to include it) — symmetric internal linking that strengthens the
+    // "contemporary landscape paintings" collection page. Only when the work genuinely qualifies.
+    (isLandscape({ title: a.title, description: a.description }) ?
+      ` · <a href="/collections/landscape-paintings" style="color:#1d4ed8;text-decoration:underline">Contemporary Landscape Paintings</a>` : "") +
     ` · <a href="/about" style="color:#1d4ed8;text-decoration:underline">About Ani Muradyan</a></p>` +
     `</article>`
   );

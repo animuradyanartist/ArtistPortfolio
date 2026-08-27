@@ -12,6 +12,7 @@ import * as seo from "./seoService";
 import * as store from "./seoStore";
 import { JOB_CADENCE, COST_TIER } from "@shared/seo/cache";
 import { NEXT_KEYWORD_BATCH } from "@shared/seo/keywords";
+import { EXECUTION_LOG, executionSummary } from "@shared/seo/executionLog";
 
 export function registerSeoAdminRoutes(app: Express): void {
   app.get("/api/admin/seo/status", requireAdminAuth, async (_req, res) => {
@@ -54,6 +55,11 @@ export function registerSeoAdminRoutes(app: Express): void {
     res.json({ nextBatch: NEXT_KEYWORD_BATCH });
   });
 
+  // The execution log — decisions taken on the real opportunities (implemented / keep / approval / deferred).
+  app.get("/api/admin/seo/execution-log", requireAdminAuth, (_req, res) => {
+    res.json({ log: EXECUTION_LOG, summary: executionSummary() });
+  });
+
   app.get("/api/admin/seo/actions", requireAdminAuth, async (req, res) => {
     try {
       const status = typeof req.query.status === "string" ? req.query.status : undefined;
@@ -65,7 +71,8 @@ export function registerSeoAdminRoutes(app: Express): void {
     try {
       const id = Number.parseInt(String(req.params.id), 10);
       const status = String((req.body ?? {}).status ?? "");
-      if (!["todo", "doing", "done", "ignored"].includes(status)) return res.status(400).json({ message: "Bad status" });
+      // Extended lifecycle: todo=Recommended, doing=Ready, done=Implemented, + needs-approval, deferred, ignored.
+      if (!["todo", "doing", "done", "ignored", "needs-approval", "deferred"].includes(status)) return res.status(400).json({ message: "Bad status" });
       await store.setActionStatus(id, status);
       res.json({ ok: true });
     } catch { res.status(500).json({ message: "Could not update the action." }); }

@@ -280,7 +280,16 @@ export default function ArtworkDetailPage() {
 
           {/* Details column */}
           <div className="lg:pt-4">
-            <Eyebrow>{CATEGORY_LABEL[artworkCategory(artwork)]}</Eyebrow>
+            {/* For a landscape work, the category eyebrow links to the collection it belongs to —
+                a descriptive internal link that strengthens the "contemporary landscape paintings"
+                collection page. Figurative (no collection yet) stays a plain label. */}
+            {artworkCategory(artwork) === "landscape" ? (
+              <Link href="/collections/landscape-paintings">
+                <a className="hover:text-stone-800 transition-colors"><Eyebrow>Contemporary Landscape Paintings</Eyebrow></a>
+              </Link>
+            ) : (
+              <Eyebrow>{CATEGORY_LABEL[artworkCategory(artwork)]}</Eyebrow>
+            )}
             <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">
               {artwork.title || "Untitled"}
             </h1>

@@ -98,6 +98,44 @@ export default function AdminSeoPage() {
   );
 }
 
+function ExecutionLog() {
+  const { data } = useQuery<any>({ queryKey: ["/api/admin/seo/execution-log"], queryFn: () => get("/api/admin/seo/execution-log"), retry: false });
+  const stateColor = (s: string) => s === "Implemented" ? "bg-emerald-100 text-emerald-700"
+    : s === "Keep" ? "bg-stone-100 text-stone-600"
+    : s === "Needs owner approval" ? "bg-amber-100 text-amber-700"
+    : "bg-sky-100 text-sky-700"; // Deferred
+  if (!data?.log?.length) return null;
+  return (
+    <div className="border border-stone-200 rounded-lg bg-white p-5 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs uppercase tracking-wide text-stone-500">What was done · what needs your decision</h3>
+        <div className="flex gap-1.5 text-[10px]">
+          {Object.entries(data.summary ?? {}).map(([s, n]) => { const c = Number(n); return c > 0 ? (
+            <span key={s} className={`uppercase tracking-wide px-1.5 py-0.5 rounded ${stateColor(s)}`}>{c} {s}</span>
+          ) : null; })}
+        </div>
+      </div>
+      <div className="space-y-2">
+        {data.log.map((e: any, i: number) => (
+          <div key={i} className="border-b border-stone-100 last:border-0 pb-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-stone-900">{e.keyword} <span className="text-xs text-stone-400">→ {e.page}</span></p>
+                <p className="text-xs text-stone-500 mt-0.5">{e.diagnosis}</p>
+                <p className="text-sm text-stone-700 mt-1"><span className="text-stone-400">Change:</span> {e.change}</p>
+                {e.files?.length ? <p className="text-[11px] text-stone-400 mt-0.5">Files: {e.files.join(", ")}</p> : null}
+                {e.verification ? <p className="text-[11px] text-emerald-600 mt-0.5">Verified: {e.verification}</p> : null}
+              </div>
+              <span className={`text-[10px] uppercase tracking-wide px-2 py-1 rounded shrink-0 ${stateColor(e.state)}`}>{e.state}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-stone-400 mt-3">Records the change + how it was verified — never a ranking claim. Code changing does not mean a ranking moved.</p>
+    </div>
+  );
+}
+
 function ErrorState({ error }: { error: unknown }) {
   const msg = error instanceof Error ? error.message : String(error ?? "Request failed");
   return (
@@ -144,6 +182,7 @@ function Overview() {
   const plan = data.weeklyPlan;
   return (
     <div>
+      <ExecutionLog />
       <div className="grid gap-4 sm:grid-cols-3 mb-4">
         <Stat label="Keywords tracked" value={data.keywords} />
         <Stat label="Wrong-page rankings" value={data.wrongPageRanking?.length ?? 0} tone={data.wrongPageRanking?.length ? "warn" : "ok"} />
@@ -332,7 +371,7 @@ function Actions() {
               </div>
               <select value={a.status} onChange={(e) => setStatus.mutate({ id: a.id, status: e.target.value })}
                 className="text-xs border border-stone-300 rounded px-2 py-1 shrink-0">
-                {["todo", "doing", "done", "ignored"].map((s) => <option key={s} value={s}>{s}</option>)}
+                {[["todo", "Recommended"], ["doing", "Ready to implement"], ["done", "Implemented"], ["needs-approval", "Needs owner approval"], ["deferred", "Deferred"], ["ignored", "Ignored"]].map(([v, label]) => <option key={v} value={v}>{label}</option>)}
               </select>
             </div>
           </div>
