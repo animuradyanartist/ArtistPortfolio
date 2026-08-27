@@ -23,6 +23,7 @@ import EditArtworkPage from "@/pages/EditArtworkPage";
 import CreatePrintPage from "@/pages/CreatePrintPage";
 import EditPrintPage from "@/pages/EditPrintPage";
 import AdminPrintVariantsPage from "@/pages/AdminPrintVariantsPage";
+import AdminSeoPage from "@/pages/AdminSeoPage";
 import NotFound from "@/pages/not-found";
 import CartPage from "@/pages/CartPage";
 import CheckoutPage from "@/pages/CheckoutPage";
@@ -80,6 +81,7 @@ function Router() {
       <Route path="/checkout" component={CheckoutPage} />
       <Route path="/order/:reference" component={OrderConfirmationPage} />
       <Route path="/track/:token" component={TrackOrderPage} />
+      <Route path="/admin/seo" component={AdminSeoPage} />
       <Route path="/admin/orders" component={AdminOrdersPage} />
       <Route path="/admin/orders/:id" component={AdminOrderDetailPage} />
       {/* Keep the catch-all LAST: /:seoSlug would otherwise swallow /blog. */}

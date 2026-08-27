@@ -696,3 +696,112 @@ export const orderAudit = pgTable("order_audit", {
   orderIdx: index("order_audit_order_idx").on(t.orderId),
 }));
 export type OrderAudit = typeof orderAudit.$inferSelect;
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// SEO GROWTH SYSTEM (DataForSEO) — the buyer-intent keyword model, historical snapshots, the action
+// engine's tasks, and the DataForSEO cost-control cache/usage log. All added via the boot self-heal
+// (ADD COLUMN / CREATE TABLE IF NOT EXISTS) — no manual migration. Sample/opt-in: nothing here runs
+// until DATAFORSEO_LOGIN + DATAFORSEO_PASSWORD are set (the client fails closed).
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The normalized keyword model (Phase 2). One row per strategic keyword, with its ONE primary target. */
+export const seoKeywords = pgTable("seo_keywords", {
+  id: serial("id").primaryKey(),
+  keyword: text("keyword").notNull(),
+  /** originals | prints | trade — decides which page type it may target (Phase 4). */
+  family: text("family").notNull(),
+  /** The single primary target URL for this keyword (Phase 3). Null until mapped. */
+  primaryTargetUrl: text("primary_target_url"),
+  /** active | paused | archived — a keyword we have deliberately deprioritized is archived, not deleted. */
+  status: text("status").notNull().default("active"),
+  /** Whether this is a seed keyword or discovered from live data. */
+  source: text("source").notNull().default("seed"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  keywordUnique: uniqueIndex("seo_keywords_keyword_unique").on(t.keyword),
+}));
+export type SeoKeyword = typeof seoKeywords.$inferSelect;
+
+/**
+ * HISTORICAL snapshots (Phase 9) — appended, never overwritten, so a ranking/volume change over
+ * before → 2 weeks → 4 weeks → 8 weeks can be read. One row per keyword per capture.
+ */
+export const seoKeywordSnapshots = pgTable("seo_keyword_snapshots", {
+  id: serial("id").primaryKey(),
+  keywordId: integer("keyword_id").notNull(),
+  capturedAt: timestamp("captured_at").defaultNow(),
+  searchVolume: integer("search_volume"),
+  /** CPC in the smallest sensible unit as a text-encoded decimal (avoids float drift). */
+  cpc: text("cpc"),
+  competition: text("competition"), // 0..1 as text
+  difficulty: integer("difficulty"), // 0..100
+  mainIntent: text("main_intent"), // informational | commercial | transactional | navigational
+  /** Our organic rank + the URL Google actually ranks (for wrong-page detection). */
+  ourRank: integer("our_rank"),
+  ourRankingUrl: text("our_ranking_url"),
+  /** Transparent opportunity score at capture time. */
+  opportunityScore: integer("opportunity_score"),
+  /** JSON: top-ranking domains + their classes (marketplace/gallery/independent/…). */
+  topDomains: text("top_domains"),
+  serpFeatures: text("serp_features"), // JSON array
+  /** The raw DataForSEO response we stored so it can be re-analysed without paying again. */
+  raw: text("raw"),
+}, (t) => ({
+  keywordIdx: index("seo_keyword_snapshots_keyword_idx").on(t.keywordId),
+}));
+export type SeoKeywordSnapshot = typeof seoKeywordSnapshots.$inferSelect;
+
+/** The action engine's tasks (Phase 7) with full lifecycle + before/after metrics (Phase 9). */
+export const seoActions = pgTable("seo_actions", {
+  id: serial("id").primaryKey(),
+  keyword: text("keyword").notNull(),
+  family: text("family"),
+  type: text("type").notNull(), // fix-wrong-page | strengthen-existing | create-print-landing | …
+  actionGroup: text("action_group"), // Quick wins | Technical SEO | …
+  targetUrl: text("target_url"),
+  priority: integer("priority").notNull().default(0),
+  effort: text("effort"), // low | medium | high
+  objective: text("objective"),
+  reason: text("reason"),
+  evidence: text("evidence"),
+  recommendedChange: text("recommended_change"),
+  status: text("status").notNull().default("todo"), // todo | doing | done | ignored
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  /** JSON snapshots so "did this action work?" can be answered without claiming causality. */
+  beforeMetrics: text("before_metrics"),
+  afterMetrics: text("after_metrics"),
+}, (t) => ({
+  statusIdx: index("seo_actions_status_idx").on(t.status),
+}));
+export type SeoAction = typeof seoActions.$inferSelect;
+
+/** DataForSEO response cache (Phase 10) — dedup + re-analyse-without-paying. Keyed deterministically. */
+export const seoApiCache = pgTable("seo_api_cache", {
+  id: serial("id").primaryKey(),
+  cacheKey: text("cache_key").notNull(),
+  dataType: text("data_type").notNull(),
+  params: text("params"), // JSON of the request params
+  response: text("response"), // JSON of the raw useful response
+  cost: text("cost"), // DataForSEO reported cost, text-decimal
+  fetchedAt: timestamp("fetched_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+}, (t) => ({
+  cacheKeyUnique: uniqueIndex("seo_api_cache_key_unique").on(t.cacheKey),
+}));
+export type SeoApiCache = typeof seoApiCache.$inferSelect;
+
+/** DataForSEO usage log (Phase 10) — every call/cache-hit, so spend is visible in admin. */
+export const seoApiUsage = pgTable("seo_api_usage", {
+  id: serial("id").primaryKey(),
+  dataType: text("data_type").notNull(),
+  endpoint: text("endpoint"),
+  cost: text("cost"),
+  cacheHit: boolean("cache_hit").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  createdIdx: index("seo_api_usage_created_idx").on(t.createdAt),
+}));
+export type SeoApiUsage = typeof seoApiUsage.$inferSelect;

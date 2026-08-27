@@ -216,5 +216,75 @@ export const SELF_HEAL_DDL: readonly string[] = [
         created_at timestamp DEFAULT now(),
         updated_at timestamp DEFAULT now()
       )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS print_masters_artwork_unique ON print_masters (artwork_id)`
+  `CREATE UNIQUE INDEX IF NOT EXISTS print_masters_artwork_unique ON print_masters (artwork_id)`,
+  // ── SEO GROWTH SYSTEM (DataForSEO). Additive; nothing runs until credentials are set. ──
+  `CREATE TABLE IF NOT EXISTS seo_keywords (
+        id serial PRIMARY KEY,
+        keyword text NOT NULL,
+        family text NOT NULL,
+        primary_target_url text,
+        status text NOT NULL DEFAULT 'active',
+        source text NOT NULL DEFAULT 'seed',
+        notes text,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS seo_keywords_keyword_unique ON seo_keywords (keyword)`,
+  `CREATE TABLE IF NOT EXISTS seo_keyword_snapshots (
+        id serial PRIMARY KEY,
+        keyword_id integer NOT NULL,
+        captured_at timestamp DEFAULT now(),
+        search_volume integer,
+        cpc text,
+        competition text,
+        difficulty integer,
+        main_intent text,
+        our_rank integer,
+        our_ranking_url text,
+        opportunity_score integer,
+        top_domains text,
+        serp_features text,
+        raw text
+      )`,
+  `CREATE INDEX IF NOT EXISTS seo_keyword_snapshots_keyword_idx ON seo_keyword_snapshots (keyword_id)`,
+  `CREATE TABLE IF NOT EXISTS seo_actions (
+        id serial PRIMARY KEY,
+        keyword text NOT NULL,
+        family text,
+        type text NOT NULL,
+        action_group text,
+        target_url text,
+        priority integer NOT NULL DEFAULT 0,
+        effort text,
+        objective text,
+        reason text,
+        evidence text,
+        recommended_change text,
+        status text NOT NULL DEFAULT 'todo',
+        created_at timestamp DEFAULT now(),
+        completed_at timestamp,
+        before_metrics text,
+        after_metrics text
+      )`,
+  `CREATE INDEX IF NOT EXISTS seo_actions_status_idx ON seo_actions (status)`,
+  `CREATE TABLE IF NOT EXISTS seo_api_cache (
+        id serial PRIMARY KEY,
+        cache_key text NOT NULL,
+        data_type text NOT NULL,
+        params text,
+        response text,
+        cost text,
+        fetched_at timestamp DEFAULT now(),
+        expires_at timestamp
+      )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS seo_api_cache_key_unique ON seo_api_cache (cache_key)`,
+  `CREATE TABLE IF NOT EXISTS seo_api_usage (
+        id serial PRIMARY KEY,
+        data_type text NOT NULL,
+        endpoint text,
+        cost text,
+        cache_hit boolean NOT NULL DEFAULT false,
+        created_at timestamp DEFAULT now()
+      )`,
+  `CREATE INDEX IF NOT EXISTS seo_api_usage_created_idx ON seo_api_usage (created_at)`
 ];

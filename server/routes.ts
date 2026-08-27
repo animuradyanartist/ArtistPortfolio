@@ -42,6 +42,7 @@ import { registerAdminCommerceRoutes } from "./commerce/adminRoutes";
 import { registerPrintRoutes } from "./commerce/prints/printRoutes";
 import { registerAdminPrintRoutes } from "./commerce/prints/adminPrintRoutes";
 import { registerProdigiCallbackRoute } from "./commerce/prodigi/prodigiCallbackRoute";
+import { registerSeoAdminRoutes } from "./seo/seoAdminRoutes";
 
 /**
  * Render an article body to crawlable HTML.
@@ -202,6 +203,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerPrintRoutes(app);
   registerAdminPrintRoutes(app);
   registerProdigiCallbackRoute(app);
+  // SEO growth system (DataForSEO). Admin-only; fails closed without credentials.
+  registerSeoAdminRoutes(app);
 
   // Any mutation invalidates the in-memory API response cache — both before
   // the handler runs and after it finishes, so a concurrent GET can't
