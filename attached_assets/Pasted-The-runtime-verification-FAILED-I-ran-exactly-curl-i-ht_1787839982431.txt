@@ -1,0 +1,232 @@
+The runtime verification FAILED.
+
+I ran exactly:
+
+curl -i http://localhost:5000/api/admin/seo/status
+
+Actual result:
+
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html>
+<html lang="en">
+...
+
+So the SEO API routing bug is STILL PRESENT.
+
+Do not make another speculative fix.
+
+I need you to debug the RUNNING SERVER and prove where the request goes.
+
+STEP 1 — TRACE SERVER STARTUP
+
+Inspect the actual execution path beginning from:
+
+server/index.ts
+
+Trace exactly:
+- Express app creation
+- registerRoutes(app)
+- registerSeoAdminRoutes(...)
+- Vite middleware registration
+- SPA/index.html fallback registration
+- app.listen(...)
+
+Show me the exact order in which these execute.
+
+STEP 2 — ADD TEMPORARY RUNTIME LOGGING
+
+Temporarily add startup logs such as:
+
+console.log("[BOOT] registering main routes");
+console.log("[BOOT] registering SEO admin routes");
+console.log("[BOOT] registering Vite middleware");
+console.log("[BOOT] registering SPA fallback");
+
+Inside the SEO router also temporarily add:
+
+console.log("[SEO ROUTER] request reached:", req.method, req.originalUrl);
+
+Restart the actual Replit server.
+
+Then run:
+
+curl -i http://localhost:5000/api/admin/seo/status
+
+Report which logs appear.
+
+Do not infer anything from source code alone.
+I need runtime evidence.
+
+STEP 3 — INSPECT EXPRESS ROUTE STACK
+
+After route registration but BEFORE Vite/SPA fallback registration, temporarily print the registered Express router stack.
+
+Confirm whether routes matching:
+
+/api/admin/seo/status
+/api/admin/seo/overview
+/api/admin/seo/images
+
+actually exist on the running Express app.
+
+If the SEO router is mounted, report:
+- mount path
+- internal router path
+- resulting full endpoint
+
+Check specifically for accidental double-prefix situations such as:
+
+app.use("/api/admin/seo", router)
+
+combined with:
+
+router.get("/api/admin/seo/status", ...)
+
+which would make the real endpoint:
+
+/api/admin/seo/api/admin/seo/status
+
+Also check whether the opposite problem exists:
+router contains "/status" but is mounted at an unexpected prefix.
+
+STEP 4 — TEST ROUTE CANDIDATES
+
+Based on the actual mount structure, curl likely candidate paths if necessary, for example:
+
+/api/admin/seo/status
+/api/admin/seo/api/admin/seo/status
+/admin/seo/status
+/api/seo/status
+
+Do this only to diagnose the actual registration.
+
+STEP 5 — FIX THE ROOT CAUSE
+
+The canonical endpoint MUST be:
+
+GET /api/admin/seo/status
+
+and it must be registered before Vite/static/SPA fallback middleware.
+
+Unauthenticated response may be:
+
+HTTP 401
+Content-Type: application/json
+
+with a JSON body.
+
+That is SUCCESS.
+
+A 200 text/html response is FAILURE.
+
+Apply the smallest architectural fix needed.
+
+STEP 6 — PROTECT /api FROM SPA FALLBACK
+
+Also fix the fallback behavior so API requests can NEVER silently receive index.html.
+
+Unknown API routes such as:
+
+GET /api/admin/seo/definitely-does-not-exist
+
+should return a JSON 404, for example:
+
+HTTP 404
+Content-Type: application/json
+
+{
+  "error": "API route not found"
+}
+
+They must never fall through to the React/Vite SPA.
+
+Make sure this API 404 handling is registered AFTER all API routes but BEFORE Vite/SPA fallback.
+
+STEP 7 — REAL RUNTIME VERIFICATION
+
+Restart the server after the fix.
+
+Then run and paste the COMPLETE headers/body for:
+
+curl -i http://localhost:5000/api/admin/seo/status
+
+curl -i http://localhost:5000/api/admin/seo/definitely-does-not-exist
+
+SUCCESS CRITERIA:
+
+/api/admin/seo/status
+→ JSON response
+→ 401 JSON unauthenticated is acceptable
+
+unknown /api/... route
+→ 404 JSON
+→ NEVER HTML
+
+Also authenticate using the existing admin auth mechanism and verify:
+
+GET /api/admin/seo/status
+GET /api/admin/seo/images
+GET /api/admin/seo/overview
+
+All three must return JSON.
+
+STEP 8 — REMOVE TEMP DEBUGGING
+
+After finding the problem:
+- remove temporary console logs
+- keep only useful permanent error handling/tests
+
+STEP 9 — TEST
+
+Run:
+- SEO tests
+- route regression tests
+- npm run check
+- npm run build
+
+The known TypeScript baseline is 59 pre-existing errors.
+Do not increase it.
+
+DO NOT:
+- call DataForSEO
+- run initial-scan/live
+- make SERP calls
+- run db:push
+- deploy
+- merge to main
+
+Work ONLY on:
+feat/print-business-prodigi
+
+Commit and push there.
+
+FINAL REPORT MUST INCLUDE:
+
+1. Exact root cause — not a hypothesis
+2. Why registerSeoAdminRoutes was not handling the request
+3. Actual Express registration order BEFORE fix
+4. Actual Express registration order AFTER fix
+5. SEO router mount path
+6. SEO router internal path for status
+7. Final full resolved endpoint
+8. Runtime curl output for /api/admin/seo/status
+9. Runtime curl output for unknown /api route
+10. Authenticated status/images/overview results
+11. Tests
+12. npm run check result
+13. npm run build result
+14. Files changed
+15. Commit hash
+16. Confirmation that temporary debug logs were removed
+17. Confirmation: no DataForSEO calls, no db:push, no deploy, no main merge
+
+IMPORTANT:
+Do not tell me the fix is complete unless the FINAL runtime curl for:
+
+http://localhost:5000/api/admin/seo/status
+
+returns application/json.
+
+Source-code inspection or passing unit tests alone is NOT sufficient.
