@@ -29,12 +29,15 @@ export default function AdminSeoPage() {
   const qc = useQueryClient();
   const { data: status } = useQuery<any>({ queryKey: ["/api/admin/seo/status"], queryFn: () => get("/api/admin/seo/status") });
 
-  const seed = useMutation({ mutationFn: () => apiRequest("POST", "/api/admin/seo/seed", {}).then((r) => r.json()),
-    onSuccess: (d: any) => { qc.invalidateQueries(); toast({ title: `Seeded ${d.seeded} keywords` }); },
-    onError: (e: Error) => toast({ title: "Seed failed", description: e.message, variant: "destructive" }) });
-  const refresh = useMutation({ mutationFn: () => apiRequest("POST", "/api/admin/seo/refresh/keyword-overview", {}).then((r) => r.json()),
-    onSuccess: (d: any) => { qc.invalidateQueries(); toast({ title: d.ok ? `Refreshed ${d.updated ?? 0} keywords${d.fromCache ? " (from cache)" : ""}` : d.message, variant: d.ok ? undefined : "destructive" }); },
-    onError: (e: Error) => toast({ title: "Refresh failed", description: e.message, variant: "destructive" }) });
+  const scanFree = useMutation({ mutationFn: () => apiRequest("POST", "/api/admin/seo/initial-scan", {}).then((r) => r.json()),
+    onSuccess: (d: any) => { qc.invalidateQueries(); toast({ title: `Initial scan done — ${d.seeded} keywords mapped, ${d.actions} actions` }); },
+    onError: (e: Error) => toast({ title: "Initial scan failed", description: e.message, variant: "destructive" }) });
+  const scanLive = useMutation({ mutationFn: () => apiRequest("POST", "/api/admin/seo/initial-scan/live", {}).then((r) => r.json()),
+    onSuccess: (d: any) => { qc.invalidateQueries();
+      if (d.ok === false) { toast({ title: d.message, variant: "destructive" }); return; }
+      const m = d.liveMetrics ?? {}; const nr = (m.noRecord ?? []).length;
+      toast({ title: `Live metrics: ${m.updated ?? 0} keyword(s)${m.fromCache ? " (from cache — no charge)" : ""}${nr ? ` · ${nr} with no DataForSEO record` : ""}` }); },
+    onError: (e: Error) => toast({ title: "Live metrics failed", description: e.message, variant: "destructive" }) });
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -61,8 +64,17 @@ export default function AdminSeoPage() {
         )}
 
         <div className="flex flex-wrap gap-2 mb-6">
-          <button onClick={() => seed.mutate()} disabled={seed.isPending} className="text-xs border border-stone-300 rounded px-3 py-1.5 hover:bg-stone-100">Seed keyword model</button>
-          <button onClick={() => refresh.mutate()} disabled={refresh.isPending} className="text-xs border border-stone-300 rounded px-3 py-1.5 hover:bg-stone-100">Refresh keyword data (weekly · cheap)</button>
+          <button onClick={() => scanFree.mutate()} disabled={scanFree.isPending}
+            className="text-xs bg-stone-900 text-white rounded px-3 py-1.5 hover:bg-stone-700 disabled:opacity-50">
+            {scanFree.isPending ? "Scanning…" : "Run initial scan (free)"}
+          </button>
+          <button
+            onClick={() => { if (window.confirm("Fetch live search metrics?\n\nThis makes ONE DataForSEO keyword_overview call for the 10-keyword initial batch (~$0.01, cached 30 days). No other endpoint is called.")) scanLive.mutate(); }}
+            disabled={scanLive.isPending || !status?.configured}
+            title={status?.configured ? "" : "Connect DataForSEO first"}
+            className="text-xs border border-stone-300 rounded px-3 py-1.5 hover:bg-stone-100 disabled:opacity-50">
+            {scanLive.isPending ? "Fetching…" : "+ Fetch live metrics (~$0.01 · 1 call)"}
+          </button>
         </div>
 
         <div className="flex flex-wrap gap-1 border-b border-stone-200 mb-6">
@@ -86,6 +98,17 @@ export default function AdminSeoPage() {
   );
 }
 
+function ErrorState({ error }: { error: unknown }) {
+  const msg = error instanceof Error ? error.message : String(error ?? "Request failed");
+  return (
+    <div className="border border-red-200 bg-red-50 text-red-800 rounded-lg p-5 text-sm">
+      <strong>Couldn’t load this data.</strong>
+      <p className="mt-1 text-red-700">{msg}</p>
+      <p className="mt-2 text-xs text-red-600">If this mentions a missing table (relation does not exist), the app needs a restart so the boot self-heal creates the SEO tables. Otherwise check the server logs.</p>
+    </div>
+  );
+}
+
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="border border-stone-200 rounded-lg bg-white p-5 mb-4">
@@ -96,9 +119,28 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 }
 
 function Overview() {
-  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/admin/seo/overview"], queryFn: () => get("/api/admin/seo/overview") });
+  const { data, isLoading, isError, error } = useQuery<any>({ queryKey: ["/api/admin/seo/overview"], queryFn: () => get("/api/admin/seo/overview"), retry: false });
   if (isLoading) return <p className="text-stone-500">Analysing…</p>;
+  if (isError) return <ErrorState error={error} />;
   if (!data) return null;
+
+  // No keyword data yet → guide the owner, don't look broken.
+  if (!data.keywords) {
+    return (
+      <div className="border border-stone-200 rounded-lg bg-white p-8 text-center max-w-2xl mx-auto">
+        <h3 className="text-lg font-medium text-stone-900 mb-2">No keyword data yet</h3>
+        <p className="text-sm text-stone-600 leading-relaxed mb-4">
+          The SEO system has no keywords stored, so there is nothing to analyse yet. Run the
+          <strong> initial scan</strong> above — it seeds a small buyer-intent batch (10 keywords),
+          maps each to the right page on your site, and generates concrete actions. This is
+          <strong> free</strong> (no DataForSEO call). To add real search volume, CPC and intent,
+          then use <em>“Fetch live metrics”</em> — one cheap keyword_overview call (~$0.01, cached 30 days).
+        </p>
+        <p className="text-xs text-stone-400">Nothing is invented — a keyword the API returns no record for stays blank, never volume 0.</p>
+      </div>
+    );
+  }
+
   const plan = data.weeklyPlan;
   return (
     <div>
@@ -164,7 +206,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "ok
 }
 
 function Opportunities() {
-  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/admin/seo/opportunities"], queryFn: () => get("/api/admin/seo/opportunities") });
+  const { data, isLoading, isError, error } = useQuery<any>({ queryKey: ["/api/admin/seo/opportunities"], queryFn: () => get("/api/admin/seo/opportunities"), retry: false });
   const [open, setOpen] = useState<string | null>(null);
   if (isLoading) return <p className="text-stone-500">Analysing…</p>;
   const kws = data?.keywords ?? [];
@@ -214,8 +256,9 @@ function Opportunities() {
 }
 
 function Images() {
-  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/admin/seo/images"], queryFn: () => get("/api/admin/seo/images") });
+  const { data, isLoading, isError, error } = useQuery<any>({ queryKey: ["/api/admin/seo/images"], queryFn: () => get("/api/admin/seo/images"), retry: false });
   if (isLoading) return <p className="text-stone-500">Auditing images…</p>;
+  if (isError) return <ErrorState error={error} />;
   return (
     <div>
       <p className="text-sm text-stone-500 mb-4">Google Images is a first-class channel for a painter. {data?.artworksAudited} artworks audited. No hacks — every fix is “describe the real work better”.</p>
@@ -243,8 +286,9 @@ function Images() {
 }
 
 function PageMap() {
-  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/admin/seo/page-map"], queryFn: () => get("/api/admin/seo/page-map") });
+  const { data, isLoading, isError, error } = useQuery<any>({ queryKey: ["/api/admin/seo/page-map"], queryFn: () => get("/api/admin/seo/page-map"), retry: false });
   if (isLoading) return <p className="text-stone-500">Loading…</p>;
+  if (isError) return <ErrorState error={error} />;
   return (
     <div className="space-y-3">
       {(data?.pages ?? []).map((p: any) => (
@@ -266,12 +310,13 @@ function PageMap() {
 function Actions() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/admin/seo/actions"], queryFn: () => get("/api/admin/seo/actions") });
+  const { data, isLoading, isError, error } = useQuery<any>({ queryKey: ["/api/admin/seo/actions"], queryFn: () => get("/api/admin/seo/actions"), retry: false });
   const regen = useMutation({ mutationFn: () => apiRequest("POST", "/api/admin/seo/regenerate-actions", {}).then((r) => r.json()),
     onSuccess: (d: any) => { qc.invalidateQueries({ queryKey: ["/api/admin/seo/actions"] }); toast({ title: `Regenerated ${d.actions} actions` }); } });
   const setStatus = useMutation({ mutationFn: (v: { id: number; status: string }) => apiRequest("POST", `/api/admin/seo/actions/${v.id}/status`, { status: v.status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/seo/actions"] }) });
   if (isLoading) return <p className="text-stone-500">Loading…</p>;
+  if (isError) return <ErrorState error={error} />;
   const actions = data?.actions ?? [];
   return (
     <div>
@@ -299,8 +344,9 @@ function Actions() {
 }
 
 function PrintSeo() {
-  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/admin/seo/print-seo"], queryFn: () => get("/api/admin/seo/print-seo") });
+  const { data, isLoading, isError, error } = useQuery<any>({ queryKey: ["/api/admin/seo/print-seo"], queryFn: () => get("/api/admin/seo/print-seo"), retry: false });
   if (isLoading) return <p className="text-stone-500">Loading…</p>;
+  if (isError) return <ErrorState error={error} />;
   const dec = (d: string) => d === "create" ? "bg-emerald-100 text-emerald-700" : d === "wait-for-inventory" ? "bg-amber-100 text-amber-700" : "bg-stone-100 text-stone-500";
   return (
     <div className="space-y-2">
@@ -319,8 +365,9 @@ function PrintSeo() {
 }
 
 function Usage() {
-  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/admin/seo/usage"], queryFn: () => get("/api/admin/seo/usage") });
+  const { data, isLoading, isError, error } = useQuery<any>({ queryKey: ["/api/admin/seo/usage"], queryFn: () => get("/api/admin/seo/usage"), retry: false });
   if (isLoading) return <p className="text-stone-500">Loading…</p>;
+  if (isError) return <ErrorState error={error} />;
   return (
     <div>
       <Card title="Usage (last 30 days)">

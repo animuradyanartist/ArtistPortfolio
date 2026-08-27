@@ -24,6 +24,7 @@ export async function listKeywords(status?: string): Promise<KeywordRow[]> {
 }
 
 export async function upsertKeyword(k: { keyword: string; family: string; source?: string; primaryTargetUrl?: string | null }): Promise<void> {
+  if (!hasDatabase) return;
   await pool.query(
     `INSERT INTO seo_keywords (keyword, family, source, primary_target_url, updated_at)
        VALUES ($1,$2,$3,$4, now())
@@ -35,10 +36,12 @@ export async function upsertKeyword(k: { keyword: string; family: string; source
 }
 
 export async function setKeywordStatus(id: number, status: string): Promise<void> {
+  if (!hasDatabase) return;
   await pool.query(`UPDATE seo_keywords SET status = $2, updated_at = now() WHERE id = $1`, [id, status]);
 }
 
 export async function setKeywordTarget(id: number, url: string | null): Promise<void> {
+  if (!hasDatabase) return;
   await pool.query(`UPDATE seo_keywords SET primary_target_url = $2, updated_at = now() WHERE id = $1`, [id, url]);
 }
 
@@ -51,6 +54,7 @@ export interface SnapshotRow {
 }
 
 export async function insertSnapshot(s: Omit<SnapshotRow, "id" | "captured_at"> & { raw?: string }): Promise<void> {
+  if (!hasDatabase) return;
   await pool.query(
     `INSERT INTO seo_keyword_snapshots
        (keyword_id, search_volume, cpc, competition, difficulty, main_intent, our_rank, our_ranking_url, opportunity_score, top_domains, serp_features, raw)
@@ -79,6 +83,7 @@ export async function snapshotHistory(keywordId: number): Promise<SnapshotRow[]>
 
 // ── Actions ─────────────────────────────────────────────────────────────────────────────────
 export async function replaceOpenActions(actions: Array<Record<string, unknown>>): Promise<void> {
+  if (!hasDatabase) return;
   // Regenerate the 'todo' set; never touch actions a human has moved to doing/done/ignored.
   await pool.query(`DELETE FROM seo_actions WHERE status = 'todo'`);
   for (const a of actions) {
@@ -99,6 +104,7 @@ export async function listActions(status?: string): Promise<Record<string, unkno
 }
 
 export async function setActionStatus(id: number, status: string, metrics?: { before?: unknown; after?: unknown }): Promise<void> {
+  if (!hasDatabase) return;
   const completed = status === "done" ? "now()" : "completed_at";
   await pool.query(
     `UPDATE seo_actions SET status = $2, completed_at = ${completed},

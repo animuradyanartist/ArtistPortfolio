@@ -13,8 +13,14 @@ import { hasDatabase } from "../db";
 import { COLLECTIONS } from "@shared/collections";
 import { artworkCanonicalPath } from "@shared/canonical";
 import { getPurchasablePrintCollection } from "../commerce/prints/printRepo";
+
+/** Never let a print/DB hiccup blank the SEO views — a print read failure just means "no prints". */
+async function safePurchasablePrints(): Promise<Awaited<ReturnType<typeof getPurchasablePrintCollection>>> {
+  try { return await getPurchasablePrintCollection(); }
+  catch { return []; }
+}
 import {
-  SEED_KEYWORDS, classifyIntent, normalizeKeyword, type IntentFamily, type SearchIntent,
+  SEED_KEYWORDS, INITIAL_SCAN_BATCH, classifyIntent, normalizeKeyword, type IntentFamily, type SearchIntent,
 } from "@shared/seo/keywords";
 import { mapKeyword, type MappingCatalogue, type KeywordMapping } from "@shared/seo/mapping";
 import { opportunityScore, type OpportunityScore } from "@shared/seo/scoring";
@@ -47,7 +53,7 @@ export async function buildCatalogue(): Promise<MappingCatalogue> {
     medium: a.medium, availability: a.availability,
     availableForPrint: (a as { availableForPrint?: boolean | null }).availableForPrint ?? false,
   }));
-  const prints = (await getPurchasablePrintCollection()).map((p) => ({ slug: p.slug, title: p.title, purchasable: true }));
+  const prints = (await safePurchasablePrints()).map((p) => ({ slug: p.slug, title: p.title, purchasable: true }));
   let articles: { slug: string; title: string }[] = [];
   try {
     const posts = (await (storage as { getAllBlogPosts?: () => Promise<Array<{ slug: string; title: string; status?: string }>> }).getAllBlogPosts?.()) ?? [];
@@ -66,6 +72,13 @@ export async function seedKeywords(): Promise<number> {
   if (!hasDatabase) return 0;
   for (const s of SEED_KEYWORDS) await store.upsertKeyword({ keyword: normalizeKeyword(s.keyword), family: s.family, source: "seed" });
   return SEED_KEYWORDS.length;
+}
+
+/** Seed ONLY the small initial batch (free — no API). Makes the dashboard non-empty immediately. */
+export async function seedInitialBatch(): Promise<number> {
+  if (!hasDatabase) return 0;
+  for (const s of INITIAL_SCAN_BATCH) await store.upsertKeyword({ keyword: normalizeKeyword(s.keyword), family: s.family, source: "initial" });
+  return INITIAL_SCAN_BATCH.length;
 }
 
 // ── Turn a stored snapshot into the score inputs the analysis needs ──────────────────────────
@@ -187,7 +200,7 @@ function wordCount(s: string | null | undefined): number {
  */
 export async function imageSeoAudit(): Promise<{ summary: Array<{ issue: string; priority: string; category: string; count: number; recommendedChange: string }>; sample: unknown[]; artworksAudited: number }> {
   const artworks = await storage.getAllArtworks();
-  const purchasablePrintArtworkIds = new Set((await getPurchasablePrintCollection()).map((p) => p.artworkId).filter((x): x is number => x != null));
+  const purchasablePrintArtworkIds = new Set((await safePurchasablePrints()).map((p) => p.artworkId).filter((x): x is number => x != null));
   const signals: ArtworkImageSignals[] = artworks.map((a) => ({
     id: a.id,
     title: a.title,
@@ -272,11 +285,18 @@ export async function printLandingRecommendations(): Promise<PrintLandingRecomme
 
 // ── REFRESH (DataForSEO, cost-controlled). Only runs when configured. ─────────────────────────
 
-/** WEEKLY cheap: bulk volume/CPC/difficulty/intent for all active keywords (one Labs call, cached). */
-export async function refreshKeywordOverview(): Promise<{ ran: boolean; fromCache?: boolean; updated?: number }> {
+/**
+ * Fetch live keyword_overview for a SPECIFIC keyword set (cost-controlled: one cached Labs call).
+ * Persists a snapshot ONLY for keywords the API actually returned — a keyword with NO record stays
+ * with no snapshot (null volume), NEVER a fabricated volume 0. Returns which keywords had no record.
+ */
+export async function refreshKeywordOverviewFor(keywordTerms: string[]): Promise<{ ran: boolean; fromCache?: boolean; updated?: number; noRecord?: string[] }> {
   if (!seoConfigured() || !hasDatabase) return { ran: false };
   const keywords = await store.listKeywords("active");
-  const terms = keywords.map((k) => k.keyword);
+  const byKeyword = new Map(keywords.map((k) => [normalizeKeyword(k.keyword), k]));
+  const terms = keywordTerms.map(normalizeKeyword).filter((t) => byKeyword.has(t));
+  if (!terms.length) return { ran: false };
+
   const { locationCode, languageCode } = market();
   const { data, fromCache } = await cachedFetch(
     "keyword_overview",
@@ -287,11 +307,14 @@ export async function refreshKeywordOverview(): Promise<{ ran: boolean; fromCach
       return { data: extractKeywordOverviewItems(env), cost: env.cost ?? null };
     },
   );
-  const byKeyword = new Map(keywords.map((k) => [normalizeKeyword(k.keyword), k]));
+
+  const returned = new Set<string>();
   let updated = 0;
   for (const item of data as Array<Record<string, any>>) {
-    const k = byKeyword.get(normalizeKeyword(item.keyword ?? ""));
+    const norm = normalizeKeyword(item.keyword ?? "");
+    const k = byKeyword.get(norm);
     if (!k) continue;
+    returned.add(norm);
     await store.insertSnapshot({
       keyword_id: k.id,
       search_volume: item.keyword_info?.search_volume ?? null,
@@ -305,7 +328,32 @@ export async function refreshKeywordOverview(): Promise<{ ran: boolean; fromCach
     });
     updated++;
   }
-  return { ran: true, fromCache, updated };
+  const noRecord = terms.filter((t) => !returned.has(t)); // API returned nothing — stays null, not 0
+  return { ran: true, fromCache, updated, noRecord };
+}
+
+/** WEEKLY cheap: refresh live data for ALL active keywords (one Labs call, cached). */
+export async function refreshKeywordOverview(): Promise<{ ran: boolean; fromCache?: boolean; updated?: number; noRecord?: string[] }> {
+  if (!seoConfigured() || !hasDatabase) return { ran: false };
+  const keywords = await store.listKeywords("active");
+  return refreshKeywordOverviewFor(keywords.map((k) => k.keyword));
+}
+
+/**
+ * THE INITIAL SEO SCAN — the one action to populate the dashboard. `withLiveMetrics=false` seeds the
+ * small batch + maps + generates actions with NO API cost (dashboard becomes non-empty immediately).
+ * `withLiveMetrics=true` additionally makes ONE cheap keyword_overview call (~$0.01) for the batch,
+ * persisting real volume/CPC/intent and reporting which keywords the API returned no record for.
+ */
+export async function initialScan(withLiveMetrics: boolean): Promise<Record<string, unknown>> {
+  const seeded = await seedInitialBatch();
+  let metrics: { ran: boolean; fromCache?: boolean; updated?: number; noRecord?: string[] } = { ran: false };
+  if (withLiveMetrics) {
+    if (!seoConfigured()) return { ok: false, seeded, message: "DataForSEO is not configured — seed done, but live metrics need DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD." };
+    metrics = await refreshKeywordOverviewFor(INITIAL_SCAN_BATCH.map((k) => k.keyword));
+  }
+  const { actions } = await analyzeAll();
+  return { ok: true, seeded, liveMetrics: metrics, actions: actions.length, batch: INITIAL_SCAN_BATCH.map((k) => k.keyword) };
 }
 
 export const _market = market; // exported for tests/inspection

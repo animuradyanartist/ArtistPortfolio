@@ -85,6 +85,24 @@ export const SEED_KEYWORDS: readonly SeedKeyword[] = [
  * keyword_overview NEXT (cost-controlled: not called yet). Auditable here and surfaced in admin so a
  * human approves what gets a paid lookup. Nothing here is targeted until DataForSEO confirms demand.
  */
+/**
+ * THE INITIAL SCAN BATCH — a SMALL buyer-intent set to populate the dashboard first (Task 4). Free
+ * to seed (mapping needs no API); its live volume/CPC/intent is fetched with ONE cheap
+ * keyword_overview call when the owner runs the paid step. Deliberately 10, not the whole taxonomy.
+ */
+export const INITIAL_SCAN_BATCH: readonly SeedKeyword[] = [
+  { keyword: "original oil paintings", family: "originals", group: "A. Original art purchase" },
+  { keyword: "contemporary landscape paintings", family: "originals", group: "B. Landscape painting purchase" },
+  { keyword: "contemporary oil paintings", family: "originals", group: "A. Original art purchase" },
+  { keyword: "original artwork for sale", family: "originals", group: "A. Original art purchase" },
+  { keyword: "modern landscape painting", family: "originals", group: "B. Landscape painting purchase" },
+  { keyword: "atmospheric landscape painting", family: "originals", group: "B. Landscape painting purchase" },
+  { keyword: "large abstract landscape painting", family: "originals", group: "D. Large / statement wall art" },
+  { keyword: "oversized original painting", family: "originals", group: "D. Large / statement wall art" },
+  { keyword: "statement wall art", family: "prints", group: "H. Print buyer" },
+  { keyword: "art for luxury interiors", family: "trade", group: "F. Interior designer / art consultant" },
+];
+
 export const NEXT_KEYWORD_BATCH: readonly SeedKeyword[] = [
   ...seed("originals", "A. Original art purchase", ["original artwork for sale", "contemporary oil paintings", "original modern paintings"]),
   ...seed("originals", "B. Landscape painting purchase", ["atmospheric landscape painting", "modern landscape painting", "countryside oil painting"]),

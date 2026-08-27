@@ -77,6 +77,24 @@ export function registerSeoAdminRoutes(app: Express): void {
   });
 
   // ── Mutations ──
+
+  // INITIAL SCAN (FREE — no API cost). Seeds the small buyer-intent batch, maps it to real pages,
+  // and generates actions — so the dashboard is populated with structural analysis immediately.
+  app.post("/api/admin/seo/initial-scan", requireAdminAuth, async (_req, res) => {
+    try { res.json(await seo.initialScan(false)); }
+    catch (e) { res.status(500).json({ message: "Initial scan failed.", detail: (e as Error).message }); }
+  });
+
+  // INITIAL SCAN + LIVE METRICS (PAID — ONE keyword_overview call, ~$0.01, cached 30 days). Adds real
+  // volume/CPC/intent. A keyword the API returns no record for stays null (never fabricated to 0).
+  app.post("/api/admin/seo/initial-scan/live", requireAdminAuth, async (_req, res) => {
+    try {
+      const r = await seo.initialScan(true);
+      if ((r as { ok?: boolean }).ok === false) return res.status(503).json(r);
+      res.json(r);
+    } catch (e) { res.status(502).json({ ok: false, message: "DataForSEO request failed.", detail: (e as Error).message?.slice(0, 200) }); }
+  });
+
   app.post("/api/admin/seo/seed", requireAdminAuth, async (_req, res) => {
     try { res.json({ ok: true, seeded: await seo.seedKeywords() }); }
     catch { res.status(500).json({ message: "Could not seed keywords." }); }

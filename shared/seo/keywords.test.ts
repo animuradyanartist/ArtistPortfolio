@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyIntent, normalizeKeyword, intentStrength, SEED_KEYWORDS, NEXT_KEYWORD_BATCH } from "./keywords";
+import { classifyIntent, normalizeKeyword, intentStrength, SEED_KEYWORDS, NEXT_KEYWORD_BATCH, INITIAL_SCAN_BATCH } from "./keywords";
 
 describe("intent separation — originals vs prints vs trade (Phase 4)", () => {
   it("keeps an 'original' buyer on originals even when decor words appear", () => {
@@ -60,6 +60,18 @@ describe("intent separation — originals vs prints vs trade (Phase 4)", () => {
     expect(SEED_KEYWORDS.some((s) => s.keyword === "original art for interiors")).toBe(false);
     // each seed keyword declares its group + family
     for (const s of SEED_KEYWORDS) { expect(s.group).toBeTruthy(); expect(s.family).toBeTruthy(); }
+  });
+
+  it("has a SMALL initial-scan batch (10 buyer-intent keywords) to populate the dashboard first", () => {
+    expect(INITIAL_SCAN_BATCH).toHaveLength(10);
+    expect(INITIAL_SCAN_BATCH.map((k) => k.keyword)).toContain("original oil paintings");
+    expect(INITIAL_SCAN_BATCH.map((k) => k.keyword)).toContain("art for luxury interiors");
+    // every entry declares a family + group, and covers originals/prints/trade
+    const families = new Set(INITIAL_SCAN_BATCH.map((k) => k.family));
+    expect(families).toContain("originals");
+    expect(families).toContain("prints");
+    expect(families).toContain("trade");
+    for (const k of INITIAL_SCAN_BATCH) { expect(k.group).toBeTruthy(); }
   });
 
   it("has an auditable NEXT batch to validate later (not yet targeted)", () => {
