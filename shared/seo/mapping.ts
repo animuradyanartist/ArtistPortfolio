@@ -154,6 +154,14 @@ function candidatesFor(keyword: string, family: IntentFamily, cat: MappingCatalo
     out.push({ url: `/${TRADE_LANDING.slug}`, type: "trade-landing", title: TRADE_LANDING.label, relevance: Math.max(rel, 0.5), exists: false });
   }
 
+  if (family === "branded") {
+    // A navigational branded search belongs on the homepage (and the about page) — never a generic
+    // collection. These pages exist, so branded queries are about protecting/strengthening, not
+    // creating. High relevance so the primary is unambiguous.
+    out.push({ url: "/", type: "homepage", title: "Ani Muradyan — Home", relevance: 1, exists: true });
+    out.push({ url: "/about", type: "article", title: "About Ani Muradyan", relevance: 0.8, exists: true });
+  }
+
   // Editorial pages can support any family.
   for (const art of cat.articles) {
     const rel = relevance(keyword, art.title);

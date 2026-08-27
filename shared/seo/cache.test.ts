@@ -13,19 +13,20 @@ describe("DataForSEO cache/dedup policy (Phase 10)", () => {
       .not.toBe(cacheKey("serp_organic", { keyword: "neutral wall art", location_code: 2826 }));
   });
 
-  it("freshness respects the per-type TTL", () => {
+  it("freshness respects the per-type TTL (keyword data has a long 30-day TTL)", () => {
     const now = 1_000_000_000_000;
-    // keyword_overview TTL = 168h
-    expect(isFresh("keyword_overview", now - 100 * 3600 * 1000, now)).toBe(true);
-    expect(isFresh("keyword_overview", now - 200 * 3600 * 1000, now)).toBe(false);
-    // serp is shorter (96h)
-    expect(isFresh("serp_organic", now - 100 * 3600 * 1000, now)).toBe(false);
+    // keyword_overview TTL = 720h (30d) — stable data is not re-paid for within a month
+    expect(isFresh("keyword_overview", now - 200 * 3600 * 1000, now)).toBe(true);
+    expect(isFresh("keyword_overview", now - 800 * 3600 * 1000, now)).toBe(false);
+    // serp is shorter (168h / 7d) — rankings move
+    expect(isFresh("serp_organic", now - 100 * 3600 * 1000, now)).toBe(true);
+    expect(isFresh("serp_organic", now - 200 * 3600 * 1000, now)).toBe(false);
   });
 
   it("decideCache is the single dedup gate: fresh → hit, stale/missing → call", () => {
     const now = 2_000_000_000_000;
     expect(decideCache("keyword_overview", { fetchedAtMs: now - 3600_000 }, now)).toEqual({ hit: true, reason: "fresh" });
-    expect(decideCache("keyword_overview", { fetchedAtMs: now - 200 * 3600_000 }, now)).toEqual({ hit: false, reason: "stale" });
+    expect(decideCache("keyword_overview", { fetchedAtMs: now - 800 * 3600_000 }, now)).toEqual({ hit: false, reason: "stale" });
     expect(decideCache("keyword_overview", null, now)).toEqual({ hit: false, reason: "missing" });
   });
 

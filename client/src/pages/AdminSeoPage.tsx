@@ -8,15 +8,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-type Tab = "overview" | "opportunities" | "page-map" | "actions" | "print-seo" | "usage";
+type Tab = "overview" | "opportunities" | "page-map" | "actions" | "images" | "print-seo" | "usage";
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "SEO Overview" },
   { id: "opportunities", label: "Keyword Opportunities" },
   { id: "page-map", label: "Page Map" },
   { id: "actions", label: "Actions" },
+  { id: "images", label: "Google Images" },
   { id: "print-seo", label: "Print SEO" },
   { id: "usage", label: "DataForSEO Usage" },
 ];
+const pri = (p: string) => p === "High" ? "bg-red-100 text-red-700" : p === "Medium" ? "bg-amber-100 text-amber-700" : "bg-stone-100 text-stone-500";
 
 const get = async (url: string) => (await apiRequest("GET", url)).json();
 const band = (b: string) => b === "high" ? "bg-emerald-100 text-emerald-700" : b === "medium" ? "bg-amber-100 text-amber-700" : "bg-stone-100 text-stone-500";
@@ -76,6 +78,7 @@ export default function AdminSeoPage() {
         {tab === "opportunities" && <Opportunities />}
         {tab === "page-map" && <PageMap />}
         {tab === "actions" && <Actions />}
+        {tab === "images" && <Images />}
         {tab === "print-seo" && <PrintSeo />}
         {tab === "usage" && <Usage />}
       </div>
@@ -166,22 +169,35 @@ function Opportunities() {
   if (isLoading) return <p className="text-stone-500">Analysing…</p>;
   const kws = data?.keywords ?? [];
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      <p className="text-sm text-stone-500">Each row is a decision — the exact action rises to the top. Highest-value first.</p>
       {kws.map((k: any) => (
-        <div key={k.keyword} className="border border-stone-200 rounded bg-white">
-          <button onClick={() => setOpen(open === k.keyword ? null : k.keyword)} className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left">
+        <div key={k.keyword} className="border border-stone-200 rounded-lg bg-white p-4">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <span className="font-medium text-stone-900">{k.keyword}</span>
-              <span className="text-xs text-stone-400 ml-2">{k.family} · {k.primaryTarget ?? "no target"}{k.rank != null ? ` · #${k.rank}` : ""}</span>
-              {k.wrongPageRanking && <span className="ml-2 text-[10px] uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">wrong page</span>}
-              {k.cannibalizationRisk && <span className="ml-2 text-[10px] uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">cannibalized</span>}
-              {k.recommendNewPage && <span className="ml-2 text-[10px] uppercase bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">new page</span>}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-stone-900">{k.keyword}</span>
+                <span className="text-[10px] uppercase tracking-wide bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded">{k.family}</span>
+                {k.category && <span className="text-[10px] uppercase tracking-wide bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">{k.category}</span>}
+              </div>
+              {/* the decision */}
+              {k.action && <p className="text-sm text-stone-900 mt-2"><span className="text-stone-400">Do:</span> {k.action}</p>}
+              <div className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2 mt-2 text-xs text-stone-500">
+                <span>Page: <code>{k.page ?? "— none yet"}</code></span>
+                <span>Demand: {k.volume != null ? `${k.volume}/mo` : "unknown"}</span>
+                <span>Intent: {k.intent ?? "unknown"}</span>
+                <span>Current: {k.rank != null ? `#${k.rank}` : "not ranking"}{k.wrongPageRanking ? " (wrong page)" : ""}</span>
+                <span className="sm:col-span-2">Why: {k.why}</span>
+              </div>
             </div>
-            <span className={`text-[11px] uppercase tracking-wide px-2 py-1 rounded shrink-0 ${band(k.band)}`}>{k.score}</span>
-          </button>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <span className={`text-[11px] uppercase tracking-wide px-2 py-1 rounded ${pri(k.priority)}`}>{k.priority}</span>
+              <button onClick={() => setOpen(open === k.keyword ? null : k.keyword)} className={`text-[11px] uppercase tracking-wide px-2 py-1 rounded ${band(k.band)}`}>score {k.score}</button>
+            </div>
+          </div>
           {open === k.keyword && (
-            <div className="px-4 pb-4 border-t border-stone-100">
-              <p className="text-[11px] uppercase tracking-wide text-stone-400 my-2">Score breakdown</p>
+            <div className="mt-3 pt-3 border-t border-stone-100">
+              <p className="text-[11px] uppercase tracking-wide text-stone-400 mb-1">Score breakdown</p>
               {k.factors?.map((f: any) => (
                 <div key={f.name} className="flex items-center justify-between gap-3 text-sm py-0.5">
                   <span className="text-stone-600">{f.name} <span className="text-stone-400">— {f.note}</span></span>
@@ -193,6 +209,35 @@ function Opportunities() {
         </div>
       ))}
       {!kws.length && <p className="text-stone-500">No keywords yet. Click “Seed keyword model”.</p>}
+    </div>
+  );
+}
+
+function Images() {
+  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/admin/seo/images"], queryFn: () => get("/api/admin/seo/images") });
+  if (isLoading) return <p className="text-stone-500">Auditing images…</p>;
+  return (
+    <div>
+      <p className="text-sm text-stone-500 mb-4">Google Images is a first-class channel for a painter. {data?.artworksAudited} artworks audited. No hacks — every fix is “describe the real work better”.</p>
+      <div className="space-y-2 mb-6">
+        {(data?.summary ?? []).map((s: any) => (
+          <div key={s.issue} className="border border-stone-200 rounded bg-white p-4 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-stone-900 font-medium">{s.issue.replace(/-/g, " ")} <span className="text-xs text-stone-400">· {s.count} artwork(s) · {s.category}</span></p>
+              <p className="text-sm text-stone-600 mt-0.5">{s.recommendedChange}</p>
+            </div>
+            <span className={`text-[11px] uppercase tracking-wide px-2 py-1 rounded shrink-0 ${pri(s.priority)}`}>{s.priority}</span>
+          </div>
+        ))}
+        {!(data?.summary ?? []).length && <p className="text-sm text-stone-500">No image-SEO issues found.</p>}
+      </div>
+      {(data?.sample ?? []).length > 0 && (
+        <Card title="Examples">
+          {data.sample.map((f: any, i: number) => (
+            <p key={i} className="text-xs text-stone-600 py-0.5"><code>{f.url}</code> — {f.issue.replace(/-/g, " ")}</p>
+          ))}
+        </Card>
+      )}
     </div>
   );
 }

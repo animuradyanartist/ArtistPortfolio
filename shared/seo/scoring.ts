@@ -60,11 +60,16 @@ function rankProximityScore(rank: number | null): { value: number; note: string 
   return { value: 0.3, note: `#${rank} — far back` };
 }
 
-/** Difficulty inverse; falls back to competition when difficulty is absent. */
-function difficultyScore(difficulty: number | null, competition: number | null): { value: number; note: string } {
-  if (difficulty != null) return { value: clamp01((100 - difficulty) / 100), note: `Keyword difficulty ${difficulty}/100` };
-  if (competition != null) return { value: clamp01(1 - competition), note: `Ad competition ${(competition * 100).toFixed(0)}% (no KD available)` };
-  return { value: 0.5, note: "No difficulty signal — neutral" };
+/**
+ * Difficulty inverse — but ONLY a genuine keyword-difficulty value (>0) is trusted. The live UK
+ * data showed keyword_overview returns KD=0 for competitive art terms (it doesn't populate real
+ * organic KD) while its `competition` is AD-AUCTION competition (HIGH), which is a MISLEADING proxy
+ * for whether an independent artist can rank organically. So with no real KD we stay neutral and let
+ * the winnable-SERP factor carry the difficulty judgement (confirmed by a SERP check, not ads).
+ */
+function difficultyScore(difficulty: number | null): { value: number; note: string } {
+  if (difficulty != null && difficulty > 0) return { value: clamp01((100 - difficulty) / 100), note: `Keyword difficulty ${difficulty}/100` };
+  return { value: 0.5, note: "No reliable organic difficulty yet — ad competition is ignored (misleading for art SEO); confirm with a SERP check" };
 }
 
 function commercialScore(cpc: number | null): { value: number; note: string } {
@@ -89,7 +94,7 @@ const WEIGHTS = {
  */
 export function opportunityScore(input: ScoreInput): OpportunityScore {
   const rank = rankProximityScore(input.currentRank);
-  const diff = difficultyScore(input.difficulty, input.competition);
+  const diff = difficultyScore(input.difficulty);
   const comm = commercialScore(input.cpc);
   const intent = intentStrength(input.intent);
   const demand = demandScore(input.searchVolume);

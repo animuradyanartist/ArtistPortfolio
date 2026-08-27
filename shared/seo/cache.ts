@@ -21,11 +21,13 @@ export type SeoDataType =
 
 /** Hours a cached response stays fresh, matched to how fast the data actually changes. */
 export const TTL_HOURS: Record<SeoDataType, number> = {
-  keyword_overview: 168, // 7 days
-  serp_organic: 96, // 4 days — a weekly rank job refetches; same-week re-requests dedup
-  ranked_keywords: 720, // 30 days
-  competitors_domain: 720, // 30 days
-  keyword_ideas: 720, // 30 days
+  // Volume/CPC/intent are STABLE month-to-month — a long TTL so we never re-pay for unchanged data
+  // (a manual refresh always overrides sooner when a batch genuinely changes).
+  keyword_overview: 720, // 30 days
+  serp_organic: 168, // 7 days — rankings move; still priority-only + weekly cadence
+  ranked_keywords: 1440, // 60 days — discovery, rarely changes
+  competitors_domain: 1440, // 60 days
+  keyword_ideas: 2160, // 90 days — expansion ideas are long-lived
 };
 
 /** Rough cost tier so usage reporting can separate cheap recurring checks from expensive research. */

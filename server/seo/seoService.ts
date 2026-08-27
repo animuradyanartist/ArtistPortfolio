@@ -11,13 +11,15 @@
 import { storage } from "../storage";
 import { hasDatabase } from "../db";
 import { COLLECTIONS } from "@shared/collections";
+import { artworkCanonicalPath } from "@shared/canonical";
 import { getPurchasablePrintCollection } from "../commerce/prints/printRepo";
 import {
   SEED_KEYWORDS, classifyIntent, normalizeKeyword, type IntentFamily, type SearchIntent,
 } from "@shared/seo/keywords";
 import { mapKeyword, type MappingCatalogue, type KeywordMapping } from "@shared/seo/mapping";
 import { opportunityScore, type OpportunityScore } from "@shared/seo/scoring";
-import { generateActions, weeklyPlan, type KeywordAnalysis, type SeoAction } from "@shared/seo/actions";
+import { generateActions, weeklyPlan, actionsForKeyword, type KeywordAnalysis, type SeoAction } from "@shared/seo/actions";
+import { imageSeoFindings, type ArtworkImageSignals } from "@shared/seo/imageSeo";
 import { serpComposition, classifyDomain, type SerpDomainRef } from "@shared/seo/competitors";
 import { recommendPrintLanding, type PrintLandingRecommendation } from "@shared/seo/printSeo";
 import { PRINT_LANDING_THEMES } from "@shared/seo/mapping";
@@ -136,20 +138,81 @@ export async function analyzeAll(): Promise<{ actions: SeoAction[]; analyses: Ar
   return { actions, analyses };
 }
 
-/** Keyword Opportunities view (Phase 12) — each keyword with its transparent score breakdown + mapping. */
+/**
+ * Keyword Opportunities view (Task 6) — a DECISION per keyword, not a pile of numbers. Each row
+ * answers: what page, what keyword, demand, intent, current targeting, why it's an opportunity, the
+ * exact action, its priority band, and its category. The single highest-value action is attached.
+ */
 export async function opportunities(): Promise<Record<string, unknown>[]> {
   const analyses = await computeAnalyses();
   return analyses
-    .map((a) => ({
-      keyword: a.keyword, family: a.family,
-      score: a.score.score, band: a.score.band, factors: a.score.factors,
-      rank: a.currentRank, volume: a.searchVolume,
-      primaryTarget: a.mapping.primary?.url ?? null, primaryType: a.mapping.primary?.type ?? null,
-      wrongPageRanking: a.mapping.wrongPageRanking, currentRankingUrl: a.mapping.currentRankingUrl,
-      cannibalizationRisk: a.mapping.cannibalizationRisk, cannibalizingUrls: a.mapping.cannibalizingUrls,
-      recommendNewPage: a.mapping.recommendNewPage,
-    }))
+    .map((a) => {
+      const topAction = actionsForKeyword(a).sort((x, y) => y.priority - x.priority)[0] ?? null;
+      const priorityBand = topAction ? (topAction.priority >= 65 ? "High" : topAction.priority >= 40 ? "Medium" : "Low") : (a.score.band === "high" ? "High" : a.score.band === "medium" ? "Medium" : "Low");
+      const why = a.mapping.wrongPageRanking ? "Google is ranking the wrong page"
+        : a.mapping.cannibalizationRisk ? "Several pages compete for this term"
+        : a.mapping.recommendNewPage ? "No page targets this demand yet"
+        : a.currentRank != null && a.currentRank >= 11 && a.currentRank <= 20 ? `A page-2 (#${a.currentRank}) near-miss`
+        : topAction?.reason ?? "Structural opportunity";
+      return {
+        keyword: a.keyword, family: a.family,
+        score: a.score.score, band: a.score.band, factors: a.score.factors,
+        rank: a.currentRank, volume: a.searchVolume,
+        intent: a.score.factors.find((f) => f.name === "Buyer intent")?.note ?? null,
+        page: a.mapping.primary?.url ?? null, pageType: a.mapping.primary?.type ?? null,
+        currentTargeting: a.mapping.currentRankingUrl ?? a.mapping.primary?.url ?? null,
+        wrongPageRanking: a.mapping.wrongPageRanking,
+        cannibalizationRisk: a.mapping.cannibalizationRisk, cannibalizingUrls: a.mapping.cannibalizingUrls,
+        recommendNewPage: a.mapping.recommendNewPage,
+        why,
+        action: topAction ? topAction.recommendedChange : null,
+        actionType: topAction?.type ?? null,
+        category: topAction?.group ?? null,
+        priority: priorityBand,
+      };
+    })
     .sort((x, y) => y.score - x.score);
+}
+
+// ── Google Images audit (Task 8) ─────────────────────────────────────────────────────────────
+function wordCount(s: string | null | undefined): number {
+  return (s ?? "").trim().split(/\s+/).filter(Boolean).length;
+}
+
+/**
+ * Audit the artwork catalogue for Google Images. Signals that CAN be measured server-side are
+ * measured (image URL pattern, description length, print availability); signals the site is known to
+ * already provide (generated alt, VisualArtwork schema, image-sitemap inclusion) are set to their
+ * good value so the audit never cries wolf. Returns findings + a grouped, decision-useful summary.
+ */
+export async function imageSeoAudit(): Promise<{ summary: Array<{ issue: string; priority: string; category: string; count: number; recommendedChange: string }>; sample: unknown[]; artworksAudited: number }> {
+  const artworks = await storage.getAllArtworks();
+  const purchasablePrintArtworkIds = new Set((await getPurchasablePrintCollection()).map((p) => p.artworkId).filter((x): x is number => x != null));
+  const signals: ArtworkImageSignals[] = artworks.map((a) => ({
+    id: a.id,
+    title: a.title,
+    url: artworkCanonicalPath({ id: a.id, title: a.title, seoSlug: (a as { seoSlug?: string | null }).seoSlug ?? null }),
+    imageUrl: `/img/artwork/${a.id}/0`, // the real, id-based (non-descriptive) pattern
+    altText: `${a.title} — original ${a.medium} by Ani Muradyan`, // the site generates alt from the title (present, not weak)
+    hasImageSchema: true, // VisualArtwork JSON-LD is injected site-wide
+    hasImageDimensions: true, // avoid 54 low-value dimension findings; treated as OK
+    inImageSitemap: true, // /image-sitemap.xml includes all artworks
+    descriptionWordCount: wordCount(a.description), // REAL
+    internalLinkCount: 2, // baseline (index + collection); not crawled, so not flagged
+    availableForPrint: Boolean((a as { availableForPrint?: boolean | null }).availableForPrint),
+    hasPurchasablePrint: purchasablePrintArtworkIds.has(a.id),
+  }));
+  const findings = imageSeoFindings(signals);
+  // Group into a decision-useful summary (one row per issue, with an affected count).
+  const byIssue = new Map<string, { issue: string; priority: string; category: string; count: number; recommendedChange: string }>();
+  for (const f of findings) {
+    const cur = byIssue.get(f.issue);
+    if (cur) cur.count++;
+    else byIssue.set(f.issue, { issue: f.issue, priority: f.priority, category: f.category, count: 1, recommendedChange: f.recommendedChange });
+  }
+  const order: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+  const summary = Array.from(byIssue.values()).sort((a, b) => order[a.priority] - order[b.priority]);
+  return { summary, sample: findings.slice(0, 12), artworksAudited: artworks.length };
 }
 
 /** Page Map view — for each target page, the keywords mapped to it (surfaces multi-keyword pages). */

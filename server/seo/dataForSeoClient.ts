@@ -107,6 +107,10 @@ async function call<T>(path: string, body: unknown[]): Promise<DfsEnvelope<T>> {
 
 // ── Verified request/response shapes (only the fields we use) ──────────────────────────────
 
+/**
+ * keyword_overview item — reconciled against the REAL live UK response (2026-08). Confirmed fields
+ * only; no speculative shapes retained.
+ */
 export interface DfsKeywordOverviewItem {
   keyword: string;
   location_code: number;
@@ -114,12 +118,19 @@ export interface DfsKeywordOverviewItem {
   keyword_info?: {
     search_volume?: number | null;
     cpc?: number | null;
-    competition?: number | null; // 0..1
+    competition?: number | null; // 0..1 — this is AD-AUCTION competition, NOT organic difficulty
     competition_level?: string | null; // LOW | MEDIUM | HIGH
+    low_top_of_page_bid?: number | null;
+    high_top_of_page_bid?: number | null;
     monthly_searches?: Array<{ year: number; month: number; search_volume: number }> | null;
   } | null;
+  /**
+   * keyword_difficulty comes back present but 0 for these art terms — keyword_overview does NOT
+   * reliably populate organic KD (the dedicated bulk_keyword_difficulty endpoint is the real source,
+   * intentionally not called for cost). Treat 0/absent as "no real KD signal", never as "easy".
+   */
   keyword_properties?: {
-    keyword_difficulty?: number | null; // 0..100
+    keyword_difficulty?: number | null; // 0..100 (unreliable from this endpoint)
   } | null;
   search_intent_info?: {
     main_intent?: string | null; // informational | navigational | commercial | transactional
@@ -146,18 +157,15 @@ export interface DfsSerpResult {
 }
 
 /**
- * Extract the per-keyword items from a keyword_overview envelope, tolerant of the two real
- * DataForSEO container shapes: `tasks[0].result[0].items[]` and `tasks[0].result[]` being the items
- * directly. This handles container NESTING only — it invents no fields. The live verification
- * confirms which shape the account returns; both are handled so the first run can't come back empty.
+ * Extract the per-keyword items from a keyword_overview envelope. CONFIRMED against the real live
+ * response (2026-08): `tasks[0].result` is an array of ONE container object
+ * `{ se_type, location_code, language_code, items_count, items: [...] }`, so the items live at
+ * `result[0].items`. Guards only — no speculative fallback shapes, no invented fields. A keyword the
+ * API did not return is simply absent from `items` (it must stay missing, never become volume 0).
  */
 export function extractKeywordOverviewItems(env: DfsEnvelope<{ items?: DfsKeywordOverviewItem[] }>): DfsKeywordOverviewItem[] {
-  const result = env?.tasks?.[0]?.result as unknown;
-  if (!Array.isArray(result)) return [];
-  const first = result[0] as { items?: DfsKeywordOverviewItem[]; keyword?: string } | undefined;
-  if (first && Array.isArray(first.items)) return first.items;
-  if (first && typeof first.keyword === "string") return result as DfsKeywordOverviewItem[];
-  return [];
+  const container = env?.tasks?.[0]?.result?.[0];
+  return Array.isArray(container?.items) ? container!.items! : [];
 }
 
 export interface DfsRankedKeywordsItem {

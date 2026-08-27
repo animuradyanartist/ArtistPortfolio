@@ -11,6 +11,7 @@ import { dataForSeoMode } from "./dataForSeoClient";
 import * as seo from "./seoService";
 import * as store from "./seoStore";
 import { JOB_CADENCE, COST_TIER } from "@shared/seo/cache";
+import { NEXT_KEYWORD_BATCH } from "@shared/seo/keywords";
 
 export function registerSeoAdminRoutes(app: Express): void {
   app.get("/api/admin/seo/status", requireAdminAuth, async (_req, res) => {
@@ -41,6 +42,16 @@ export function registerSeoAdminRoutes(app: Express): void {
   app.get("/api/admin/seo/print-seo", requireAdminAuth, async (_req, res) => {
     try { res.json({ recommendations: await seo.printLandingRecommendations() }); }
     catch { res.status(500).json({ message: "Could not load print SEO recommendations." }); }
+  });
+
+  app.get("/api/admin/seo/images", requireAdminAuth, async (_req, res) => {
+    try { res.json(await seo.imageSeoAudit()); }
+    catch { res.status(500).json({ message: "Could not run the Google Images audit." }); }
+  });
+
+  // The auditable next keyword batch (Task 5) — candidates to validate, NOT yet given a paid lookup.
+  app.get("/api/admin/seo/next-batch", requireAdminAuth, (_req, res) => {
+    res.json({ nextBatch: NEXT_KEYWORD_BATCH });
   });
 
   app.get("/api/admin/seo/actions", requireAdminAuth, async (req, res) => {

@@ -38,9 +38,20 @@ describe("opportunity score (Phase 5) — transparent, favours realistic wins", 
     expect(noTarget).toBeGreaterThan(0);
   });
 
-  it("falls back to competition when keyword difficulty is absent", () => {
-    const r = opportunityScore({ ...base, difficulty: null, competition: 0.9 });
-    expect(r.factors.find((f) => f.name === "Beatable difficulty")?.note).toMatch(/competition/i);
+  it("IGNORES ad-competition as difficulty for art terms (live-data fix): HIGH ad comp + KD 0 stays neutral, not penalized", () => {
+    // Real UK data: "original oil paintings" competition=1 (HIGH), keyword_difficulty=0.
+    const artTerm = opportunityScore({ ...base, difficulty: 0, competition: 1 });
+    const diff = artTerm.factors.find((f) => f.name === "Beatable difficulty")!;
+    expect(diff.value).toBe(0.5); // neutral — NOT tanked to ~0 by ad competition
+    expect(diff.note).toMatch(/ad competition is ignored/i);
+    // a HIGH-ad-competition art keyword is not scored worse than a low-competition one on difficulty
+    const lowComp = opportunityScore({ ...base, difficulty: 0, competition: 0.1 });
+    expect(diff.value).toBe(lowComp.factors.find((f) => f.name === "Beatable difficulty")!.value);
+  });
+
+  it("uses a GENUINE keyword-difficulty value (>0) when a real KD endpoint provides it", () => {
+    const r = opportunityScore({ ...base, difficulty: 30, competition: null });
+    expect(r.factors.find((f) => f.name === "Beatable difficulty")?.note).toMatch(/Keyword difficulty 30/);
   });
 
   it("bands the score", () => {
