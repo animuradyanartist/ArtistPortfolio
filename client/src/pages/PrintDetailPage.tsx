@@ -23,20 +23,20 @@ import {
 } from "@/lib/commerceAnalytics";
 
 interface Option {
-  id: number;
+  id: number | null;
   material: string;
   sizeLabel: string;
-  widthCm: number;
-  heightCm: number;
+  widthCm?: number;
+  heightCm?: number;
   framed: boolean;
   frameColour: string | null;
   currency: string;
   priceMinor: number | null;
-  effectiveDpi: number | null;
-  mockup: string | null;
-  state: "purchasable" | "provisional";
+  effectiveDpi?: number | null;
+  mockup?: string | null;
+  state: "purchasable" | "provisional" | "preview";
   reason: string | null;
-  prodigiVerified: boolean;
+  prodigiVerified?: boolean;
 }
 
 interface PrintDetail {
@@ -47,7 +47,10 @@ interface PrintDetail {
   images: string[];
   image: string | null;
   artworkId: number | null;
+  artworkPath?: string;
   purchasable: boolean;
+  preview?: boolean;
+  materialLabel?: string;
   startingPriceMinor: number | null;
   masterReady: boolean;
   options: Option[];
@@ -124,6 +127,8 @@ export default function PrintDetailPage() {
       `Museum-quality giclée fine-art print of "${data.title}" by Ani Muradyan on archival Hahnemühle paper. Open edition. The original painting remains unique.`,
     );
     updateCanonicalUrl(`/prints/${data.slug}`);
+    // NO GA for preview/demo products — demo prices must never enter analytics.
+    if (data.preview) return;
     trackViewItemPrint({
       id: data.id,
       title: data.title,
@@ -133,9 +138,9 @@ export default function PrintDetailPage() {
     });
   }, [data]);
 
-  // select_item on each configurator change.
+  // select_item on each configurator change (real products only — never demo).
   useEffect(() => {
-    if (!data || !selected) return;
+    if (!data || data.preview || !selected || selected.id == null) return;
     trackSelectItemPrint({
       id: data.id,
       title: data.title,
@@ -145,7 +150,7 @@ export default function PrintDetailPage() {
       printVariantId: selected.id,
       artworkId: data.artworkId,
       material: selected.material,
-      size: `${selected.widthCm}×${selected.heightCm} cm`,
+      size: selected.sizeLabel,
       frame: frameLabel(frameKeyOf(selected)),
     });
   }, [data, selected]);
@@ -178,17 +183,22 @@ export default function PrintDetailPage() {
           </div>
           {data.artworkId != null && (
             <Link
-              href={`/artworks/${data.artworkId}`}
+              href={data.artworkPath ?? `/artworks/${data.artworkId}`}
               className="inline-block mt-4 text-[11px] tracking-[0.2em] uppercase text-stone-600 border-b border-stone-400 hover:border-stone-800"
             >
-              View the original painting →
+              View original artwork →
             </Link>
           )}
         </div>
 
         {/* Configurator */}
         <div>
-          <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-2">Fine-Art Print · Open edition · Unsigned</p>
+          {data.preview && (
+            <div className="mb-4 border border-amber-300/70 bg-amber-50 text-amber-800 px-3 py-2 text-xs rounded">
+              Preview — demo product for design testing. Purchasing is not yet available.
+            </div>
+          )}
+          <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-2">Fine Art Print · Open edition · Unsigned</p>
           <h1 className="font-playfair text-3xl md:text-4xl text-stone-900 mb-4">{data.title}</h1>
           <p className="text-stone-700 leading-relaxed mb-8">
             A museum-quality giclée reproduction on archival Hahnemühle paper, printed to order with
@@ -212,12 +222,14 @@ export default function PrintDetailPage() {
             <Choice label="Size">
               {sizes.map((s) => (
                 <Pill key={s.sizeLabel} active={size === s.sizeLabel} onClick={() => setSize(s.sizeLabel)}>
-                  {s.sizeLabel} · {s.widthCm}×{s.heightCm} cm
+                  {s.sizeLabel}{s.widthCm && s.heightCm ? ` · ${s.widthCm}×${s.heightCm} cm` : ""}
                 </Pill>
               ))}
             </Choice>
           )}
-          {frames.length > 0 && (
+          {/* Framing is deliberately not offered yet (framed SKUs unverified) — the product info
+              states "Unframed". Only show a Frame choice if more than one frame option exists. */}
+          {frames.length > 1 && (
             <Choice label="Frame">
               {frames.map((f) => (
                 <Pill key={f} active={frame === f} onClick={() => setFrame(f)}>{frameLabel(f)}</Pill>
@@ -232,6 +244,9 @@ export default function PrintDetailPage() {
             {selected && selected.state === "purchasable" && selected.priceMinor != null && (
               <PurchasableBlock detail={data} option={selected} navigate={navigate} />
             )}
+            {selected && selected.state === "preview" && selected.priceMinor != null && (
+              <PreviewBlock option={selected} />
+            )}
             {selected && selected.state === "provisional" && (
               <div>
                 {selected.priceMinor != null && (
@@ -243,12 +258,14 @@ export default function PrintDetailPage() {
                 <p className="text-sm text-stone-600 leading-relaxed max-w-prose">
                   This print is being prepared from a high-resolution master and is not yet available
                   to order. {data.artworkId != null && (
-                    <>The <Link href={`/artworks/${data.artworkId}`} className="border-b border-stone-400 hover:border-stone-800">original painting</Link> is available now.</>
+                    <>The <Link href={data.artworkPath ?? `/artworks/${data.artworkId}`} className="border-b border-stone-400 hover:border-stone-800">original painting</Link> is available now.</>
                   )}
                 </p>
               </div>
             )}
           </div>
+
+          <ProductInfo />
         </div>
       </div>
     </Shell>
@@ -273,8 +290,8 @@ function PurchasableBlock({ detail, option, navigate }: {
     trackBeginCheckoutPrint(
       {
         id: detail.id, title: detail.title, priceMinor: option.priceMinor, currency: option.currency,
-        printProductId: detail.id, printVariantId: option.id, artworkId: detail.artworkId,
-        material: option.material, size: `${option.widthCm}×${option.heightCm} cm`,
+        printProductId: detail.id, printVariantId: option.id ?? undefined, artworkId: detail.artworkId,
+        material: option.material, size: option.sizeLabel,
         frame: frameLabel(frameKeyOf(option)), quantity: qty,
       },
       (option.priceMinor ?? 0) * qty, option.currency,
@@ -362,6 +379,66 @@ function PurchasableBlock({ detail, option, navigate }: {
       </button>
       <p className="text-xs text-stone-500">Payment is handled by Stripe. Your card details never reach this website.</p>
     </form>
+  );
+}
+
+/**
+ * PREVIEW/DEMO purchase block. Shows the price + quantity selector so the full UI can be
+ * evaluated, but the CTA is DISABLED — it makes NO checkout request. A preview option carries no
+ * DB variant id, so even a forced request would be refused by the server. Demo prices never leave
+ * this component (no checkout, no GA, no feed).
+ */
+function PreviewBlock({ option }: { option: Option }) {
+  const [qty, setQty] = useState(1);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-3">
+        <p className="font-playfair text-3xl text-stone-900 tabular-nums">{money((option.priceMinor ?? 0) * qty, option.currency)}</p>
+        <label className="flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase text-stone-500">
+          Qty
+          <select value={qty} onChange={(e) => setQty(Number(e.target.value))}
+            className="bg-transparent border-b border-stone-300 focus:border-stone-800 focus:outline-none py-1 text-stone-900">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+      </div>
+      <button
+        disabled
+        aria-disabled="true"
+        className="inline-block bg-stone-300 text-stone-600 px-8 py-3 text-[11px] tracking-[0.2em] uppercase cursor-not-allowed"
+      >
+        Preview — purchasing will be available soon
+      </button>
+      <p className="text-xs text-stone-500 mt-2">Demo pricing, shown for design testing only.</p>
+    </div>
+  );
+}
+
+/** Shared print information — shown on every PDP (preview and real). No archival-longevity claims. */
+function ProductInfo() {
+  const facts = [
+    ["Type", "Fine art giclée print"],
+    ["Paper", "Museum-quality Hahnemühle paper"],
+    ["Edition", "Open edition · Unsigned"],
+    ["Production", "Printed to order"],
+    ["Framing", "Unframed"],
+  ];
+  return (
+    <div className="border-t border-stone-300 mt-10 pt-6">
+      <h2 className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-4">About this print</h2>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
+        {facts.map(([k, v]) => (
+          <div key={k} className="flex items-baseline justify-between gap-3 border-b border-stone-200/70 py-1.5">
+            <dt className="text-xs tracking-wide uppercase text-stone-400">{k}</dt>
+            <dd className="text-sm text-stone-800 text-right">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-xs text-stone-500 leading-relaxed mt-4 max-w-prose">
+        Each print is made to order. Colours may vary slightly between your screen and the physical
+        print, and between production batches — every screen renders colour a little differently.
+      </p>
+    </div>
   );
 }
 

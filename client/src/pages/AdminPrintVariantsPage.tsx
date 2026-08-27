@@ -28,6 +28,13 @@ interface Variant {
 
 const inputCls = "w-full border border-stone-300 rounded px-2 py-1.5 text-sm focus:border-stone-800 focus:outline-none";
 
+/** Heuristic: does this asset look like a web/preview image rather than a real print-ready master?
+ *  Informational only — eligibility is server-derived and always requires real hi-res dimensions. */
+function looksLikePreviewAsset(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return /\/img\/artwork\/|singulart\.com|\?v=|\/thumbnail|preview/i.test(url);
+}
+
 export default function AdminPrintVariantsPage() {
   const { id } = useParams();
   const printId = Number(id);
@@ -91,7 +98,12 @@ function MasterCard({ artworkId, master, onSaved }: { artworkId: number; master:
     <div className="border border-stone-200 rounded-lg bg-white p-5">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-medium text-stone-900">High-res master</h2>
-        <span className={`text-[11px] uppercase tracking-wide px-2 py-0.5 rounded ${master?.status === "ready" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{master?.status ?? "missing"}</span>
+        <div className="flex items-center gap-2">
+          {looksLikePreviewAsset(master?.printReadyAssetUrl) && (
+            <span className="text-[11px] uppercase tracking-wide px-2 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700" title="This looks like a web/preview image, not a print-ready master. It can never satisfy production eligibility.">Preview image</span>
+          )}
+          <span className={`text-[11px] uppercase tracking-wide px-2 py-0.5 rounded ${master?.status === "ready" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{master?.status ?? "missing"}</span>
+        </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm text-stone-600">Width px<input className={inputCls} value={widthPx} onChange={(e) => setWidthPx(e.target.value)} inputMode="numeric" /></label>

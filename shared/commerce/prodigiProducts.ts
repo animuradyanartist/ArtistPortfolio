@@ -28,8 +28,10 @@ export interface ProdigiLaunchProduct {
   paperType: "HGE" | "HPR";
   /** Substrate weight the API reported (gsm). */
   substrateGsm: number;
-  /** Customer-facing size label. */
+  /** Customer-facing size label, e.g. "12×16 in (30×40 cm)". */
   displayName: string;
+  /** Short, clean size label for the storefront (never shows pixels), e.g. "30 × 40 cm" or "A2". */
+  friendlyLabel: string;
   /** Physical print size, cm (rounded to 1 dp). Portrait orientation as Prodigi lists it. */
   widthCm: number;
   heightCm: number;
@@ -48,15 +50,15 @@ export interface ProdigiLaunchProduct {
  */
 export const PRODIGI_LAUNCH_PRODUCTS: readonly ProdigiLaunchProduct[] = [
   // ── Hahnemühle German Etching · HGE · 310gsm ──
-  { sku: "GLOBAL-HGE-12X16", material: "german-etching", paperType: "HGE", substrateGsm: 310, displayName: "12×16 in (30×40 cm)", widthCm: 30.5, heightCm: 40.6, printAreaWidthPx: 3600, printAreaHeightPx: 4800, activeForLaunch: true },
-  { sku: "GLOBAL-HGE-16X20", material: "german-etching", paperType: "HGE", substrateGsm: 310, displayName: "16×20 in (40×50 cm)", widthCm: 40.6, heightCm: 50.8, printAreaWidthPx: 4800, printAreaHeightPx: 6000, activeForLaunch: true },
-  { sku: "GLOBAL-HGE-18X24", material: "german-etching", paperType: "HGE", substrateGsm: 310, displayName: "18×24 in (45×60 cm)", widthCm: 45.7, heightCm: 61.0, printAreaWidthPx: 5400, printAreaHeightPx: 7200, activeForLaunch: true },
-  { sku: "GLOBAL-HGE-A3", material: "german-etching", paperType: "HGE", substrateGsm: 310, displayName: "A3 (29.7×42 cm)", widthCm: 29.7, heightCm: 42.0, printAreaWidthPx: 3578, printAreaHeightPx: 5031, activeForLaunch: true },
-  { sku: "GLOBAL-HGE-A2", material: "german-etching", paperType: "HGE", substrateGsm: 310, displayName: "A2 (42×59.4 cm)", widthCm: 42.0, heightCm: 59.4, printAreaWidthPx: 4960, printAreaHeightPx: 7015, activeForLaunch: true },
+  { sku: "GLOBAL-HGE-12X16", material: "german-etching", paperType: "HGE", substrateGsm: 310, displayName: "12×16 in (30×40 cm)", friendlyLabel: "30 × 40 cm", widthCm: 30.5, heightCm: 40.6, printAreaWidthPx: 3600, printAreaHeightPx: 4800, activeForLaunch: true },
+  { sku: "GLOBAL-HGE-16X20", material: "german-etching", paperType: "HGE", substrateGsm: 310, displayName: "16×20 in (40×50 cm)", friendlyLabel: "40 × 50 cm", widthCm: 40.6, heightCm: 50.8, printAreaWidthPx: 4800, printAreaHeightPx: 6000, activeForLaunch: true },
+  { sku: "GLOBAL-HGE-18X24", material: "german-etching", paperType: "HGE", substrateGsm: 310, displayName: "18×24 in (45×60 cm)", friendlyLabel: "45 × 60 cm", widthCm: 45.7, heightCm: 61.0, printAreaWidthPx: 5400, printAreaHeightPx: 7200, activeForLaunch: true },
+  { sku: "GLOBAL-HGE-A3", material: "german-etching", paperType: "HGE", substrateGsm: 310, displayName: "A3 (29.7×42 cm)", friendlyLabel: "A3", widthCm: 29.7, heightCm: 42.0, printAreaWidthPx: 3578, printAreaHeightPx: 5031, activeForLaunch: true },
+  { sku: "GLOBAL-HGE-A2", material: "german-etching", paperType: "HGE", substrateGsm: 310, displayName: "A2 (42×59.4 cm)", friendlyLabel: "A2", widthCm: 42.0, heightCm: 59.4, printAreaWidthPx: 4960, printAreaHeightPx: 7015, activeForLaunch: true },
 
   // ── Hahnemühle Photo Rag · HPR · 308gsm ──
-  { sku: "GLOBAL-HPR-16X20", material: "photo-rag", paperType: "HPR", substrateGsm: 308, displayName: "16×20 in (40×50 cm)", widthCm: 40.6, heightCm: 50.8, printAreaWidthPx: 4800, printAreaHeightPx: 6000, activeForLaunch: true },
-  { sku: "GLOBAL-HPR-A3", material: "photo-rag", paperType: "HPR", substrateGsm: 308, displayName: "A3 (29.7×42 cm)", widthCm: 29.7, heightCm: 42.0, printAreaWidthPx: 3507, printAreaHeightPx: 4960, activeForLaunch: true },
+  { sku: "GLOBAL-HPR-16X20", material: "photo-rag", paperType: "HPR", substrateGsm: 308, displayName: "16×20 in (40×50 cm)", friendlyLabel: "40 × 50 cm", widthCm: 40.6, heightCm: 50.8, printAreaWidthPx: 4800, printAreaHeightPx: 6000, activeForLaunch: true },
+  { sku: "GLOBAL-HPR-A3", material: "photo-rag", paperType: "HPR", substrateGsm: 308, displayName: "A3 (29.7×42 cm)", friendlyLabel: "A3", widthCm: 29.7, heightCm: 42.0, printAreaWidthPx: 3507, printAreaHeightPx: 4960, activeForLaunch: true },
 ];
 
 const BY_SKU = new Map(PRODIGI_LAUNCH_PRODUCTS.map((p) => [p.sku.toUpperCase(), p]));

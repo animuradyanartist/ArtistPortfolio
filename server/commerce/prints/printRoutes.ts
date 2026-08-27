@@ -18,6 +18,7 @@ import {
 } from "./printRepo";
 import { assessVariant, isPubliclyPurchasable, startingPriceMinor } from "@shared/commerce/printProduct";
 import { buildFeedTsv } from "@shared/commerce/printFeed";
+import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
 
 function baseUrlOf(req: Request): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
@@ -27,12 +28,29 @@ function baseUrlOf(req: Request): string {
 }
 
 export function registerPrintRoutes(app: Express): void {
-  // ── The storefront collection: ONLY products with a genuinely purchasable variant. ──────
+  // ── The storefront collection: ONLY products with a genuinely purchasable variant. In PREVIEW
+  //    mode (dev flag), demo products are appended — each carries `preview: true` and is not
+  //    purchasable. Production/default returns only real sellable products. ────────────────────
   app.get("/api/commerce/prints", async (_req, res) => {
     try {
       const cards = await getPurchasablePrintCollection();
-      res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-      return res.json({ prints: cards });
+      const previewMode = isPrintPreviewMode();
+      const preview = previewMode
+        ? (await getPreviewCatalogue()).map((p) => ({
+            id: -p.artworkId, // negative, non-DB id so it can never collide with a real product
+            title: p.title,
+            slug: p.slug,
+            image: p.image,
+            artworkId: p.artworkId,
+            startingPriceMinor: p.startingPriceMinor,
+            currency: p.currency,
+            sizeCount: p.sizes.length,
+            materialLabel: p.materialLabel,
+            preview: true as const,
+          }))
+        : [];
+      res.set("Cache-Control", previewMode ? "no-store" : "public, max-age=60, stale-while-revalidate=300");
+      return res.json({ prints: [...cards, ...preview], previewMode });
     } catch {
       return res.status(500).json({ message: "Could not load prints." });
     }
@@ -44,9 +62,16 @@ export function registerPrintRoutes(app: Express): void {
     try {
       const artworkId = Number.parseInt(String(req.params.artworkId), 10);
       if (!Number.isInteger(artworkId)) return res.status(400).json({ slug: null });
+      // PRODUCTION: only a genuinely purchasable print lights the link. This function is untouched.
       const slug = await purchasablePrintSlugForArtwork(artworkId);
-      res.set("Cache-Control", "public, max-age=60");
-      return res.json({ available: slug != null, slug });
+      if (slug) {
+        res.set("Cache-Control", "public, max-age=60");
+        return res.json({ available: true, slug, preview: false });
+      }
+      // PREVIEW (dev flag only): a separate, clearly-flagged branch for demo artworks.
+      const previewSlug = await getPreviewSlugForArtwork(artworkId);
+      res.set("Cache-Control", "no-store");
+      return res.json({ available: previewSlug != null, slug: previewSlug, preview: previewSlug != null });
     } catch {
       return res.status(500).json({ slug: null });
     }
@@ -56,7 +81,41 @@ export function registerPrintRoutes(app: Express): void {
   app.get("/api/commerce/prints/:slug", async (req, res) => {
     try {
       const detail = await getPrintDetailBySlug(String(req.params.slug));
-      if (!detail) return res.status(404).json({ message: "Print not found" });
+      if (!detail) {
+        // PREVIEW fallback (dev flag only): a demo product with the same shape, flagged preview.
+        // Every option is state 'preview' with NO real variant id, so it can never be checked out.
+        const p = await getPreviewDetail(String(req.params.slug));
+        if (p) {
+          res.set("Cache-Control", "no-store");
+          return res.json({
+            id: -p.artworkId,
+            slug: p.slug,
+            title: p.title,
+            description: "",
+            images: [p.image],
+            image: p.image,
+            artworkId: p.artworkId,
+            artworkPath: p.artworkPath,
+            purchasable: false,
+            preview: true,
+            startingPriceMinor: p.startingPriceMinor,
+            masterReady: false,
+            materialLabel: p.materialLabel,
+            options: p.sizes.map((s) => ({
+              id: null, // no DB variant — cannot be checked out
+              material: p.material,
+              sizeLabel: s.sizeLabel,
+              framed: false,
+              frameColour: null,
+              currency: s.currency,
+              priceMinor: s.priceMinor,
+              state: "preview" as const,
+              reason: null,
+            })),
+          });
+        }
+        return res.status(404).json({ message: "Print not found" });
+      }
 
       // Expose only the options the configurator may present: enabled + eligible variants. A
       // disabled or resolution-failing variant ('unavailable') is hidden entirely.

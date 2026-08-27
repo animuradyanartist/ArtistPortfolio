@@ -24,6 +24,9 @@ interface PrintCard {
   artworkId: number | null;
   startingPriceMinor: number | null;
   currency: string;
+  sizeCount?: number;
+  materialLabel?: string;
+  preview?: boolean;
 }
 
 function money(minor: number, currency: string): string {
@@ -35,7 +38,7 @@ function money(minor: number, currency: string): string {
 }
 
 export default function PrintsPage() {
-  const { data, isLoading } = useQuery<{ prints: PrintCard[] }>({
+  const { data, isLoading } = useQuery<{ prints: PrintCard[]; previewMode?: boolean }>({
     queryKey: ["/api/commerce/prints"],
     queryFn: async () => {
       const r = await fetch("/api/commerce/prints");
@@ -43,6 +46,7 @@ export default function PrintsPage() {
       return r.json();
     },
   });
+  const previewMode = Boolean(data?.previewMode);
 
   useEffect(() => {
     document.title = "Fine-Art Prints · Ani Muradyan";
@@ -59,6 +63,11 @@ export default function PrintsPage() {
       <div className="mx-auto max-w-6xl px-6 py-16 md:py-24">
         <Eyebrow>Fine-Art Prints</Eyebrow>
         <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">Prints</h1>
+        {previewMode && (
+          <div className="mb-8 border border-amber-300/70 bg-amber-50 text-amber-800 px-4 py-2.5 text-sm rounded max-w-2xl">
+            <strong className="font-medium">Preview mode.</strong> These are demo products for design testing — purchasing is not yet available and prices are placeholders.
+          </div>
+        )}
         <p className="text-stone-700 max-w-2xl leading-relaxed mb-12">
           Museum-quality giclée reproductions on archival Hahnemühle paper, printed to order. A print
           lets a painting live on more walls — the{" "}
@@ -100,11 +109,15 @@ export default function PrintsPage() {
                     <div className="w-full h-full grid place-items-center text-stone-400 text-sm">No image</div>
                   )}
                 </div>
-                <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-1">Fine-Art Print</p>
+                <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-1">Fine Art Print</p>
                 <h3 className="font-playfair text-xl text-stone-900 group-hover:text-stone-600 transition-colors">{p.title}</h3>
-                {p.startingPriceMinor != null && (
-                  <p className="text-sm text-stone-700 tabular-nums mt-1">From {money(p.startingPriceMinor, p.currency)}</p>
-                )}
+                <div className="flex items-baseline flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                  {p.startingPriceMinor != null && (
+                    <span className="text-sm text-stone-700 tabular-nums">From {money(p.startingPriceMinor, p.currency)}</span>
+                  )}
+                  {p.sizeCount ? <span className="text-xs text-stone-500">{p.sizeCount} sizes</span> : null}
+                </div>
+                {p.materialLabel && <p className="text-xs text-stone-400 mt-0.5">{p.materialLabel}</p>}
               </Link>
             ))}
           </div>
