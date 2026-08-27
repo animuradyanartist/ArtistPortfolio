@@ -145,6 +145,21 @@ export interface DfsSerpResult {
   item_types?: string[] | null;
 }
 
+/**
+ * Extract the per-keyword items from a keyword_overview envelope, tolerant of the two real
+ * DataForSEO container shapes: `tasks[0].result[0].items[]` and `tasks[0].result[]` being the items
+ * directly. This handles container NESTING only — it invents no fields. The live verification
+ * confirms which shape the account returns; both are handled so the first run can't come back empty.
+ */
+export function extractKeywordOverviewItems(env: DfsEnvelope<{ items?: DfsKeywordOverviewItem[] }>): DfsKeywordOverviewItem[] {
+  const result = env?.tasks?.[0]?.result as unknown;
+  if (!Array.isArray(result)) return [];
+  const first = result[0] as { items?: DfsKeywordOverviewItem[]; keyword?: string } | undefined;
+  if (first && Array.isArray(first.items)) return first.items;
+  if (first && typeof first.keyword === "string") return result as DfsKeywordOverviewItem[];
+  return [];
+}
+
 export interface DfsRankedKeywordsItem {
   keyword_data?: { keyword?: string; keyword_info?: { search_volume?: number | null } | null };
   ranked_serp_element?: { serp_item?: { rank_absolute?: number; url?: string; domain?: string } };

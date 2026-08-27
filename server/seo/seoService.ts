@@ -21,7 +21,7 @@ import { generateActions, weeklyPlan, type KeywordAnalysis, type SeoAction } fro
 import { serpComposition, classifyDomain, type SerpDomainRef } from "@shared/seo/competitors";
 import { recommendPrintLanding, type PrintLandingRecommendation } from "@shared/seo/printSeo";
 import { PRINT_LANDING_THEMES } from "@shared/seo/mapping";
-import { dataForSeo, dataForSeoConfigured } from "./dataForSeoClient";
+import { dataForSeo, dataForSeoConfigured, extractKeywordOverviewItems } from "./dataForSeoClient";
 import { cachedFetch } from "./seoStore";
 import * as store from "./seoStore";
 
@@ -221,8 +221,7 @@ export async function refreshKeywordOverview(): Promise<{ ran: boolean; fromCach
     "/v3/dataforseo_labs/google/keyword_overview/live",
     async () => {
       const env = await dataForSeo.keywordOverview(terms, locationCode, languageCode);
-      const items = env.tasks?.[0]?.result?.[0]?.items ?? [];
-      return { data: items, cost: env.cost ?? null };
+      return { data: extractKeywordOverviewItems(env), cost: env.cost ?? null };
     },
   );
   const byKeyword = new Map(keywords.map((k) => [normalizeKeyword(k.keyword), k]));
