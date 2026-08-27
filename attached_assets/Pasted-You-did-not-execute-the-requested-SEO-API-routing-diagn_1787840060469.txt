@@ -1,0 +1,107 @@
+You did not execute the requested SEO API routing diagnosis.
+
+Your response about /prints is unrelated.
+
+Return to the actual task and continue from the current branch:
+
+feat/print-business-prodigi
+
+The problem is still:
+
+curl -i http://localhost:5000/api/admin/seo/status
+
+returns:
+
+HTTP 200
+Content-Type: text/html
+
+<!DOCTYPE html>...
+
+That means the request is still falling through to the Vite/SPA HTML fallback instead of the SEO API router.
+
+Do NOT discuss /prints.
+Do NOT call DataForSEO.
+Do NOT run db:push.
+Do NOT deploy.
+Do NOT merge main.
+
+Now do exactly this:
+
+1. Trace the REAL runtime startup order from server/index.ts:
+   - Express app creation
+   - registerRoutes(app)
+   - registerSeoAdminRoutes(...)
+   - Vite middleware
+   - SPA fallback
+   - app.listen
+
+2. Add TEMP runtime logs proving:
+   - when SEO routes are registered
+   - what path they are mounted at
+   - whether the request reaches the SEO router
+
+3. Inspect the live Express router stack and report the actual resolved path for:
+   GET /api/admin/seo/status
+
+4. Check for a double-prefix or wrong-prefix bug.
+
+5. Fix the root cause with the smallest change.
+
+6. Add an API JSON 404 guard:
+   unknown /api/* routes must return JSON 404 and must NEVER return index.html.
+
+7. Restart the actual server.
+
+8. Prove the fix with COMPLETE runtime output:
+
+   curl -i http://localhost:5000/api/admin/seo/status
+
+Expected unauthenticated success:
+   HTTP 401
+   Content-Type: application/json
+
+Then:
+
+   curl -i http://localhost:5000/api/admin/seo/definitely-does-not-exist
+
+Expected:
+   HTTP 404
+   Content-Type: application/json
+
+9. Authenticate using the existing admin auth flow and verify JSON responses for:
+   /api/admin/seo/status
+   /api/admin/seo/images
+   /api/admin/seo/overview
+
+10. Remove temporary debug logs.
+
+11. Run:
+   - SEO tests
+   - route regression tests
+   - npm run check
+   - npm run build
+
+Known baseline:
+59 pre-existing TypeScript errors.
+Do not increase it.
+
+Do not claim completion unless the final curl for:
+
+http://localhost:5000/api/admin/seo/status
+
+returns application/json.
+
+Final report must include:
+- exact root cause
+- route registration order before/after
+- router mount path
+- internal route path
+- final resolved endpoint
+- curl outputs
+- authenticated endpoint results
+- tests
+- typecheck
+- build
+- files changed
+- commit hash
+- confirmation no DataForSEO call, no db:push, no deploy, no main merge
