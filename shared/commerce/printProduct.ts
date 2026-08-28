@@ -217,6 +217,101 @@ export function printAdminSummary(
   };
 }
 
+/**
+ * PRINT READINESS — the checklist the unified admin editor shows, and the SAME gate the publish
+ * action is held to. Every check is derived from the real product/master/variant data. `canPublish`
+ * is true only when a genuinely purchasable variant exists (master ready + eligible + enabled +
+ * priced + verified launch SKU + asset) AND the product is presentable (title, description, artwork,
+ * a public image) — so "Publish" can never make an unready print live. Pure and unit-tested; both
+ * the client panel and the server publish guard call it, so they can never disagree.
+ */
+export interface PrintReadinessInput {
+  title: string;
+  description: string;
+  artworkId: number | null;
+  imageCount: number;
+  master: PrintMasterView | null;
+  variants: PrintVariantView[];
+}
+
+export interface PrintReadinessCheck {
+  key: string;
+  label: string;
+  ok: boolean;
+  /** Shown when the check fails. */
+  hint: string;
+}
+
+export interface PrintReadiness {
+  checks: PrintReadinessCheck[];
+  /** Labels of the failed checks, for a "Cannot publish yet" explanation. */
+  missing: string[];
+  /** True only when every required check passes — the fail-closed publish gate. */
+  canPublish: boolean;
+  state: PrintAdminStatus;
+}
+
+export function printReadiness(input: PrintReadinessInput, productStatus: string): PrintReadiness {
+  const { master, variants } = input;
+  const checks: PrintReadinessCheck[] = [
+    {
+      key: "details",
+      label: "Print details complete",
+      ok: input.title.trim().length > 0 && input.description.trim().length > 0 && input.artworkId != null,
+      hint: "Add a title, a description and the source artwork.",
+    },
+    {
+      key: "image",
+      label: "Public image added",
+      ok: input.imageCount > 0,
+      hint: "Add at least one storefront image.",
+    },
+    {
+      key: "master",
+      label: "High-resolution master uploaded",
+      ok: !!(master && master.printReadyAssetUrl && master.widthPx && master.heightPx),
+      hint: "Upload a high-resolution print file.",
+    },
+    {
+      key: "master-eligible",
+      label: "Master resolution eligible",
+      ok: master?.status === "ready",
+      hint: "The uploaded file's resolution must clear the print floor.",
+    },
+    {
+      key: "option",
+      label: "At least one material/size option configured",
+      ok: variants.length > 0,
+      hint: "Add a print option (material + size).",
+    },
+    {
+      key: "price",
+      label: "Selling price added",
+      ok: variants.some((v) => (v.retailMinor ?? 0) > 0),
+      hint: "Set a price on at least one option.",
+    },
+    {
+      key: "sku",
+      label: "Verified Prodigi product",
+      ok: variants.some((v) => isActiveLaunchSku(v.prodigiSku)),
+      hint: "Each option must map to a verified Prodigi size.",
+    },
+    {
+      key: "enabled",
+      label: "Option enabled and purchasable",
+      ok: hasPurchasableVariant(variants, master),
+      hint: "Enable an eligible, priced option.",
+    },
+  ];
+  const missing = checks.filter((c) => !c.ok).map((c) => c.label);
+  return {
+    checks,
+    missing,
+    canPublish: checks.every((c) => c.ok),
+    state: printAdminSummary(productStatus, variants, master).status,
+  };
+}
+
 export interface PrintItemSnapshot {
   itemType: "print";
   printId: number;

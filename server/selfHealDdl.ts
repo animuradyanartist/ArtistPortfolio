@@ -173,6 +173,17 @@ export const SELF_HEAL_DDL: readonly string[] = [
         created_at timestamp DEFAULT now(),
         updated_at timestamp DEFAULT now()
       )`,
+  // The prints table PREDATES this self-heal block, so CREATE TABLE IF NOT EXISTS is a no-op on
+  // production and never adds a column that arrived after the table was first pushed. These additive
+  // ALTERs backfill columns the create/edit flow writes, so a drifted production table cannot make an
+  // INSERT fail (e.g. a missing slug column). Every column here is nullable or defaulted — safe on rows.
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS slug text`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS preferred_material text NOT NULL DEFAULT 'paper'`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active'`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS featured boolean DEFAULT false`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS position integer DEFAULT 0`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`,
   // PRINT VARIANTS — the purchasable material × size × frame configurations of a print. Both
   // eligible (master cleared the resolution engine) AND enabled (an admin turned it on) must be
   // true before a customer can buy it. prodigi_verified records SKU reconciliation state.
@@ -217,6 +228,10 @@ export const SELF_HEAL_DDL: readonly string[] = [
         updated_at timestamp DEFAULT now()
       )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS print_masters_artwork_unique ON print_masters (artwork_id)`,
+  // The uploaded high-resolution master file (a base64 data URL), stored server-side and served over
+  // HTTPS from an app route to the fulfilment provider — NEVER linked from any public page. Additive.
+  `ALTER TABLE print_masters ADD COLUMN IF NOT EXISTS asset_data text`,
+  `ALTER TABLE print_masters ADD COLUMN IF NOT EXISTS asset_filename text`,
   // ── SEO GROWTH SYSTEM (DataForSEO). Additive; nothing runs until credentials are set. ──
   `CREATE TABLE IF NOT EXISTS seo_keywords (
         id serial PRIMARY KEY,

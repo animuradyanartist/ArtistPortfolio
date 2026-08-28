@@ -230,6 +230,10 @@ export const printMasters = pgTable("print_masters", {
   heightPx: integer("height_px"),
   /** The print-ready, colour-managed derived asset URL fulfilment sends to Prodigi. Never a web image. */
   printReadyAssetUrl: text("print_ready_asset_url"),
+  /** The uploaded master file itself (base64 data URL), stored server-side and served over HTTPS from
+   *  an app route to the fulfilment provider — never linked from any public page. */
+  assetData: text("asset_data"),
+  assetFilename: text("asset_filename"),
   /** MD5 of the print-ready asset, passed to Prodigi so it can verify the file it downloaded. */
   checksumMd5: text("checksum_md5"),
   /**

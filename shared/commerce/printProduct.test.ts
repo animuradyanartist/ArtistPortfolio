@@ -10,6 +10,7 @@ import {
   printCanonicalPath,
   printCanonicalUrl,
   printAdminSummary,
+  printReadiness,
   type PrintVariantView,
   type PrintMasterView,
 } from "./printProduct";
@@ -147,6 +148,47 @@ describe("price + snapshot", () => {
     });
     // asset falls back to the master when the variant has none
     expect(snap.printReadyAssetUrl).toBe(readyMaster.printReadyAssetUrl);
+  });
+});
+
+describe("printReadiness — the publish gate + checklist", () => {
+  const ready = (over = {}) => printReadiness({
+    title: "Blue Hour", description: "A calm sea", artworkId: 7, imageCount: 1,
+    master: readyMaster, variants: [variant()], ...over,
+  }, "active");
+
+  it("canPublish only when every check passes (a genuinely purchasable variant + presentable)", () => {
+    const r = ready();
+    expect(r.canPublish).toBe(true);
+    expect(r.missing).toEqual([]);
+    expect(r.state).toBe("published");
+  });
+
+  it("blocks publish and lists what's missing when the master is not ready", () => {
+    const r = ready({ master: missingMaster });
+    expect(r.canPublish).toBe(false);
+    expect(r.missing).toContain("High-resolution master uploaded");
+    expect(r.missing).toContain("Master resolution eligible");
+    expect(r.missing).toContain("Option enabled and purchasable");
+  });
+
+  it("blocks publish when no variant is enabled/purchasable", () => {
+    const r = ready({ variants: [variant({ enabled: false })] });
+    expect(r.canPublish).toBe(false);
+    expect(r.missing).toEqual(["Option enabled and purchasable"]);
+  });
+
+  it("flags missing details and image", () => {
+    const r = ready({ title: "", imageCount: 0, artworkId: null });
+    expect(r.checks.find((c) => c.key === "details")?.ok).toBe(false);
+    expect(r.checks.find((c) => c.key === "image")?.ok).toBe(false);
+    expect(r.canPublish).toBe(false);
+  });
+
+  it("an unverified SKU is not a verified Prodigi product and cannot publish", () => {
+    const r = ready({ variants: [variant({ prodigiSku: "GLOBAL-FAP-16X24" })] });
+    expect(r.checks.find((c) => c.key === "sku")?.ok).toBe(false);
+    expect(r.canPublish).toBe(false);
   });
 });
 

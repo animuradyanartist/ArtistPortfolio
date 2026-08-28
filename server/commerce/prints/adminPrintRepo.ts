@@ -28,9 +28,16 @@ export interface AdminVariantRow {
   prodigi_verified: boolean;
 }
 
-export async function getMaster(artworkId: number): Promise<MasterDims & { note: string | null } | null> {
+export async function getMaster(artworkId: number): Promise<(MasterDims & { note: string | null; assetFilename: string | null; hasAsset: boolean }) | null> {
   if (!hasDatabase) return null;
-  const { rows } = await pool.query(`SELECT * FROM print_masters WHERE artwork_id = $1 LIMIT 1`, [artworkId]);
+  // Deliberately NOT `SELECT *` — asset_data holds the full base64 master (can be megabytes) and no
+  // caller of getMaster needs the bytes, only whether one exists (hasAsset) + the dims/status/url.
+  const { rows } = await pool.query(
+    `SELECT width_px, height_px, status, print_ready_asset_url, note, asset_filename,
+            (asset_data IS NOT NULL) AS has_asset
+       FROM print_masters WHERE artwork_id = $1 LIMIT 1`,
+    [artworkId],
+  );
   const r = rows[0];
   if (!r) return null;
   return {
@@ -39,7 +46,46 @@ export async function getMaster(artworkId: number): Promise<MasterDims & { note:
     status: r.status ?? "missing",
     printReadyAssetUrl: r.print_ready_asset_url ?? null,
     note: r.note ?? null,
+    assetFilename: r.asset_filename ?? null,
+    hasAsset: Boolean(r.has_asset),
   };
+}
+
+/** Store an UPLOADED master file (base64) + its derived dims/status. The `assetUrl` is the app HTTPS
+ *  route that serves the bytes to the fulfilment provider — never a public link. */
+export async function upsertMasterFile(
+  artworkId: number,
+  m: { widthPx: number; heightPx: number; assetData: string; assetFilename: string; assetUrl: string; checksumMd5: string; status: string },
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO print_masters (artwork_id, width_px, height_px, print_ready_asset_url, asset_data, asset_filename, checksum_md5, status, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
+     ON CONFLICT (artwork_id) DO UPDATE SET
+       width_px = EXCLUDED.width_px, height_px = EXCLUDED.height_px,
+       print_ready_asset_url = EXCLUDED.print_ready_asset_url, asset_data = EXCLUDED.asset_data,
+       asset_filename = EXCLUDED.asset_filename, checksum_md5 = EXCLUDED.checksum_md5,
+       status = EXCLUDED.status, updated_at = now()`,
+    [artworkId, m.widthPx, m.heightPx, m.assetUrl, m.assetData, m.assetFilename, m.checksumMd5, m.status],
+  );
+}
+
+/** Clear an uploaded master back to 'missing' (the editor's "remove" action). */
+export async function clearMaster(artworkId: number): Promise<void> {
+  await pool.query(
+    `UPDATE print_masters SET width_px = NULL, height_px = NULL, print_ready_asset_url = NULL,
+       asset_data = NULL, asset_filename = NULL, checksum_md5 = NULL, status = 'missing', updated_at = now()
+     WHERE artwork_id = $1`,
+    [artworkId],
+  );
+}
+
+/** The raw uploaded bytes (data URL) for the fulfilment-facing serve route. */
+export async function getMasterAsset(artworkId: number): Promise<{ dataUrl: string; filename: string | null } | null> {
+  if (!hasDatabase) return null;
+  const { rows } = await pool.query(`SELECT asset_data, asset_filename FROM print_masters WHERE artwork_id = $1 LIMIT 1`, [artworkId]);
+  const r = rows[0];
+  if (!r || !r.asset_data) return null;
+  return { dataUrl: r.asset_data as string, filename: r.asset_filename ?? null };
 }
 
 export async function upsertMaster(

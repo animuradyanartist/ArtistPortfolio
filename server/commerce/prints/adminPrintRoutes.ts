@@ -7,14 +7,37 @@
  * variant can only be enabled when it is genuinely sellable.
  */
 
-import type { Express } from "express";
+import type { Express, Request } from "express";
+import { createHash } from "crypto";
 import { requireAdminAuth } from "../../auth";
-import { PRODIGI_LAUNCH_PRODUCTS } from "../prodigi/prodigiProducts";
+import { PRODIGI_LAUNCH_PRODUCTS, eligibleSkusForMaster } from "../prodigi/prodigiProducts";
+import { printReadiness } from "@shared/commerce/printProduct";
 import { validateVariantSave, type VariantSaveInput } from "./adminPrintService";
 import {
-  getMaster, upsertMaster, listVariants, getVariant, createVariant, updateVariant, deleteVariant, printArtworkId,
+  getMaster, upsertMaster, upsertMasterFile, clearMaster, getMasterAsset,
+  listVariants, getVariant, createVariant, updateVariant, deleteVariant, printArtworkId,
 } from "./adminPrintRepo";
-import { getAdminPrintsOverview } from "./printRepo";
+import { getAdminPrintsOverview, getPrintAdminDetail, setPrintStatus } from "./printRepo";
+
+/** Absolute app origin for building the fulfilment-facing master asset URL. */
+function originOf(req: Request): string {
+  const configured = process.env.PUBLIC_BASE_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+  const proto = (req.headers["x-forwarded-proto"] as string) ?? req.protocol ?? "https";
+  return `${proto}://${req.get("host")}`;
+}
+
+/** Parse a `data:<mime>;base64,<data>` URL into its bytes + mime. Null if it isn't one. */
+function parseDataUrl(s: unknown): { mime: string; buffer: Buffer } | null {
+  if (typeof s !== "string") return null;
+  const m = /^data:([^;,]+);base64,(.+)$/i.exec(s.trim());
+  if (!m) return null;
+  try {
+    return { mime: m[1], buffer: Buffer.from(m[2], "base64") };
+  } catch {
+    return null;
+  }
+}
 
 function readVariantInput(body: unknown): VariantSaveInput {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -77,6 +100,100 @@ export function registerAdminPrintRoutes(app: Express): void {
       return res.json({ ok: true, master: await getMaster(artworkId) });
     } catch {
       return res.status(500).json({ message: "Could not save master." });
+    }
+  });
+
+  // ── Master FILE UPLOAD (per artwork). Replaces the manual "paste an HTTPS URL" flow: the admin
+  //    uploads a high-res file, the client measured its pixels, and the SERVER derives readiness
+  //    (a genuine hi-res file that clears at least one launch size → 'ready', else 'provisional').
+  //    The bytes are stored server-side and served over HTTPS from an app route — never linked
+  //    publicly. Nothing physical is trusted beyond the pixels; eligibility is derived here. ──
+  app.post("/api/admin/prints/masters/:artworkId/file", requireAdminAuth, async (req, res) => {
+    try {
+      const artworkId = Number.parseInt(String(req.params.artworkId), 10);
+      if (!Number.isInteger(artworkId)) return res.status(400).json({ message: "Bad artwork id" });
+      const b = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = parseDataUrl(b.dataUrl);
+      if (!parsed || !parsed.mime.startsWith("image/")) {
+        return res.status(400).json({ message: "Please upload a valid image file." });
+      }
+      const widthPx = Number(b.widthPx);
+      const heightPx = Number(b.heightPx);
+      if (!Number.isInteger(widthPx) || !Number.isInteger(heightPx) || widthPx <= 0 || heightPx <= 0) {
+        return res.status(400).json({ message: "The image dimensions could not be read." });
+      }
+      const filename = typeof b.filename === "string" ? b.filename.slice(0, 200) : "master";
+      const checksumMd5 = createHash("md5").update(parsed.buffer).digest("hex");
+      // A master is 'ready' only when its resolution clears at least one verified launch size; a file
+      // too small to print at any size is stored but stays 'provisional' (never yields an eligible sale).
+      const eligibleSkus = eligibleSkusForMaster({ widthPx, heightPx });
+      const status = eligibleSkus.length > 0 ? "ready" : "provisional";
+      const assetUrl = `${originOf(req)}/api/commerce/prints/master-asset/${artworkId}`;
+
+      await upsertMasterFile(artworkId, {
+        widthPx, heightPx, assetData: String(b.dataUrl), assetFilename: filename, assetUrl, checksumMd5, status,
+      });
+      return res.json({
+        ok: true,
+        master: await getMaster(artworkId),
+        eligibleSizeCount: eligibleSkus.length,
+      });
+    } catch {
+      return res.status(500).json({ message: "Could not save the master file." });
+    }
+  });
+
+  // Remove an uploaded master (back to 'missing').
+  app.delete("/api/admin/prints/masters/:artworkId/file", requireAdminAuth, async (req, res) => {
+    try {
+      const artworkId = Number.parseInt(String(req.params.artworkId), 10);
+      if (!Number.isInteger(artworkId)) return res.status(400).json({ message: "Bad artwork id" });
+      await clearMaster(artworkId);
+      return res.json({ ok: true, master: await getMaster(artworkId) });
+    } catch {
+      return res.status(500).json({ message: "Could not remove the master file." });
+    }
+  });
+
+  // ── PUBLISH / UNPUBLISH. Publishing re-checks readiness on the SERVER (the same fail-closed gate
+  //    as checkout) and refuses with the exact missing reasons — it can never make an unready print
+  //    live. Unpublish returns it to Draft, hidden from the public storefront but kept in admin. ──
+  app.post("/api/admin/prints/:printId/publish", requireAdminAuth, async (req, res) => {
+    try {
+      const printId = Number.parseInt(String(req.params.printId), 10);
+      if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
+      const detail = await getPrintAdminDetail(printId);
+      if (!detail) return res.status(404).json({ message: "Print not found" });
+      const readiness = printReadiness(
+        {
+          title: detail.print.title,
+          description: detail.print.description,
+          artworkId: detail.print.artworkId,
+          imageCount: detail.print.images.length,
+          master: detail.master,
+          variants: detail.variants,
+        },
+        detail.print.status,
+      );
+      if (!readiness.canPublish) {
+        return res.status(409).json({ code: "not-ready", message: "Cannot publish yet.", missing: readiness.missing });
+      }
+      await setPrintStatus(printId, "active");
+      return res.json({ ok: true, status: "active" });
+    } catch {
+      return res.status(500).json({ message: "Could not publish this print." });
+    }
+  });
+
+  app.post("/api/admin/prints/:printId/unpublish", requireAdminAuth, async (req, res) => {
+    try {
+      const printId = Number.parseInt(String(req.params.printId), 10);
+      if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
+      const ok = await setPrintStatus(printId, "draft");
+      if (!ok) return res.status(404).json({ message: "Print not found" });
+      return res.json({ ok: true, status: "draft" });
+    } catch {
+      return res.status(500).json({ message: "Could not unpublish this print." });
     }
   });
 
