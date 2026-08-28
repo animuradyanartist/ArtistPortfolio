@@ -140,6 +140,83 @@ export function hasPurchasableVariant(variants: PrintVariantView[], master: Prin
   return variants.some((v) => isPubliclyPurchasable(v, master));
 }
 
+/**
+ * The admin list status of a print product — the ONE label the management table shows. It is
+ * DERIVED from the real data and can never lie: "Published" means the fail-closed purchasability
+ * gate genuinely passes for at least one variant, so a print cannot look live because someone typed
+ * a label. The ladder, hidden → live:
+ *   - "draft"      — the product row is not active (hidden from the storefront regardless of variants).
+ *   - "not-ready"  — active, but no master is ready yet → nothing can be sold (the honest default today).
+ *   - "ready"      — active + a ready master + an eligible, priced, verified variant EXISTS, but none is
+ *                    enabled yet → the admin can turn it on, but the public sees nothing.
+ *   - "published"  — active + at least one genuinely purchasable variant → it is on the storefront.
+ */
+export type PrintAdminStatus = "draft" | "not-ready" | "ready" | "published";
+
+export interface PrintAdminSummary {
+  status: PrintAdminStatus;
+  /** Distinct materials across the product's variants, in first-seen order (e.g. ["photo-rag", ...]). */
+  materials: string[];
+  variantCount: number;
+  enabledCount: number;
+  /** Lowest own-site price among genuinely purchasable variants, or null when nothing is buyable. */
+  startingPriceMinor: number | null;
+  /**
+   * Lowest CONFIGURED variant price, regardless of whether it is purchasable yet — the price the
+   * admin has set. Non-null as soon as any variant carries a price, so the admin table shows the
+   * intended price on a Draft/Ready row (unlike `startingPriceMinor`, which the storefront uses and
+   * which stays null until the print is genuinely buyable).
+   */
+  lowestPriceMinor: number | null;
+  currency: string;
+}
+
+/**
+ * Summarise a print product for the admin management table — every field derived, none stored. The
+ * caller passes the product's own `status` (active/hidden) plus its variants and master; nothing here
+ * trusts a manual "starting price" or "is live" flag.
+ */
+export function printAdminSummary(
+  productStatus: string,
+  variants: PrintVariantView[],
+  master: PrintMasterView | null,
+): PrintAdminSummary {
+  const materials: string[] = [];
+  for (const v of variants) if (!materials.includes(v.material)) materials.push(v.material);
+  const enabledCount = variants.filter((v) => v.enabled).length;
+  const purchasable = hasPurchasableVariant(variants, master);
+  // A variant that could be sold the moment an admin enables it: the master is ready, it cleared
+  // eligibility, carries a verified launch SKU and a real price — everything but the `enabled` flag.
+  const sellableIfEnabled = variants.some(
+    (v) => isActiveLaunchSku(v.prodigiSku) && v.eligible && master?.status === "ready" && (v.retailMinor ?? 0) > 0,
+  );
+
+  let status: PrintAdminStatus;
+  if (productStatus !== "active") status = "draft";
+  else if (purchasable) status = "published";
+  else if (sellableIfEnabled) status = "ready";
+  else status = "not-ready";
+
+  const currency = variants.find((v) => isPubliclyPurchasable(v, master))?.currency
+    ?? variants[0]?.currency
+    ?? "USD";
+
+  const configuredPrices = variants
+    .map((v) => v.retailMinor)
+    .filter((n): n is number => n != null && n > 0);
+  const lowestPriceMinor = configuredPrices.length ? Math.min(...configuredPrices) : null;
+
+  return {
+    status,
+    materials,
+    variantCount: variants.length,
+    enabledCount,
+    startingPriceMinor: startingPriceMinor(variants, master),
+    lowestPriceMinor,
+    currency,
+  };
+}
+
 export interface PrintItemSnapshot {
   itemType: "print";
   printId: number;

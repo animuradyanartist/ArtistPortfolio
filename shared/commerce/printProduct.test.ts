@@ -9,6 +9,7 @@ import {
   printReadyAssetOf,
   printCanonicalPath,
   printCanonicalUrl,
+  printAdminSummary,
   type PrintVariantView,
   type PrintMasterView,
 } from "./printProduct";
@@ -153,5 +154,55 @@ describe("canonical namespace — no collision with /artworks", () => {
   it("prefixes every print under /prints/", () => {
     expect(printCanonicalPath("blue-hour")).toBe("/prints/blue-hour");
     expect(printCanonicalUrl("https://animuradyan.com/", "blue-hour")).toBe("https://animuradyan.com/prints/blue-hour");
+  });
+});
+
+describe("printAdminSummary — the derived management-table status (never a manual flag)", () => {
+  it("is DRAFT when the product row is not active, whatever the variants say", () => {
+    const s = printAdminSummary("hidden", [variant()], readyMaster);
+    expect(s.status).toBe("draft");
+  });
+
+  it("is NOT-READY when active but no master is ready (the honest default today)", () => {
+    const s = printAdminSummary("active", [variant()], missingMaster);
+    expect(s.status).toBe("not-ready");
+    expect(s.startingPriceMinor).toBeNull();
+  });
+
+  it("is READY when a variant could sell the instant it is enabled, but none is enabled yet", () => {
+    const s = printAdminSummary("active", [variant({ enabled: false })], readyMaster);
+    expect(s.status).toBe("ready");
+    expect(s.startingPriceMinor).toBeNull(); // nothing purchasable yet → no public starting price
+    expect(s.lowestPriceMinor).toBe(6500);   // but the admin still sees the configured price
+  });
+
+  it("shows the configured price on a Draft/unpurchasable row (admin sees intent, storefront does not)", () => {
+    const s = printAdminSummary("hidden", [variant({ retailMinor: 18000 })], missingMaster);
+    expect(s.status).toBe("draft");
+    expect(s.startingPriceMinor).toBeNull(); // storefront: not buyable
+    expect(s.lowestPriceMinor).toBe(18000);  // admin: the price you set
+  });
+
+  it("is PUBLISHED only when the fail-closed gate genuinely passes for a variant", () => {
+    const s = printAdminSummary("active", [variant()], readyMaster);
+    expect(s.status).toBe("published");
+    expect(s.startingPriceMinor).toBe(6500);
+  });
+
+  it("a 'Published' label can never be faked — an unverified SKU stays not-ready", () => {
+    const s = printAdminSummary("active", [variant({ prodigiSku: "GLOBAL-FAP-16X24", enabled: true })], readyMaster);
+    expect(s.status).toBe("not-ready");
+  });
+
+  it("derives materials (distinct, first-seen order), counts and the lowest purchasable price", () => {
+    const s = printAdminSummary("active", [
+      variant({ id: 1, material: "photo-rag", retailMinor: 9000 }),
+      variant({ id: 2, material: "german-etching", retailMinor: 6500 }),
+      variant({ id: 3, material: "photo-rag", retailMinor: 12000 }),
+    ], readyMaster);
+    expect(s.materials).toEqual(["photo-rag", "german-etching"]);
+    expect(s.variantCount).toBe(3);
+    expect(s.enabledCount).toBe(3);
+    expect(s.startingPriceMinor).toBe(6500);
   });
 });

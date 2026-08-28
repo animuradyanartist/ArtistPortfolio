@@ -28,6 +28,7 @@ import { publicOrderView, publicTrackingView } from "./orderView";
 import { clientIpOf } from "../loginRateLimit";
 import { getVariantForCheckout } from "./prints/printRepo";
 import { validatePrintSelection, planPrintCheckout } from "./prints/printCheckout";
+import { quotePrintShipping } from "./prints/printShipping";
 import { fulfilPrintOrder, paidActionFor } from "./prints/printFulfilmentService";
 
 /**
@@ -124,6 +125,25 @@ async function handlePrintCheckout(req: Request, res: Response, stripe: NonNulla
     });
   }
 
+  // REAL shipping, at the point a destination is known. The plan's shipping is 0 by default; we ask
+  // Prodigi for a live quote to the buyer's country. Fails closed: if Prodigi is unconfigured or
+  // cannot quote, shipping stays 0 (shipping is absorbed — no sale is blocked and no number is
+  // invented). When it succeeds, the Stripe total includes the real shipping as its own line.
+  const attributes: Record<string, string> = {};
+  if (resolved.variant.framed && resolved.variant.frameColour) attributes.frameColour = resolved.variant.frameColour;
+  const shipQuote = await quotePrintShipping({
+    prodigiSku: resolved.variant.prodigiSku,
+    copies: sel.value!.quantity,
+    country: buyer.value.country,
+    currency: plan.plan.currency,
+    ...(Object.keys(attributes).length ? { attributes } : {}),
+  });
+  const shippingMinor = shipQuote.ok ? shipQuote.shippingMinor : plan.plan.shippingMinor;
+  const shippingBasis = shipQuote.ok
+    ? `prodigi-quote (${shipQuote.method || "standard"} to ${buyer.value.country})`
+    : plan.plan.shippingBasis;
+  const totalMinor = plan.plan.itemsMinor + shippingMinor;
+
   const reference = await nextReference();
   const order = await createOrder({
     reference,
@@ -143,9 +163,9 @@ async function handlePrintCheckout(req: Request, res: Response, stripe: NonNulla
     artwork_snapshot: JSON.stringify(plan.plan.snapshot),
     item_price_minor: plan.plan.itemsMinor,
     currency: plan.plan.currency,
-    shipping_minor: plan.plan.shippingMinor,
-    total_minor: plan.plan.totalMinor,
-    shipping_basis: plan.plan.shippingBasis,
+    shipping_minor: shippingMinor,
+    total_minor: totalMinor,
+    shipping_basis: shippingBasis,
     attribution: sanitiseAttribution((req.body ?? {}).attribution),
   } as never);
 
@@ -171,6 +191,18 @@ async function handlePrintCheckout(req: Request, res: Response, stripe: NonNulla
             },
           },
         },
+        // A real, quoted shipping line — added only when Prodigi actually quoted it (never a
+        // fabricated amount, and omitted entirely when shipping is 0/absorbed).
+        ...(shippingMinor > 0
+          ? [{
+              quantity: 1,
+              price_data: {
+                currency: plan.plan.currency.toLowerCase(),
+                unit_amount: shippingMinor,
+                product_data: { name: "Shipping", description: shippingBasis },
+              },
+            }]
+          : []),
       ],
       success_url: `${base}/order/${order.reference}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${base}/api/commerce/checkout/cancel?ref=${encodeURIComponent(order.reference)}&session_id={CHECKOUT_SESSION_ID}`,

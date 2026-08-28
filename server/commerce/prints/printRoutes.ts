@@ -13,12 +13,14 @@ import {
   getPurchasablePrintCollection,
   getPrintDetailBySlug,
   getPrintFeedInputs,
+  getVariantForCheckout,
   printSlugOf,
   purchasablePrintSlugForArtwork,
 } from "./printRepo";
-import { assessVariant, isPubliclyPurchasable, startingPriceMinor } from "@shared/commerce/printProduct";
+import { assessVariant, isPubliclyPurchasable, startingPriceMinor, resolveVariantPrice } from "@shared/commerce/printProduct";
 import { buildFeedTsv } from "@shared/commerce/printFeed";
 import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
+import { quotePrintShipping } from "./printShipping";
 
 function baseUrlOf(req: Request): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
@@ -74,6 +76,64 @@ export function registerPrintRoutes(app: Express): void {
       return res.json({ available: previewSlug != null, slug: previewSlug, preview: previewSlug != null });
     } catch {
       return res.status(500).json({ slug: null });
+    }
+  });
+
+  // ── A REAL shipping quote for a variant to a destination (registered before :slug). The price is
+  //    the SERVER's (never the client's); shipping comes from Prodigi's /quotes endpoint. Fails
+  //    closed: if the variant is not purchasable, or Prodigi is unconfigured / cannot quote, it
+  //    answers `available: false` so the UI shows "calculated at checkout" — NEVER a fake number. ──
+  app.post("/api/commerce/prints/quote", async (req, res) => {
+    try {
+      const b = (req.body ?? {}) as Record<string, unknown>;
+      const variantId = Number(b.variantId);
+      const country = String(b.country ?? "").trim().toUpperCase();
+      let quantity = Number(b.quantity);
+      if (!Number.isFinite(quantity)) quantity = 1;
+      quantity = Math.min(10, Math.max(1, Math.floor(quantity)));
+      if (!Number.isInteger(variantId) || variantId <= 0 || !/^[A-Z]{2}$/.test(country)) {
+        return res.status(400).json({ available: false, reason: "bad-request" });
+      }
+
+      const resolved = await getVariantForCheckout(variantId);
+      // Only a genuinely purchasable variant may be quoted — same gate as checkout.
+      if (!resolved || assessVariant(resolved.variant, resolved.master).state !== "purchasable") {
+        return res.json({ available: false, reason: "not-purchasable" });
+      }
+      const itemsMinor = resolveVariantPrice(resolved.variant, quantity);
+      if (itemsMinor == null) return res.json({ available: false, reason: "unpriced" });
+
+      const attributes: Record<string, string> = {};
+      if (resolved.variant.framed && resolved.variant.frameColour) attributes.frameColour = resolved.variant.frameColour;
+
+      const quote = await quotePrintShipping({
+        prodigiSku: resolved.variant.prodigiSku,
+        copies: quantity,
+        country,
+        currency: resolved.variant.currency,
+        ...(Object.keys(attributes).length ? { attributes } : {}),
+      });
+
+      res.set("Cache-Control", "no-store");
+      if (!quote.ok) {
+        // Honest: we could not obtain a live shipping figure — the client shows a message, not a number.
+        return res.json({
+          available: false,
+          reason: quote.reason,
+          itemsMinor,
+          currency: resolved.variant.currency,
+        });
+      }
+      return res.json({
+        available: true,
+        itemsMinor,
+        shippingMinor: quote.shippingMinor,
+        totalMinor: itemsMinor + quote.shippingMinor,
+        currency: quote.currency,
+        method: quote.method,
+      });
+    } catch {
+      return res.status(500).json({ available: false, reason: "error" });
     }
   });
 

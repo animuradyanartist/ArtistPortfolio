@@ -11,10 +11,12 @@ import { pool, hasDatabase } from "../../db";
 import {
   type PrintVariantView,
   type PrintMasterView,
+  type PrintAdminSummary,
   assessVariant,
   isPubliclyPurchasable,
   hasPurchasableVariant,
   startingPriceMinor,
+  printAdminSummary,
 } from "@shared/commerce/printProduct";
 import type { FeedVariantInput } from "@shared/commerce/printFeed";
 import { toSlug } from "@shared/canonical";
@@ -154,6 +156,55 @@ export async function getPurchasablePrintCollection(): Promise<PrintCollectionCa
     });
   }
   return cards;
+}
+
+export interface AdminPrintOverviewRow {
+  id: number;
+  title: string;
+  slug: string;
+  image: string | null;
+  imageCount: number;
+  artworkId: number | null;
+  artworkTitle: string | null;
+  productStatus: string;
+  summary: PrintAdminSummary;
+}
+
+/**
+ * The ADMIN management-table read: every print product (all statuses, not just active) with its
+ * DERIVED summary — materials, variant/enabled counts, starting price and the fail-closed status —
+ * plus the source artwork's title. Nothing here is a stored "is live" or "starting price" flag; the
+ * table cannot show a print as Published unless the same gate that guards checkout genuinely passes.
+ */
+export async function getAdminPrintsOverview(): Promise<AdminPrintOverviewRow[]> {
+  if (!hasDatabase) return [];
+  const { rows } = await pool.query(`SELECT * FROM prints ORDER BY position ASC, id ASC`);
+  const out: AdminPrintOverviewRow[] = [];
+  const titleCache = new Map<number, string | null>();
+  for (const r of rows) {
+    const print = mapPrint(r);
+    const [variants, master] = await Promise.all([variantsFor(print.id), masterFor(print.artworkId)]);
+    let artworkTitle: string | null = null;
+    if (print.artworkId != null) {
+      if (!titleCache.has(print.artworkId)) {
+        const a = await pool.query(`SELECT title FROM artworks WHERE id = $1 LIMIT 1`, [print.artworkId]);
+        titleCache.set(print.artworkId, a.rows[0]?.title ?? null);
+      }
+      artworkTitle = titleCache.get(print.artworkId) ?? null;
+    }
+    out.push({
+      id: print.id,
+      title: print.title,
+      slug: printSlugOf(print),
+      image: print.images[0] ?? null,
+      imageCount: print.images.length,
+      artworkId: print.artworkId,
+      artworkTitle,
+      productStatus: print.status,
+      summary: printAdminSummary(print.status, variants, master),
+    });
+  }
+  return out;
 }
 
 /** The slug of a PURCHASABLE print product for a given artwork, or null. Powers the original →
