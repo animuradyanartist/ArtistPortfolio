@@ -172,7 +172,15 @@ describe("printAdminSummary — the derived management-table status (never a man
   it("is READY when a variant could sell the instant it is enabled, but none is enabled yet", () => {
     const s = printAdminSummary("active", [variant({ enabled: false })], readyMaster);
     expect(s.status).toBe("ready");
-    expect(s.startingPriceMinor).toBeNull(); // nothing purchasable yet → no starting price
+    expect(s.startingPriceMinor).toBeNull(); // nothing purchasable yet → no public starting price
+    expect(s.lowestPriceMinor).toBe(6500);   // but the admin still sees the configured price
+  });
+
+  it("shows the configured price on a Draft/unpurchasable row (admin sees intent, storefront does not)", () => {
+    const s = printAdminSummary("hidden", [variant({ retailMinor: 18000 })], missingMaster);
+    expect(s.status).toBe("draft");
+    expect(s.startingPriceMinor).toBeNull(); // storefront: not buyable
+    expect(s.lowestPriceMinor).toBe(18000);  // admin: the price you set
   });
 
   it("is PUBLISHED only when the fail-closed gate genuinely passes for a variant", () => {

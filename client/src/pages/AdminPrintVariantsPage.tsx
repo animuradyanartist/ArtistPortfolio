@@ -155,7 +155,7 @@ function VariantForm({ printId, products, onSaved }: { printId: number; products
   const { toast } = useToast();
   const [sku, setSku] = useState("");
   const [retailMinor, setRetailMinor] = useState("");
-  const [currency, setCurrency] = useState("EUR");
+  const [currency, setCurrency] = useState("USD");
   const [framed, setFramed] = useState(false);
   const [frameColour, setFrameColour] = useState("natural");
   const [asset, setAsset] = useState("");

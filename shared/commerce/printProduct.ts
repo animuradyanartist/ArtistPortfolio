@@ -161,6 +161,13 @@ export interface PrintAdminSummary {
   enabledCount: number;
   /** Lowest own-site price among genuinely purchasable variants, or null when nothing is buyable. */
   startingPriceMinor: number | null;
+  /**
+   * Lowest CONFIGURED variant price, regardless of whether it is purchasable yet — the price the
+   * admin has set. Non-null as soon as any variant carries a price, so the admin table shows the
+   * intended price on a Draft/Ready row (unlike `startingPriceMinor`, which the storefront uses and
+   * which stays null until the print is genuinely buyable).
+   */
+  lowestPriceMinor: number | null;
   currency: string;
 }
 
@@ -192,7 +199,12 @@ export function printAdminSummary(
 
   const currency = variants.find((v) => isPubliclyPurchasable(v, master))?.currency
     ?? variants[0]?.currency
-    ?? "EUR";
+    ?? "USD";
+
+  const configuredPrices = variants
+    .map((v) => v.retailMinor)
+    .filter((n): n is number => n != null && n > 0);
+  const lowestPriceMinor = configuredPrices.length ? Math.min(...configuredPrices) : null;
 
   return {
     status,
@@ -200,6 +212,7 @@ export function printAdminSummary(
     variantCount: variants.length,
     enabledCount,
     startingPriceMinor: startingPriceMinor(variants, master),
+    lowestPriceMinor,
     currency,
   };
 }

@@ -23,7 +23,7 @@ function readVariantInput(body: unknown): VariantSaveInput {
     framed: Boolean(b.framed),
     frameColour: b.frameColour ? String(b.frameColour).trim().toLowerCase() : null,
     retailMinor: b.retailMinor == null || b.retailMinor === "" ? null : Number(b.retailMinor),
-    currency: String(b.currency ?? "EUR").trim().toUpperCase().slice(0, 3) || "EUR",
+    currency: String(b.currency ?? "USD").trim().toUpperCase().slice(0, 3) || "USD",
     printReadyAssetUrl: b.printReadyAssetUrl ? String(b.printReadyAssetUrl).trim() : null,
     enabled: Boolean(b.enabled),
   };

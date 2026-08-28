@@ -13,11 +13,12 @@ import { useAdmin } from "@/hooks/useAdmin";
 import { apiRequest } from "@/lib/queryClient";
 import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema, insertContactSettingsSchema, insertGalleryPhotoSchema } from "@shared/schema";
 import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings, GalleryPhoto, Collector, Message } from "@shared/schema";
-import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown, RefreshCw, MoreHorizontal, Layers, ExternalLink } from "lucide-react";
+import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, MoreHorizontal, Layers, ExternalLink } from "lucide-react";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import AdminArticles from "@/components/AdminArticles";
+import AdminShell from "@/components/AdminShell";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 // Editable painting slots on the storytelling "/path" page. Each stores an
@@ -750,74 +751,12 @@ export default function AdminPage() {
     );
   }
 
-  const isDevEnv = import.meta.env.DEV;
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {isDevEnv ? (
-        <div className="w-full bg-amber-400 text-amber-900 text-center py-2 px-4 font-semibold text-sm tracking-wide shadow-sm">
-          ⚠ TEST ENVIRONMENT — Changes here do NOT affect the live animuradyan.com website
-        </div>
-      ) : (
-        <div className="w-full bg-emerald-600 text-white text-center py-1.5 px-4 text-xs font-medium tracking-wide">
-          ● PRODUCTION — animuradyan.com
-        </div>
-      )}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-12">
-          <div>
-            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-2 rounded-full text-sm font-medium text-blue-700 mb-4">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              Admin Dashboard
-            </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
-              Content Management
-            </h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={() => setLocation("/admin/orders")}
-              variant="outline"
-              className="h-10 px-6 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
-              Orders
-            </Button>
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              className="h-10 px-6 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              Logout
-            </Button>
-          </div>
-        </div>
-
-        {/* Modern Tabs */}
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-2 mb-8">
-          <div className="flex space-x-1">
-            {(['homepage', 'path', 'artworks', 'articles', 'prints', 'exhibitions', 'gallery', 'artist', 'contact', 'collectors', 'messages'] as const).map((tab) => (
-              <Button
-                key={tab}
-                variant="ghost"
-                onClick={() => setActiveTab(tab)}
-                className={`capitalize flex-1 h-10 rounded-xl transition-all duration-200 ${
-                  activeTab === tab
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                {tab === 'artist' ? 'About Artist' : tab === 'path' ? 'The Path' : tab}
-              </Button>
-            ))}
-          </div>
-        </div>
-
+    <AdminShell
+      active={activeTab}
+      onSelectTab={(t) => setActiveTab(t as typeof activeTab)}
+      onLogout={handleLogout}
+    >
         {/* Articles — the whole owner side of publishing. Career OS can only ever put a
             draft here; this tab is the only path from a draft to a public page. */}
         {activeTab === 'articles' && <AdminArticles />}
@@ -2261,8 +2200,7 @@ export default function AdminPage() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </AdminShell>
   );
 }
 
@@ -2274,21 +2212,22 @@ export default function AdminPage() {
  * so a label can never make an unready print look live. Edit opens the existing print editor; the
  * overflow menu jumps to variant/master management; Preview opens the public PDP.
  */
+// Full substrate names (Prodigi launch papers) for the Material column.
 const PRINT_MATERIAL_LABEL: Record<string, string> = {
-  "german-etching": "German Etching",
-  "photo-rag": "Photo Rag",
-  "paper": "Paper",
+  "german-etching": "Hahnemühle German Etching 310gsm",
+  "photo-rag": "Hahnemühle Photo Rag 308gsm (Matte)",
+  "paper": "Fine art paper",
 };
 const printMaterialLabel = (m: string) => PRINT_MATERIAL_LABEL[m] ?? m;
 
-function printMoney(minor: number | null, currency: string): string {
+// Prices are shown in USD (the storefront currency going forward). Nothing is purchasable today,
+// so this reads "—" until a real USD-priced variant is enabled.
+function printUsd(minor: number | null): string {
   if (minor == null) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(minor / 100);
-  } catch {
-    return `${(minor / 100).toFixed(0)} ${currency}`;
-  }
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(minor / 100);
 }
+
+const PRINTS_PER_PAGE = 10;
 
 type PrintAdminStatus = "draft" | "not-ready" | "ready" | "published";
 interface PrintOverviewRow {
@@ -2306,6 +2245,7 @@ interface PrintOverviewRow {
     variantCount: number;
     enabledCount: number;
     startingPriceMinor: number | null;
+    lowestPriceMinor: number | null;
     currency: string;
   };
 }
@@ -2337,11 +2277,16 @@ function PrintsManagement() {
     }
   };
 
+  const [page, setPage] = useState(1);
   const { data, isLoading } = useQuery<{ prints: PrintOverviewRow[] }>({
     queryKey: ["/api/admin/prints/overview"],
     queryFn: async () => (await apiRequest("GET", "/api/admin/prints/overview")).json(),
   });
   const prints = data?.prints ?? [];
+  const pageCount = Math.max(1, Math.ceil(prints.length / PRINTS_PER_PAGE));
+  const current = Math.min(page, pageCount);
+  const start = (current - 1) * PRINTS_PER_PAGE;
+  const visible = prints.slice(start, start + PRINTS_PER_PAGE);
 
   const deletePrintMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/prints/${id}`),
@@ -2392,14 +2337,16 @@ function PrintsManagement() {
                     <TableHead className="w-[72px]">Image</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Original artwork</TableHead>
-                    <TableHead>Materials / variants</TableHead>
-                    <TableHead>Starting price</TableHead>
+                    <TableHead>Entry type</TableHead>
+                    <TableHead>Material</TableHead>
+                    <TableHead>Price (USD)</TableHead>
+                    <TableHead>Shipping (USD)</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {prints.map((p) => (
+                  {visible.map((p) => (
                     <TableRow key={p.id} className="cursor-pointer" onClick={() => setLocation(`/admin/edit-print/${p.id}`)}>
                       <TableCell>
                         <div className="w-12 h-12 rounded bg-gray-100 overflow-hidden flex items-center justify-center">
@@ -2414,43 +2361,46 @@ function PrintsManagement() {
                         <span className="font-medium text-charcoal">{p.title}</span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-soft-gray">{p.artworkTitle ?? "—"}</span>
+                        <span className="text-deep-blue underline decoration-deep-blue/30 underline-offset-2">
+                          {p.artworkTitle ?? "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-charcoal">Open Edition</span>
                       </TableCell>
                       <TableCell>
                         {p.summary.materials.length > 0 ? (
                           <span className="text-charcoal">
-                            {p.summary.materials.map(printMaterialLabel).join(" / ")}
-                            <span className="text-soft-gray">
-                              {" "}· {p.summary.variantCount} variant{p.summary.variantCount !== 1 ? "s" : ""}
-                            </span>
+                            {p.summary.materials.map(printMaterialLabel).join(", ")}
                           </span>
                         ) : (
-                          <span className="text-soft-gray">No variants</span>
+                          <span className="text-soft-gray">—</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className="tabular-nums text-charcoal">
-                          {p.summary.startingPriceMinor != null
-                            ? `From ${printMoney(p.summary.startingPriceMinor, p.summary.currency)}`
-                            : "—"}
-                        </span>
+                        <span className="tabular-nums text-charcoal">{printUsd(p.summary.lowestPriceMinor)}</span>
+                      </TableCell>
+                      <TableCell>
+                        {/* Real print shipping is a live per-destination Prodigi quote, not a fixed
+                            per-product amount — so we never show a fabricated flat number here. */}
+                        <span className="text-soft-gray text-sm">Quoted at checkout</span>
                       </TableCell>
                       <TableCell>
                         <PrintStatusBadge status={p.summary.status} />
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          <Button size="sm" variant="outline" className="text-xs" onClick={() => setLocation(`/admin/edit-print/${p.id}`)}>
-                            <Edit className="w-3 h-3 mr-1" /> Edit
+                          <Button size="icon" variant="outline" className="h-8 w-8" title="Edit" onClick={() => setLocation(`/admin/edit-print/${p.id}`)}>
+                            <Edit className="w-4 h-4" />
                           </Button>
                           <a href={`/prints/${p.slug}`} target="_blank" rel="noreferrer">
-                            <Button size="sm" variant="ghost" className="text-xs" title="Preview public print page">
-                              <Eye className="w-3 h-3" />
+                            <Button size="icon" variant="outline" className="h-8 w-8" title="Preview public print page">
+                              <Eye className="w-4 h-4" />
                             </Button>
                           </a>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="sm" variant="ghost" className="text-xs" title="More">
+                              <Button size="icon" variant="ghost" className="h-8 w-8" title="More">
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -2483,11 +2433,48 @@ function PrintsManagement() {
         </CardContent>
       </Card>
 
+      {prints.length > 0 && (
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <p className="text-sm text-soft-gray">
+            Showing {start + 1} to {start + visible.length} of {prints.length} print{prints.length !== 1 ? "s" : ""}
+          </p>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="icon" variant="outline" className="h-8 w-8"
+              disabled={current <= 1}
+              onClick={() => setPage((n) => Math.max(1, n - 1))}
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+              <Button
+                key={n}
+                size="icon"
+                variant={n === current ? "default" : "outline"}
+                className={`h-8 w-8 ${n === current ? "bg-deep-blue hover:bg-deep-blue/90" : ""}`}
+                onClick={() => setPage(n)}
+              >
+                {n}
+              </Button>
+            ))}
+            <Button
+              size="icon" variant="outline" className="h-8 w-8"
+              disabled={current >= pageCount}
+              onClick={() => setPage((n) => Math.min(pageCount, n + 1))}
+              aria-label="Next page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       <p className="text-xs text-soft-gray max-w-2xl">
-        Status is derived from the real product data, never a manual label. A print becomes
-        <strong> Published</strong> only when it has a ready master, an eligible, verified and priced
-        variant that you have enabled — the same rules that let it be sold. Prints are managed entirely
-        separately from original artworks.
+        Status, material, price and entry type are all derived from the real product data, never manual
+        labels. A print becomes <strong>Published</strong> only when it has a ready master, an eligible,
+        verified and priced variant that you have enabled — the same rules that let it be sold. Shipping
+        is quoted per destination at checkout. Prints are managed entirely separately from original artworks.
       </p>
     </div>
   );
