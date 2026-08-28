@@ -39,6 +39,10 @@ import { registerCommerceRoutes } from "./commerce/routes";
 import { registerTestCheckoutRoutes } from "./commerce/testCheckout";
 import { registerTestArtworkRoutes } from "./commerce/testArtwork";
 import { registerAdminCommerceRoutes } from "./commerce/adminRoutes";
+import { registerPrintRoutes } from "./commerce/prints/printRoutes";
+import { registerAdminPrintRoutes } from "./commerce/prints/adminPrintRoutes";
+import { registerProdigiCallbackRoute } from "./commerce/prodigi/prodigiCallbackRoute";
+import { registerSeoAdminRoutes } from "./seo/seoAdminRoutes";
 
 /**
  * Render an article body to crawlable HTML.
@@ -194,6 +198,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerTestCheckoutRoutes(app);
   registerTestArtworkRoutes(app);
   registerAdminCommerceRoutes(app);
+  // Print storefront read API + Pinterest feed, and the Prodigi fulfilment callback endpoint.
+  // One commerce system — these extend it; they never introduce a second checkout or order store.
+  registerPrintRoutes(app);
+  registerAdminPrintRoutes(app);
+  registerProdigiCallbackRoute(app);
+  // SEO growth system (DataForSEO). Admin-only; fails closed without credentials.
+  registerSeoAdminRoutes(app);
 
   // Any mutation invalidates the in-memory API response cache — both before
   // the handler runs and after it finishes, so a concurrent GET can't
@@ -1414,6 +1425,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // API requests are never pages. Keep this after every API route and before every
+  // public-page/SPA fallback so a typo or missing backend route cannot masquerade as a
+  // successful HTML response and then fail in the browser's JSON parser.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "API route not found" });
+  });
+
   // Slug helper: toSlug is imported from @shared/canonical (single source).
 
   // SEO Routes
@@ -1594,6 +1612,36 @@ Crawl-delay: 1
         xml += '  </url>\n';
       });
 
+      // PRINT PDPs — ONLY genuinely purchasable prints (a ready master + an eligible+enabled+priced
+      // variant). Today that set is empty, so this adds nothing; when a real master lands, the print
+      // pages enter the sitemap automatically without a code change. The /prints collection index is
+      // added only when it actually has products, for the same reason the catch-all noindexes it empty.
+      try {
+        const { getPurchasablePrintCollection } = await import('./commerce/prints/printRepo');
+        const { printCanonicalUrl } = await import('@shared/commerce/printProduct');
+        const printCards = await getPurchasablePrintCollection();
+        if (printCards.length > 0) {
+          const printsIndex = `${SEO_BASE_URL}/prints`;
+          if (!seenUrls.has(printsIndex)) {
+            seenUrls.add(printsIndex);
+            xml += `  <url>\n    <loc>${escXml(printsIndex)}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.6</priority>\n  </url>\n`;
+          }
+          for (const card of printCards) {
+            const loc = printCanonicalUrl(SEO_BASE_URL, card.slug);
+            if (seenUrls.has(loc)) continue;
+            seenUrls.add(loc);
+            xml += '  <url>\n';
+            xml += `    <loc>${escXml(loc)}</loc>\n`;
+            xml += `    <lastmod>${today}</lastmod>\n`;
+            xml += '    <changefreq>monthly</changefreq>\n';
+            xml += '    <priority>0.6</priority>\n';
+            xml += '  </url>\n';
+          }
+        }
+      } catch (e) {
+        console.error("Error adding prints to sitemap:", e);
+      }
+
       xml += '</urlset>';
 
       res.setHeader('Content-Type', 'application/xml');
@@ -1734,25 +1782,17 @@ Crawl-delay: 1
     }
   });
 
-  // /prints AND EVERYTHING UNDER IT — an unbounded supply of indexable empty pages.
+  // /prints AND EVERYTHING UNDER IT NOW HAVE REAL ROUTES.
   //
-  // There has never been a server route for these. They fell through to the catch-all, which
-  // could not resolve them to an artwork ('prints' is in RESERVED_PATHS) and does not treat
-  // them as missing (isMissingArtworkPath only fires under /artworks/), so EVERY path under
-  // /prints answered 200 with an empty shell and a self-canonical — /prints/anything-at-all
-  // included. robots.txt explicitly Allows /prints and /prints/*, and the sitemap deliberately
-  // excludes them, so the only thing telling a crawler these pages are not real was nothing.
-  // That is an infinite soft-404 surface on a site whose whole indexing problem is soft 404s.
-  //
-  // The app has ALREADY decided what these URLs mean: App.tsx routes both to <Redirect to="/">.
-  // This is that same decision, made where a crawler can see it. A human lands on the home page
-  // exactly as before — the difference is that the redirect now costs one hop instead of a
-  // page-load-and-run-JavaScript, and Google is told the URL is not a destination.
-  //
-  // 301 rather than 404 because the client's own answer is "go home", not "does not exist";
-  // a permanent redirect matches that and consolidates any signal these URLs ever accrued.
-  // Registered OUTSIDE the production block so dev and production agree.
-  app.get(['/prints', '/prints/*'], (_req, res) => res.redirect(301, '/'));
+  // The old blanket `301 → /` existed because these paths used to be an unbounded soft-404
+  // surface: no server route, no real page, just an empty shell with a self-canonical for
+  // /prints/anything-at-all. That is fixed properly now — the print storefront (`/prints`) and
+  // PDPs (`/prints/:slug`) are real, data-gated pages, and the production catch-all below injects
+  // per-print meta + Product JSON-LD for a genuinely purchasable print, and a `noindex` robots
+  // directive for the (currently empty) collection and for any unready/unknown print. So the
+  // soft-404 concern is answered by "only real, purchasable prints are indexable" rather than by
+  // hiding the whole namespace. The redirect is therefore removed; nothing falls through to an
+  // unhandled shell.
 
   // Production: serve static assets + inject correct canonical URL per page
   if (process.env.NODE_ENV === 'production') {
@@ -1890,6 +1930,54 @@ Crawl-delay: 1
           );
         } else {
           html = html.replace('</head>', `  <link rel="canonical" href="${canonicalUrl}">\n  </head>`);
+        }
+
+        // PRINTS: real SSR for the storefront + PDPs (this replaced the old blanket 301 → /).
+        // Only a genuinely purchasable print is indexable + carries a Product JSON-LD Offer; the
+        // (currently empty) collection and any unready/unknown print is served `noindex`, so the
+        // /prints namespace never becomes an indexable soft-404 surface.
+        if (req.path === '/prints' || req.path.startsWith('/prints/')) {
+          const setRobots = (h: string, val: string) => {
+            const tag = `<meta name="robots" content="${val}">`;
+            return /<meta\s+name="robots"[^>]*>/i.test(h)
+              ? h.replace(/<meta\s+name="robots"[^>]*>/i, tag)
+              : h.replace('</head>', `  ${tag}\n</head>`);
+          };
+          try {
+            const { getPrintDetailBySlug, getPurchasablePrintCollection, printSlugOf } = await import('./commerce/prints/printRepo');
+            const { isPubliclyPurchasable, startingPriceMinor } = await import('@shared/commerce/printProduct');
+            const { injectPrintMeta } = await import('@shared/printSsr');
+
+            if (req.path === '/prints') {
+              const cards = await getPurchasablePrintCollection();
+              html = setRobots(html, cards.length ? 'index,follow' : 'noindex,follow');
+              return res.status(200).set('Content-Type', 'text/html').send(html);
+            }
+
+            const slug = decodeURIComponent(req.path.slice('/prints/'.length).split('/')[0].split('?')[0]);
+            const detail = slug ? await getPrintDetailBySlug(slug) : null;
+            if (detail) {
+              const ssr = {
+                id: detail.print.id,
+                slug: printSlugOf(detail.print),
+                title: detail.print.title,
+                description: detail.print.description,
+                image: detail.print.images[0] ?? null,
+                artworkId: detail.print.artworkId,
+                purchasable: detail.variants.some((v) => isPubliclyPurchasable(v, detail.master)),
+                startingPriceMinor: startingPriceMinor(detail.variants, detail.master),
+                currency: detail.variants[0]?.currency ?? 'EUR',
+              };
+              html = injectPrintMeta(html, ssr, SEO_BASE_URL);
+              return res.status(200).set('Content-Type', 'text/html').send(html);
+            }
+            // Unknown print slug — never an indexable soft-404.
+            html = setRobots(html, 'noindex,follow');
+            return res.status(404).set('Content-Type', 'text/html').send(html);
+          } catch {
+            html = setRobots(html, 'noindex,follow');
+            return res.status(200).set('Content-Type', 'text/html').send(html);
+          }
         }
 
         // BLOG: the whole point of the blog is search, and this site renders on the

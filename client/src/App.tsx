@@ -10,8 +10,8 @@ import HomePage from "@/pages/HomePage";
 import ArtworksPage from "@/pages/ArtworksPage";
 import ArtworkDetailPage from "@/pages/ArtworkDetailPage";
 import CollectionPage from "@/pages/CollectionPage";
-// import PrintsPage from "@/pages/PrintsPage";
-// import PrintArtworkPage from "@/pages/PrintArtworkPage";
+import PrintsPage from "@/pages/PrintsPage";
+import PrintDetailPage from "@/pages/PrintDetailPage";
 import AboutPage from "@/pages/AboutPage";
 import PathPage from "@/pages/PathPage";
 import ExhibitionsPage from "@/pages/ExhibitionsPage";
@@ -22,6 +22,8 @@ import CreateArtworkPage from "@/pages/CreateArtworkPage";
 import EditArtworkPage from "@/pages/EditArtworkPage";
 import CreatePrintPage from "@/pages/CreatePrintPage";
 import EditPrintPage from "@/pages/EditPrintPage";
+import AdminPrintVariantsPage from "@/pages/AdminPrintVariantsPage";
+import AdminSeoPage from "@/pages/AdminSeoPage";
 import NotFound from "@/pages/not-found";
 import CartPage from "@/pages/CartPage";
 import CheckoutPage from "@/pages/CheckoutPage";
@@ -58,8 +60,8 @@ function Router() {
       <Route path="/" component={HomePage} />
       <Route path="/artworks" component={ArtworksPage} />
       <Route path="/artworks/:id" component={ArtworkDetailPage} />{/* :id accepts both numeric IDs and slug strings */}
-      <Route path="/prints">{() => <Redirect to="/" />}</Route>
-      <Route path="/prints/:id">{() => <Redirect to="/" />}</Route>
+      <Route path="/prints" component={PrintsPage} />
+      <Route path="/prints/:slug" component={PrintDetailPage} />
       <Route path="/about" component={AboutPage} />
       <Route path="/path" component={PathPage} />
       <Route path="/exhibitions" component={ExhibitionsPage} />
@@ -70,6 +72,7 @@ function Router() {
       <Route path="/admin/edit-artwork/:id" component={EditArtworkPage} />
       <Route path="/admin/create-print" component={CreatePrintPage} />
       <Route path="/admin/edit-print/:id" component={EditPrintPage} />
+      <Route path="/admin/edit-print/:id/variants" component={AdminPrintVariantsPage} />
       <Route path="/blog" component={BlogPage} />
       <Route path="/blog/:slug" component={BlogPostPage} />
       {/* Direct sales. Declared BEFORE the /:seoSlug catch-all, which would otherwise
@@ -78,6 +81,7 @@ function Router() {
       <Route path="/checkout" component={CheckoutPage} />
       <Route path="/order/:reference" component={OrderConfirmationPage} />
       <Route path="/track/:token" component={TrackOrderPage} />
+      <Route path="/admin/seo" component={AdminSeoPage} />
       <Route path="/admin/orders" component={AdminOrdersPage} />
       <Route path="/admin/orders/:id" component={AdminOrderDetailPage} />
       {/* Keep the catch-all LAST: /:seoSlug would otherwise swallow /blog. */}

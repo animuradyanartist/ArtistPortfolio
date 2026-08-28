@@ -161,6 +161,97 @@ export const prints = pgTable("prints", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+/**
+ * PRINT VARIANTS — the purchasable configurations of a print. The `prints` row is the product
+ * (one per artwork); a variant is a specific material × size × frame. This lives in the ONE
+ * commerce system; a print purchase is an `orders` row with item_type 'print' referencing a
+ * variant here. `eligible` (the master passed the resolution engine) AND `enabled` (an admin
+ * turned it on) must both be true before a customer can buy it — so a low-res master can never
+ * be sold, and nothing goes live by accident.
+ */
+export const printVariants = pgTable("print_variants", {
+  id: serial("id").primaryKey(),
+  printId: integer("print_id").notNull(),
+  material: text("material").notNull(), // 'german-etching' | 'photo-rag'
+  prodigiSku: text("prodigi_sku").notNull(),
+  sizeLabel: text("size_label").notNull(), // 'S' | 'M' | 'L'
+  widthCm: integer("width_cm").notNull(),
+  heightCm: integer("height_cm").notNull(),
+  framed: boolean("framed").notNull().default(false),
+  frameColour: text("frame_colour"), // 'natural' | 'black' | 'white' | null
+  border: text("border"),
+  retailMinor: integer("retail_minor"),
+  currency: text("currency").notNull().default("EUR"),
+  baseCostMinor: integer("base_cost_minor"),
+  printReadyAssetUrl: text("print_ready_asset_url"),
+  mockups: text("mockups").array(),
+  effectiveDpi: integer("effective_dpi"),
+  minDpi: integer("min_dpi"),
+  eligible: boolean("eligible").notNull().default(false),
+  enabled: boolean("enabled").notNull().default(false),
+  /**
+   * PRODIGI RECONCILIATION STATE. False means the `prodigiSku` + attributes are our own
+   * PROVISIONAL configuration, not yet checked against a live Prodigi product response. It flips
+   * true only after a real sandbox/live catalogue call confirms the SKU, its attributes and its
+   * required print resolution. A public purchase is NEVER gated on this alone (a master must be
+   * ready), but the configurator and admin show a provisional variant as unverified so an
+   * invented SKU can never masquerade as confirmed.
+   */
+  prodigiVerified: boolean("prodigi_verified").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  printIdx: index("print_variants_print_idx").on(t.printId),
+}));
+
+export const insertPrintVariantSchema = createInsertSchema(printVariants).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsertPrintVariant = z.infer<typeof insertPrintVariantSchema>;
+export type PrintVariant = typeof printVariants.$inferSelect;
+
+/**
+ * PRINT MASTERS — the readiness record for the ONE thing a print product cannot fake: a
+ * genuine high-resolution source file. A master belongs to an ARTWORK (the source photograph of
+ * the original painting), independent of whether a `prints` product exists yet.
+ *
+ * TODAY EVERY ARTWORK'S ONLY IMAGE IS THE ~1280px WEB FILE, WHICH IS NOT A MASTER. So no row
+ * here has `status: 'ready'` and nothing is publicly purchasable. This table is the interface
+ * that lets a real master be added LATER — its pixel dimensions drive the eligibility engine,
+ * its print-ready derived URL is what fulfilment sends to Prodigi — without any storefront
+ * rewrite. Nothing here upscales or pretends a web image is a master.
+ */
+export const printMasters = pgTable("print_masters", {
+  id: serial("id").primaryKey(),
+  /** One master per artwork. */
+  artworkId: integer("artwork_id").notNull(),
+  /** Longest/short edge in pixels of the real master. Null until a master is actually supplied. */
+  widthPx: integer("width_px"),
+  heightPx: integer("height_px"),
+  /** The print-ready, colour-managed derived asset URL fulfilment sends to Prodigi. Never a web image. */
+  printReadyAssetUrl: text("print_ready_asset_url"),
+  /** MD5 of the print-ready asset, passed to Prodigi so it can verify the file it downloaded. */
+  checksumMd5: text("checksum_md5"),
+  /**
+   * Readiness, and it fails closed. 'missing' = no real master (the default, and the truth for
+   * the whole catalogue today). 'provisional' = a candidate uploaded but not yet confirmed
+   * print-ready. 'ready' = a verified master whose dimensions clear the eligibility floor — the
+   * ONLY state in which its variants may be publicly purchasable.
+   */
+  status: text("status").notNull().default("missing"), // 'missing' | 'provisional' | 'ready'
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  artworkIdx: uniqueIndex("print_masters_artwork_unique").on(t.artworkId),
+}));
+
+export const insertPrintMasterSchema = createInsertSchema(printMasters).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsertPrintMaster = z.infer<typeof insertPrintMasterSchema>;
+export type PrintMaster = typeof printMasters.$inferSelect;
+
 export const exhibitions = pgTable("exhibitions", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -472,6 +563,18 @@ export const orders = pgTable("orders", {
   /** A non-status overlay for exceptional situations: null | 'delayed' | 'delivery_issue'.
    *  Kept off the status machine so it can be raised and cleared without a fake transition. */
   exceptionState: text("exception_state"),
+
+  // ── print fulfilment via a provider (Prodigi). Null on original-artwork orders, which Ani
+  //    fulfils herself. A print order carries the variant it bought and the provider order id, so
+  //    fulfilment extends the verified-paid path without a second commerce system. ──
+  fulfilmentProvider: text("fulfilment_provider"), // 'prodigi' | null
+  printVariantId: integer("print_variant_id"),
+  prodigiOrderId: text("prodigi_order_id"),
+  fulfilmentStatus: text("fulfilment_status"), // pending | created | inproduction | shipped | complete | failed | cancelled
+  /** One stable key per internal order, reused on every retry so duplicate webhooks never double-produce. */
+  fulfilmentIdempotencyKey: text("fulfilment_idempotency_key"),
+  fulfilmentError: text("fulfilment_error"),
+  fulfilmentRetryCount: integer("fulfilment_retry_count").default(0),
   /** The latest buyer-visible note ("Packed and collected by the courier this morning."). */
   customerMessage: text("customer_message"),
   /** Private to Admin — never sent to the buyer or returned by a public endpoint. */
@@ -593,3 +696,112 @@ export const orderAudit = pgTable("order_audit", {
   orderIdx: index("order_audit_order_idx").on(t.orderId),
 }));
 export type OrderAudit = typeof orderAudit.$inferSelect;
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// SEO GROWTH SYSTEM (DataForSEO) — the buyer-intent keyword model, historical snapshots, the action
+// engine's tasks, and the DataForSEO cost-control cache/usage log. All added via the boot self-heal
+// (ADD COLUMN / CREATE TABLE IF NOT EXISTS) — no manual migration. Sample/opt-in: nothing here runs
+// until DATAFORSEO_LOGIN + DATAFORSEO_PASSWORD are set (the client fails closed).
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The normalized keyword model (Phase 2). One row per strategic keyword, with its ONE primary target. */
+export const seoKeywords = pgTable("seo_keywords", {
+  id: serial("id").primaryKey(),
+  keyword: text("keyword").notNull(),
+  /** originals | prints | trade — decides which page type it may target (Phase 4). */
+  family: text("family").notNull(),
+  /** The single primary target URL for this keyword (Phase 3). Null until mapped. */
+  primaryTargetUrl: text("primary_target_url"),
+  /** active | paused | archived — a keyword we have deliberately deprioritized is archived, not deleted. */
+  status: text("status").notNull().default("active"),
+  /** Whether this is a seed keyword or discovered from live data. */
+  source: text("source").notNull().default("seed"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  keywordUnique: uniqueIndex("seo_keywords_keyword_unique").on(t.keyword),
+}));
+export type SeoKeyword = typeof seoKeywords.$inferSelect;
+
+/**
+ * HISTORICAL snapshots (Phase 9) — appended, never overwritten, so a ranking/volume change over
+ * before → 2 weeks → 4 weeks → 8 weeks can be read. One row per keyword per capture.
+ */
+export const seoKeywordSnapshots = pgTable("seo_keyword_snapshots", {
+  id: serial("id").primaryKey(),
+  keywordId: integer("keyword_id").notNull(),
+  capturedAt: timestamp("captured_at").defaultNow(),
+  searchVolume: integer("search_volume"),
+  /** CPC in the smallest sensible unit as a text-encoded decimal (avoids float drift). */
+  cpc: text("cpc"),
+  competition: text("competition"), // 0..1 as text
+  difficulty: integer("difficulty"), // 0..100
+  mainIntent: text("main_intent"), // informational | commercial | transactional | navigational
+  /** Our organic rank + the URL Google actually ranks (for wrong-page detection). */
+  ourRank: integer("our_rank"),
+  ourRankingUrl: text("our_ranking_url"),
+  /** Transparent opportunity score at capture time. */
+  opportunityScore: integer("opportunity_score"),
+  /** JSON: top-ranking domains + their classes (marketplace/gallery/independent/…). */
+  topDomains: text("top_domains"),
+  serpFeatures: text("serp_features"), // JSON array
+  /** The raw DataForSEO response we stored so it can be re-analysed without paying again. */
+  raw: text("raw"),
+}, (t) => ({
+  keywordIdx: index("seo_keyword_snapshots_keyword_idx").on(t.keywordId),
+}));
+export type SeoKeywordSnapshot = typeof seoKeywordSnapshots.$inferSelect;
+
+/** The action engine's tasks (Phase 7) with full lifecycle + before/after metrics (Phase 9). */
+export const seoActions = pgTable("seo_actions", {
+  id: serial("id").primaryKey(),
+  keyword: text("keyword").notNull(),
+  family: text("family"),
+  type: text("type").notNull(), // fix-wrong-page | strengthen-existing | create-print-landing | …
+  actionGroup: text("action_group"), // Quick wins | Technical SEO | …
+  targetUrl: text("target_url"),
+  priority: integer("priority").notNull().default(0),
+  effort: text("effort"), // low | medium | high
+  objective: text("objective"),
+  reason: text("reason"),
+  evidence: text("evidence"),
+  recommendedChange: text("recommended_change"),
+  status: text("status").notNull().default("todo"), // todo | doing | done | ignored
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  /** JSON snapshots so "did this action work?" can be answered without claiming causality. */
+  beforeMetrics: text("before_metrics"),
+  afterMetrics: text("after_metrics"),
+}, (t) => ({
+  statusIdx: index("seo_actions_status_idx").on(t.status),
+}));
+export type SeoAction = typeof seoActions.$inferSelect;
+
+/** DataForSEO response cache (Phase 10) — dedup + re-analyse-without-paying. Keyed deterministically. */
+export const seoApiCache = pgTable("seo_api_cache", {
+  id: serial("id").primaryKey(),
+  cacheKey: text("cache_key").notNull(),
+  dataType: text("data_type").notNull(),
+  params: text("params"), // JSON of the request params
+  response: text("response"), // JSON of the raw useful response
+  cost: text("cost"), // DataForSEO reported cost, text-decimal
+  fetchedAt: timestamp("fetched_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+}, (t) => ({
+  cacheKeyUnique: uniqueIndex("seo_api_cache_key_unique").on(t.cacheKey),
+}));
+export type SeoApiCache = typeof seoApiCache.$inferSelect;
+
+/** DataForSEO usage log (Phase 10) — every call/cache-hit, so spend is visible in admin. */
+export const seoApiUsage = pgTable("seo_api_usage", {
+  id: serial("id").primaryKey(),
+  dataType: text("data_type").notNull(),
+  endpoint: text("endpoint"),
+  cost: text("cost"),
+  cacheHit: boolean("cache_hit").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  createdIdx: index("seo_api_usage_created_idx").on(t.createdAt),
+}));
+export type SeoApiUsage = typeof seoApiUsage.$inferSelect;

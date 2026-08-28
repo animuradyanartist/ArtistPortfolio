@@ -296,6 +296,12 @@ export default function EditPrintPage() {
           <p className="text-charcoal">
             Update this print edition's details, images, and sizing options
           </p>
+          <a
+            href={`/admin/edit-print/${id}/variants`}
+            className="inline-block mt-3 text-sm text-deep-blue border-b border-deep-blue/40 hover:border-deep-blue"
+          >
+            Manage print variants &amp; master (Prodigi fulfilment) →
+          </a>
         </div>
 
         <Card>

@@ -146,5 +146,145 @@ export const SELF_HEAL_DDL: readonly string[] = [
         received_at timestamp DEFAULT now()
       )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS stripe_events_event_id_unique ON stripe_events (event_id)`,
-  `CREATE INDEX IF NOT EXISTS artworks_reserved_until_idx ON artworks (reserved_until)`
+  `CREATE INDEX IF NOT EXISTS artworks_reserved_until_idx ON artworks (reserved_until)`,
+  // ── PRINT FULFILMENT via a provider (Prodigi). One commerce system: these live on the orders
+  //    table and are null on original-artwork orders. Must mirror shared/schema.ts orders exactly. ──
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment_provider text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS print_variant_id integer`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS prodigi_order_id text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment_status text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment_idempotency_key text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment_error text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment_retry_count integer DEFAULT 0`,
+  // The print PRODUCT (one per artwork). Predates the variant model; CREATE IF NOT EXISTS is a
+  // no-op where it already exists in production.
+  `CREATE TABLE IF NOT EXISTS prints (
+        id serial PRIMARY KEY,
+        title text NOT NULL,
+        slug text,
+        description text NOT NULL,
+        images text[] NOT NULL,
+        artwork_id integer,
+        available_sizes text NOT NULL,
+        preferred_material text NOT NULL DEFAULT 'paper',
+        status text NOT NULL DEFAULT 'active',
+        featured boolean DEFAULT false,
+        position integer DEFAULT 0,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+  // PRINT VARIANTS — the purchasable material × size × frame configurations of a print. Both
+  // eligible (master cleared the resolution engine) AND enabled (an admin turned it on) must be
+  // true before a customer can buy it. prodigi_verified records SKU reconciliation state.
+  `CREATE TABLE IF NOT EXISTS print_variants (
+        id serial PRIMARY KEY,
+        print_id integer NOT NULL,
+        material text NOT NULL,
+        prodigi_sku text NOT NULL,
+        size_label text NOT NULL,
+        width_cm integer NOT NULL,
+        height_cm integer NOT NULL,
+        framed boolean NOT NULL DEFAULT false,
+        frame_colour text,
+        border text,
+        retail_minor integer,
+        currency text NOT NULL DEFAULT 'EUR',
+        base_cost_minor integer,
+        print_ready_asset_url text,
+        mockups text[],
+        effective_dpi integer,
+        min_dpi integer,
+        eligible boolean NOT NULL DEFAULT false,
+        enabled boolean NOT NULL DEFAULT false,
+        prodigi_verified boolean NOT NULL DEFAULT false,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+  `ALTER TABLE print_variants ADD COLUMN IF NOT EXISTS prodigi_verified boolean NOT NULL DEFAULT false`,
+  `CREATE INDEX IF NOT EXISTS print_variants_print_idx ON print_variants (print_id)`,
+  // PRINT MASTERS — the readiness record for the high-resolution source. Fails closed: default
+  // status 'missing' means nothing is publicly purchasable until a real master is supplied.
+  `CREATE TABLE IF NOT EXISTS print_masters (
+        id serial PRIMARY KEY,
+        artwork_id integer NOT NULL,
+        width_px integer,
+        height_px integer,
+        print_ready_asset_url text,
+        checksum_md5 text,
+        status text NOT NULL DEFAULT 'missing',
+        note text,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS print_masters_artwork_unique ON print_masters (artwork_id)`,
+  // ── SEO GROWTH SYSTEM (DataForSEO). Additive; nothing runs until credentials are set. ──
+  `CREATE TABLE IF NOT EXISTS seo_keywords (
+        id serial PRIMARY KEY,
+        keyword text NOT NULL,
+        family text NOT NULL,
+        primary_target_url text,
+        status text NOT NULL DEFAULT 'active',
+        source text NOT NULL DEFAULT 'seed',
+        notes text,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS seo_keywords_keyword_unique ON seo_keywords (keyword)`,
+  `CREATE TABLE IF NOT EXISTS seo_keyword_snapshots (
+        id serial PRIMARY KEY,
+        keyword_id integer NOT NULL,
+        captured_at timestamp DEFAULT now(),
+        search_volume integer,
+        cpc text,
+        competition text,
+        difficulty integer,
+        main_intent text,
+        our_rank integer,
+        our_ranking_url text,
+        opportunity_score integer,
+        top_domains text,
+        serp_features text,
+        raw text
+      )`,
+  `CREATE INDEX IF NOT EXISTS seo_keyword_snapshots_keyword_idx ON seo_keyword_snapshots (keyword_id)`,
+  `CREATE TABLE IF NOT EXISTS seo_actions (
+        id serial PRIMARY KEY,
+        keyword text NOT NULL,
+        family text,
+        type text NOT NULL,
+        action_group text,
+        target_url text,
+        priority integer NOT NULL DEFAULT 0,
+        effort text,
+        objective text,
+        reason text,
+        evidence text,
+        recommended_change text,
+        status text NOT NULL DEFAULT 'todo',
+        created_at timestamp DEFAULT now(),
+        completed_at timestamp,
+        before_metrics text,
+        after_metrics text
+      )`,
+  `CREATE INDEX IF NOT EXISTS seo_actions_status_idx ON seo_actions (status)`,
+  `CREATE TABLE IF NOT EXISTS seo_api_cache (
+        id serial PRIMARY KEY,
+        cache_key text NOT NULL,
+        data_type text NOT NULL,
+        params text,
+        response text,
+        cost text,
+        fetched_at timestamp DEFAULT now(),
+        expires_at timestamp
+      )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS seo_api_cache_key_unique ON seo_api_cache (cache_key)`,
+  `CREATE TABLE IF NOT EXISTS seo_api_usage (
+        id serial PRIMARY KEY,
+        data_type text NOT NULL,
+        endpoint text,
+        cost text,
+        cache_hit boolean NOT NULL DEFAULT false,
+        created_at timestamp DEFAULT now()
+      )`,
+  `CREATE INDEX IF NOT EXISTS seo_api_usage_created_idx ON seo_api_usage (created_at)`
 ];

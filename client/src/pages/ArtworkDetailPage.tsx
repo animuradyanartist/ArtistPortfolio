@@ -280,7 +280,16 @@ export default function ArtworkDetailPage() {
 
           {/* Details column */}
           <div className="lg:pt-4">
-            <Eyebrow>{CATEGORY_LABEL[artworkCategory(artwork)]}</Eyebrow>
+            {/* For a landscape work, the category eyebrow links to the collection it belongs to —
+                a descriptive internal link that strengthens the "contemporary landscape paintings"
+                collection page. Figurative (no collection yet) stays a plain label. */}
+            {artworkCategory(artwork) === "landscape" ? (
+              <Link href="/collections/landscape-paintings">
+                <a className="hover:text-stone-800 transition-colors"><Eyebrow>Contemporary Landscape Paintings</Eyebrow></a>
+              </Link>
+            ) : (
+              <Eyebrow>{CATEGORY_LABEL[artworkCategory(artwork)]}</Eyebrow>
+            )}
             <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">
               {artwork.title || "Untitled"}
             </h1>
@@ -328,6 +337,10 @@ export default function ArtworkDetailPage() {
                 marketplace behaviour it has today (PART 34). */}
             <PurchasePanel artworkId={artwork.id} marketplaceUrl={commerce.marketplaceUrl}
               marketplaceLabel={commerce.marketplaceLabel} />
+
+            {/* Cross-link to a fine-art print — appears ONLY when this artwork has a genuinely
+                purchasable print. The original stays the premium, one-of-a-kind work. */}
+            <PrintAvailability artworkId={artwork.id} />
 
             {/* The existing marketplace actions, shown when direct sale is NOT the route. */}
             {!directSale && artwork.availability === "available" && (
@@ -400,5 +413,29 @@ export default function ArtworkDetailPage() {
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Subtle "Available as a fine-art print" cross-link. Renders NOTHING unless the artwork has a
+ * genuinely purchasable print (the server gates that). Today nothing is purchasable, so this is
+ * invisible — it lights up automatically once a real master + enabled variant exists.
+ */
+function PrintAvailability({ artworkId }: { artworkId: number }) {
+  const { data } = useQuery<{ available: boolean; slug: string | null }>({
+    queryKey: [`/api/commerce/prints/for-artwork/${artworkId}`],
+    queryFn: async () => {
+      const r = await fetch(`/api/commerce/prints/for-artwork/${artworkId}`);
+      if (!r.ok) return { available: false, slug: null };
+      return r.json();
+    },
+  });
+  if (!data?.available || !data.slug) return null;
+  return (
+    <Link href={`/prints/${data.slug}`}>
+      <a className="inline-flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase text-stone-600 border-b border-stone-400 hover:border-stone-800">
+        Available as a fine-art print →
+      </a>
+    </Link>
   );
 }

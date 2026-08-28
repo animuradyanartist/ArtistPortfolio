@@ -1,519 +1,127 @@
-import { useState, useMemo, useEffect, useCallback, useRef, memo } from "react";
+/**
+ * THE PRINT STOREFRONT — the public collection of fine-art prints.
+ *
+ * It shows ONLY genuinely purchasable print products (the server gates this: a product with no
+ * ready master, no eligible+enabled variant, or no own-site price never appears). Today that set
+ * is empty — no high-resolution master exists yet — so the page shows an honest "coming soon"
+ * state rather than exposing anything unready. A price is shown ONLY when a real own-site print
+ * price exists.
+ *
+ * Prints are positioned as exactly what they are: museum-quality reproductions. The originals stay
+ * the premium, one-of-a-kind work, and every route out of here says so.
+ */
+import { useEffect } from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import type { Print } from "@shared/schema";
-import { updateCanonicalUrl, updateMetaDescription, toSlug } from "@/lib/seo";
+import { Eyebrow } from "@/components/editorial";
+import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 
-// Thumbnail cache for better performance
-const thumbnailCache = new Map<number, string>();
-const loadingSet = new Set<number>();
-const pendingPromises = new Map<number, Promise<void>>();
-
-// Batch loading function for better performance
-async function batchLoadThumbnails(printIds: number[]): Promise<void> {
-  const uncachedIds = printIds.filter(id => !thumbnailCache.has(id) && !loadingSet.has(id));
-  
-  if (uncachedIds.length === 0) return;
-  
-  // Create a promise for this batch and track it
-  const batchPromise = (async () => {
-    // Mark as loading
-    uncachedIds.forEach(id => loadingSet.add(id));
-    
-    try {
-      const response = await fetch('/api/prints/thumbnails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'max-age=3600'
-        },
-        body: JSON.stringify({ ids: uncachedIds })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Cache all thumbnails
-        Object.entries(data.thumbnails).forEach(([id, thumbnail]) => {
-          thumbnailCache.set(parseInt(id), thumbnail as string || '');
-        });
-      }
-    } catch (error) {
-      console.error('Batch thumbnail loading failed:', error);
-    } finally {
-      // Remove from loading set and pending promises
-      uncachedIds.forEach(id => {
-        loadingSet.delete(id);
-        pendingPromises.delete(id);
-      });
-    }
-  })();
-  
-  // Track this promise for all IDs in the batch
-  uncachedIds.forEach(id => {
-    pendingPromises.set(id, batchPromise);
-  });
-  
-  await batchPromise;
+interface PrintCard {
+  id: number;
+  title: string;
+  slug: string;
+  image: string | null;
+  artworkId: number | null;
+  startingPriceMinor: number | null;
+  currency: string;
+  sizeCount?: number;
+  materialLabel?: string;
+  preview?: boolean;
 }
 
-// Intersection Observer for lazy loading
-const useIntersectionObserver = (callback: () => void, threshold = 0.1) => {
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  
-  const ref = useCallback((node: HTMLDivElement | null) => {
-    // Clean up previous observer
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-      observerRef.current = null;
-    }
-    
-    if (node) {
-      observerRef.current = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) {
-            callback();
-            if (observerRef.current) {
-              observerRef.current.unobserve(node);
-            }
-          }
-        },
-        { threshold, rootMargin: '50px' }
-      );
-      observerRef.current.observe(node);
-    }
-  }, [callback, threshold]);
-  
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
-  }, []);
-  
-  return ref;
-};
-
-// Optimized image loading component with lazy loading and caching  
-const LazyThumbnail = memo(function LazyThumbnail({ printId, title }: { printId: number; title: string }) {
-  const [imageSrc, setImageSrc] = useState<string | null>(() => {
-    return thumbnailCache.get(printId) || null;
-  });
-  const [imageLoading, setImageLoading] = useState(() => {
-    return !thumbnailCache.has(printId);
-  });
-  const [imageError, setImageError] = useState(false);
-  const [shouldLoad, setShouldLoad] = useState(false);
-  
-  const loadThumbnail = useCallback(async () => {
-    // Check cache first
-    if (thumbnailCache.has(printId)) {
-      const cached = thumbnailCache.get(printId)!;
-      setImageSrc(cached);
-      setImageLoading(false);
-      setImageError(!cached);
-      return;
-    }
-
-    // If already pending, wait for the existing promise
-    if (pendingPromises.has(printId)) {
-      try {
-        await pendingPromises.get(printId);
-        // Check cache again after promise resolves
-        const cached = thumbnailCache.get(printId);
-        if (cached) {
-          setImageSrc(cached);
-          setImageError(!cached);
-        } else {
-          setImageError(true);
-        }
-        setImageLoading(false);
-        return;
-      } catch (error) {
-        setImageError(true);
-        setImageLoading(false);
-        return;
-      }
-    }
-
-    // Only use batch loading - trigger batch load for this item
-    await batchLoadThumbnails([printId]);
-    
-    // Update state based on cached result
-    const cached = thumbnailCache.get(printId);
-    if (cached) {
-      setImageSrc(cached);
-      setImageError(!cached);
-    } else {
-      setImageError(true);
-    }
-    setImageLoading(false);
-  }, [printId]);
-  
-  // Intersection observer ref
-  const intersectionRef = useIntersectionObserver(() => {
-    setShouldLoad(true);
-  });
-  
-  useEffect(() => {
-    if (shouldLoad && !thumbnailCache.has(printId)) {
-      loadThumbnail();
-    }
-  }, [shouldLoad, loadThumbnail, printId]);
-  
-  // Show cached images immediately, or skeleton if not loaded yet
-  if (!shouldLoad && !imageSrc) {
-    return (
-      <div 
-        ref={intersectionRef}
-        className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300"
-      >
-        <div className="w-12 h-12 bg-slate-300 rounded-lg opacity-50"></div>
-      </div>
-    );
+function money(minor: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(minor / 100);
+  } catch {
+    return `${(minor / 100).toFixed(0)} ${currency}`;
   }
-  
-  if (imageLoading && !imageSrc) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300">
-        <div className="w-8 h-8 bg-slate-300 rounded-full animate-spin">
-          <div className="w-2 h-2 bg-slate-500 rounded-full mt-1 ml-1"></div>
-        </div>
-      </div>
-    );
-  }
-  
-  if (imageError || !imageSrc) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 text-red-500">
-        <div className="text-center">
-          <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-          <div className="text-xs font-medium text-red-600">Image not available</div>
-        </div>
-      </div>
-    );
-  }
-  
-  return (
-    <img 
-      src={imageSrc} 
-      alt={`${title} – fine art print by Armenian artist Ani Muradyan`}
-      className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
-      loading="lazy"
-      decoding="async"
-      style={{
-        willChange: 'transform'
-      }}
-      onError={() => setImageError(true)}
-      onLoad={() => {
-        setImageLoading(false);
-        // Ensure image stays cached
-        if (imageSrc) {
-          thumbnailCache.set(printId, imageSrc);
-        }
-      }}
-    />
-  );
-});
+}
 
 export default function PrintsPage() {
-  const [, setLocation] = useLocation();
-  
-  // Set page title and canonical URL for SEO
-  useEffect(() => {
-    document.title = "Art Prints by Ani Muradyan | Museum-Quality Canvas & Paper Prints";
-    updateCanonicalUrl('/prints');
-    updateMetaDescription('Shop museum-quality fine art prints by Armenian contemporary artist Ani Muradyan. Available on premium paper and canvas in custom sizes.');
-  }, []);
-  
-  // Price calculator state
-  const [width, setWidth] = useState<number>(0);
-  const [height, setHeight] = useState<number>(0);
-  const [material, setMaterial] = useState<string>("paper");
-
-  // Fetch all prints with optimized caching
-  const { data: prints = [], isLoading, error } = useQuery<Print[]>({
-    queryKey: ["/api/prints"],
-    retry: 2,
-    retryDelay: 1000,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false
+  const { data, isLoading } = useQuery<{ prints: PrintCard[]; previewMode?: boolean }>({
+    queryKey: ["/api/commerce/prints"],
+    queryFn: async () => {
+      const r = await fetch("/api/commerce/prints");
+      if (!r.ok) throw new Error("Could not load prints");
+      return r.json();
+    },
   });
+  const previewMode = Boolean(data?.previewMode);
 
-  // Removed debug logging for performance
-
-  // Filter active prints
-  const activePrints = useMemo(() => {
-    if (!Array.isArray(prints)) return [];
-    return prints.filter((print: Print) => print.status === 'active');
-  }, [prints]);
-
-  // Pre-load visible thumbnails in smaller batches for better performance
   useEffect(() => {
-    if (activePrints.length > 0) {
-      // Load first 3 prints immediately (above the fold)
-      const firstBatch = activePrints.slice(0, 3).map(p => p.id);
-      if (firstBatch.length > 0) {
-        batchLoadThumbnails(firstBatch);
-      }
-      
-      // Load next 6 prints after a short delay
-      const timer1 = setTimeout(() => {
-        const secondBatch = activePrints.slice(3, 9).map(p => p.id);
-        if (secondBatch.length > 0) {
-          batchLoadThumbnails(secondBatch);
-        }
-      }, 500);
-      
-      // Load remaining prints after a longer delay
-      const timer2 = setTimeout(() => {
-        const remainingIds = activePrints.slice(9).map(p => p.id);
-        if (remainingIds.length > 0) {
-          batchLoadThumbnails(remainingIds);
-        }
-      }, 2000);
-      
-      // Cleanup timers on unmount or dependency change
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-      };
-    }
-  }, [activePrints]);
-
-  // Price calculation
-  const calculatedPrice = useMemo(() => {
-    if (width <= 0 || height <= 0) return null;
-    
-    const area = width * height;
-    const rates = {
-      paper: 0.013,
-      canvas: 0.015
-    };
-    
-    const rate = rates[material as keyof typeof rates] || rates.paper;
-    const finalPrice = area * rate;
-    
-    return {
-      area,
-      finalPrice
-    };
-  }, [width, height, material]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-64 mx-auto mb-4"></div>
-              <div className="h-4 bg-gray-200 rounded w-96 mx-auto"></div>
-            </div>
-          </div>
-        </div>
-      </div>
+    document.title = "Fine-Art Prints · Ani Muradyan";
+    updateMetaDescription(
+      "Museum-quality giclée fine-art prints of paintings by Ani Muradyan, on archival Hahnemühle paper. The originals remain unique, one-of-a-kind works.",
     );
-  }
+    updateCanonicalUrl("/prints");
+  }, []);
+
+  const prints = data?.prints ?? [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Hero Section */}
-        <div className="text-center mb-20">
-          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-full text-sm font-medium text-blue-700 mb-8 animate-fadeIn">
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-            Art Print Collection
+    <div className="min-h-screen bg-[#f5f1ea]">
+      <div className="mx-auto max-w-6xl px-6 py-16 md:py-24">
+        <Eyebrow>Fine-Art Prints</Eyebrow>
+        <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">Prints</h1>
+        {previewMode && (
+          <div className="mb-8 border border-amber-300/70 bg-amber-50 text-amber-800 px-4 py-2.5 text-sm rounded max-w-2xl">
+            <strong className="font-medium">Preview mode.</strong> These are demo products for design testing — purchasing is not yet available and prices are placeholders.
           </div>
-          <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-6 animate-slideUp">
-            Ani Muradyan Art Prints
-          </h1>
-          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed animate-slideUp animation-delay-200">
-            Museum-quality prints of Ani Muradyan's original abstract realism artwork. Each piece is carefully reproduced on premium paper or canvas to preserve the artistic integrity and emotional depth.
-          </p>
-        </div>
+        )}
+        <p className="text-stone-700 max-w-2xl leading-relaxed mb-12">
+          Museum-quality giclée reproductions on archival Hahnemühle paper, printed to order. A print
+          lets a painting live on more walls — the{" "}
+          <Link href="/artworks" className="border-b border-stone-400 hover:border-stone-800">original works</Link>{" "}
+          remain unique and one of a kind.
+        </p>
 
-        {/* Gallery Section */}
-        <div className="mb-20">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-semibold text-slate-800">
-              Available Works
-            </h2>
-            <div className="flex items-center gap-2 text-slate-500">
-              <span className="text-sm">{activePrints.length} prints available</span>
-              <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
-              <span className="text-sm">Multiple sizes</span>
-            </div>
-          </div>
-          
-          {activePrints.length === 0 ? (
-            <div className="text-center py-20">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <p className="text-slate-500">No prints available at the moment.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activePrints.map((print: Print, index: number) => (
-                <div
-                  key={print.id}
-                  className="group cursor-pointer"
-                  onClick={() => setLocation(`/prints/${toSlug(print.title)}`)}
-                  style={{ 
-                    animationDelay: `${index * 50}ms`,
-                    animationFillMode: 'both'
-                  }}
-                >
-                  <div className="relative overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200/50 group-hover:shadow-2xl group-hover:shadow-slate-500/10 transition-all duration-300">
-                    <div className="relative aspect-[4/5] overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent"></div>
-                      <LazyThumbnail printId={print.id} title={print.title} />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300">
-                        <div className="absolute bottom-4 left-4 right-4">
-                          <div className="bg-white/95 backdrop-blur-sm px-3 py-2 rounded-lg text-sm font-medium text-slate-800 shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                            View Details
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-medium text-slate-900 mb-1 group-hover:text-blue-600 transition-colors duration-200">
-                        {print.title}
-                      </h3>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-500">Multiple sizes</span>
-                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 text-xs font-medium text-slate-600">
-                          <div className="w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
-                          {print.preferredMaterial}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {isLoading && <p className="text-stone-500">Loading…</p>}
 
-        {/* Price Calculator Section */}
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
-            <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-8 py-6 border-b border-slate-200/50">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-900">Price Calculator</h3>
-                  <p className="text-sm text-slate-600">Get an instant quote for your custom print size</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-8">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-slate-700">Width (cm)</Label>
-                  <Input
-                    type="number"
-                    value={width || ""}
-                    onChange={(e) => setWidth(Number(e.target.value))}
-                    placeholder="30"
-                    className="h-12 text-base border-slate-200 focus:border-blue-500 focus:ring-blue-500/20"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-slate-700">Height (cm)</Label>
-                  <Input
-                    type="number"
-                    value={height || ""}
-                    onChange={(e) => setHeight(Number(e.target.value))}
-                    placeholder="40"
-                    className="h-12 text-base border-slate-200 focus:border-blue-500 focus:ring-blue-500/20"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-slate-700">Material</Label>
-                  <Select value={material} onValueChange={setMaterial}>
-                    <SelectTrigger className="h-12 text-base border-slate-200 focus:border-blue-500 focus:ring-blue-500/20">
-                      <SelectValue placeholder="Select material" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="paper">Premium Paper</SelectItem>
-                      <SelectItem value="canvas">Canvas</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              {calculatedPrice ? (
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200/50">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-blue-700">Instant Quote</span>
-                    </div>
-                    <div className="text-sm text-blue-600">
-                      {calculatedPrice.area.toFixed(0)} cm²
-                    </div>
-                  </div>
-                  <div className="text-3xl font-bold text-blue-900 mb-4">
-                    ${calculatedPrice.finalPrice.toFixed(2)}
-                  </div>
-                  <div className="bg-white/70 rounded-xl p-4 space-y-3">
-                    <div className="text-sm font-medium text-slate-700 mb-2">Contact for Order</div>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <a 
-                        href="mailto:animuradyan.artist@gmail.com" 
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        Email Artist
-                      </a>
-                      <a 
-                        href="https://www.instagram.com/animuradyan.art/" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium text-sm"
-                      >
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                        </svg>
-                        Instagram
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <p className="text-slate-500">Enter dimensions above to calculate pricing</p>
-                </div>
-              )}
-            </div>
+        {!isLoading && prints.length === 0 && (
+          <div className="border border-stone-300/80 bg-white/40 px-8 py-16 text-center max-w-2xl">
+            <h2 className="font-playfair text-2xl text-stone-900 mb-3">Coming soon</h2>
+            <p className="text-stone-700 leading-relaxed mb-6">
+              Fine-art prints are being prepared from high-resolution masters of the paintings. They
+              are not yet available to order. In the meantime, the original works are available.
+            </p>
+            <Link
+              href="/artworks"
+              className="inline-block bg-stone-900 text-stone-50 px-8 py-3 text-[11px] tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors"
+            >
+              View the paintings
+            </Link>
           </div>
-        </div>
+        )}
+
+        {prints.length > 0 && (
+          <div className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+            {prints.map((p) => (
+              <Link key={p.id} href={`/prints/${p.slug}`} className="group block">
+                <div className="aspect-[3/4] overflow-hidden bg-stone-200/60 mb-4">
+                  {p.image ? (
+                    <img
+                      src={p.image}
+                      alt={`Fine-art print of ${p.title}`}
+                      loading="lazy"
+                      className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className="w-full h-full grid place-items-center text-stone-400 text-sm">No image</div>
+                  )}
+                </div>
+                <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-1">Fine Art Print</p>
+                <h3 className="font-playfair text-xl text-stone-900 group-hover:text-stone-600 transition-colors">{p.title}</h3>
+                <div className="flex items-baseline flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                  {p.startingPriceMinor != null && (
+                    <span className="text-sm text-stone-700 tabular-nums">From {money(p.startingPriceMinor, p.currency)}</span>
+                  )}
+                  {p.sizeCount ? <span className="text-xs text-stone-500">{p.sizeCount} sizes</span> : null}
+                </div>
+                {p.materialLabel && <p className="text-xs text-stone-400 mt-0.5">{p.materialLabel}</p>}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

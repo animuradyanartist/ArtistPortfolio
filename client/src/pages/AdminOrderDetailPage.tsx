@@ -97,6 +97,18 @@ export default function AdminOrderDetailPage() {
     onSuccess: () => { done(); toast({ title: "Fulfilment saved" }); },
     onError: (e: Error) => toast({ title: "Couldn't save", description: e.message, variant: "destructive" }),
   });
+  const retryFulfilment = useMutation({
+    mutationFn: () => post(`/retry-fulfilment`, {}),
+    onSuccess: (d: { fulfilmentStatus?: string | null; prodigiOrderId?: string | null; fulfilmentError?: string | null }) => {
+      done();
+      toast({
+        title: d?.prodigiOrderId ? "Fulfilment created" : "Fulfilment attempted",
+        description: `Status: ${d?.fulfilmentStatus ?? "unknown"}${d?.fulfilmentError ? ` — ${d.fulfilmentError}` : ""}`,
+        variant: d?.fulfilmentError ? "destructive" : undefined,
+      });
+    },
+    onError: (e: Error) => toast({ title: "Retry failed", description: e.message, variant: "destructive" }),
+  });
   const saveMsg = useMutation({
     mutationFn: () => post(`/customer-message`, { message: custMsg }),
     onSuccess: () => { done(); toast({ title: "Buyer-visible note saved" }); },
@@ -218,6 +230,73 @@ export default function AdminOrderDetailPage() {
           </div>
         )}
       </Panel>
+
+      {/* Print fulfilment (Prodigi) — only for print orders */}
+      {o.isPrint && (
+        <Panel title="Print fulfilment (Prodigi)">
+          {(() => {
+            const ps = snap as (typeof snap & {
+              material?: string; sizeLabel?: string; widthCm?: number; heightCm?: number;
+              framed?: boolean; frameColour?: string | null; quantity?: number; prodigiSku?: string;
+            }) | null;
+            const paidUnfulfilled =
+              o.payment_status === "paid" &&
+              (o.fulfilmentStatus == null || ["pending", "config_missing", "failed"].includes(o.fulfilmentStatus));
+            return (
+              <>
+                {paidUnfulfilled && (
+                  <div className="mb-5 border border-red-300 bg-red-50 text-red-800 px-4 py-3 text-sm">
+                    <strong className="uppercase tracking-wide text-[11px]">Paid, not yet fulfilled.</strong>{" "}
+                    {o.fulfilmentStatus === "config_missing"
+                      ? "Prodigi is not configured (no API key on the server) — add the Prodigi key to the server environment, then retry."
+                      : o.fulfilmentStatus === "failed"
+                        ? "The last fulfilment attempt failed — see the error below, then retry."
+                        : "This order has been paid but no provider order exists yet."}
+                  </div>
+                )}
+                <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 mb-5">
+                  <PayRow k="Provider" v={o.fulfilmentProvider ?? "—"} />
+                  <PayRow k="Fulfilment status" v={
+                    <span className={
+                      o.fulfilmentStatus === "complete" || o.fulfilmentStatus === "shipped" ? "text-emerald-700"
+                      : o.fulfilmentStatus === "failed" ? "text-red-700"
+                      : o.fulfilmentStatus === "config_missing" ? "text-amber-700"
+                      : "text-stone-600"
+                    }>{o.fulfilmentStatus ?? "—"}</span>
+                  } />
+                  <PayRow k="Prodigi order id" v={o.prodigiOrderId ?? <span className="text-stone-400">none</span>} />
+                  <PayRow k="Retry count" v={String(o.fulfilmentRetryCount ?? 0)} />
+                  <PayRow k="Material" v={ps?.material ?? "—"} />
+                  <PayRow k="Size" v={ps ? `${ps.sizeLabel ?? ""} · ${ps.widthCm ?? "?"}×${ps.heightCm ?? "?"} cm` : "—"} />
+                  <PayRow k="Frame" v={ps?.framed ? `Framed (${ps.frameColour ?? "natural"})` : "Unframed"} />
+                  <PayRow k="Quantity" v={String(ps?.quantity ?? 1)} />
+                  <PayRow k="Prodigi SKU" v={ps?.prodigiSku ?? "—"} />
+                </div>
+                {o.fulfilmentError && (
+                  <div className="mb-4 text-sm text-red-700 bg-red-50 px-3 py-2 rounded max-w-2xl break-words">
+                    {o.fulfilmentError}
+                  </div>
+                )}
+                {o.canRetryFulfilment ? (
+                  <button
+                    onClick={() => { if (window.confirm("Retry Prodigi fulfilment?\n\nThis reuses the same idempotency key, so it can only reconcile to the existing provider order — it can never create a duplicate.")) retryFulfilment.mutate(); }}
+                    disabled={retryFulfilment.isPending}
+                    className="bg-stone-900 text-white px-5 py-2 text-[11px] tracking-[0.18em] uppercase hover:bg-stone-700 transition-colors disabled:opacity-50">
+                    {retryFulfilment.isPending ? "Retrying…" : "Retry fulfilment"}
+                  </button>
+                ) : (
+                  <p className="text-xs text-stone-500">
+                    {o.prodigiOrderId ? "A provider order exists — retry is disabled to avoid a duplicate." : "Retry becomes available once the order is paid."}
+                  </p>
+                )}
+                <p className="mt-3 text-xs text-stone-500 max-w-2xl">
+                  Fulfilment runs automatically on the paid webhook. Retry is a safe manual fallback: it reuses the same idempotency key, so a duplicate provider order is impossible.
+                </p>
+              </>
+            );
+          })()}
+        </Panel>
+      )}
 
       {/* Fulfilment */}
       <Panel title="Fulfilment">

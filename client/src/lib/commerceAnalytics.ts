@@ -21,15 +21,48 @@ function gtag(): Gtag | null {
   return typeof g === "function" ? g : null;
 }
 
-interface ItemInput { id: number; title: string; priceMinor?: number | null; currency?: string }
+interface ItemInput {
+  id: number;
+  title: string;
+  priceMinor?: number | null;
+  currency?: string;
+  /** Defaults to "original-artwork"; a print passes "fine-art-print". */
+  category?: string;
+  quantity?: number;
+  // ── print-only enrichment (all optional; ignored for originals) ──
+  printProductId?: number;
+  printVariantId?: number;
+  artworkId?: number | null;
+  material?: string;
+  size?: string;
+  frame?: string;
+}
 
 const toItem = (i: ItemInput) => ({
-  item_id: String(i.id),
+  item_id: String(i.printVariantId ?? i.id),
   item_name: i.title,
-  item_category: "original-artwork",
+  item_category: i.category ?? "original-artwork",
   price: typeof i.priceMinor === "number" ? i.priceMinor / 100 : undefined,
-  quantity: 1,
+  quantity: i.quantity ?? 1,
+  // GA4 recognises item_variant; the rest are custom params kept intentionally flat.
+  ...(i.size || i.frame ? { item_variant: [i.size, i.frame].filter(Boolean).join(" · ") } : {}),
+  ...(i.category === "fine-art-print"
+    ? {
+        item_type: "print",
+        print_product_id: i.printProductId,
+        print_variant_id: i.printVariantId,
+        artwork_id: i.artworkId ?? undefined,
+        material: i.material,
+        size: i.size,
+        frame: i.frame,
+      }
+    : {}),
 });
+
+/** Marker for a print item, so callers don't have to remember the category string. */
+export function printItem(i: Omit<ItemInput, "category">): ItemInput {
+  return { ...i, category: "fine-art-print" };
+}
 
 export function trackViewItem(i: ItemInput): void {
   gtag()?.("event", "view_item", {
@@ -109,4 +142,34 @@ export function readAttribution(): Record<string, string> | null {
     const raw = sessionStorage.getItem(ATTRIBUTION_KEY);
     return raw ? (JSON.parse(raw) as Record<string, string>) : null;
   } catch { return null; }
+}
+
+// ── PRINT ecommerce events. Same GA4, same `toItem`, so the print funnel reports beside the
+//    originals'. `purchase` is NOT re-implemented here — a print purchase reuses
+//    `trackPurchaseOnce` (with `printItem(...)`) so it can never double-fire. ─────────────────
+
+/** view_item on a print PDP. */
+export function trackViewItemPrint(i: Omit<ItemInput, "category">): void {
+  const item = printItem(i);
+  gtag()?.("event", "view_item", {
+    currency: i.currency ?? "EUR",
+    value: typeof i.priceMinor === "number" ? i.priceMinor / 100 : undefined,
+    items: [toItem(item)],
+  });
+}
+
+/** select_item when a shopper picks a material/size/frame in the configurator. */
+export function trackSelectItemPrint(i: Omit<ItemInput, "category">): void {
+  gtag()?.("event", "select_item", {
+    item_list_id: "print-configurator",
+    item_list_name: "Print configurator",
+    items: [toItem(printItem(i))],
+  });
+}
+
+/** begin_checkout when a shopper starts buying a print. */
+export function trackBeginCheckoutPrint(i: Omit<ItemInput, "category">, totalMinor: number, currency: string): void {
+  gtag()?.("event", "begin_checkout", {
+    currency, value: totalMinor / 100, items: [toItem(printItem(i))],
+  });
 }
