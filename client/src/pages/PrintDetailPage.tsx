@@ -119,6 +119,16 @@ export default function PrintDetailPage() {
     [options, material, size, frame],
   );
 
+  // GALLERY IMAGES — the public storefront images plus the selected variant's Prodigi mockup (if it
+  // is not already among them). The high-resolution production master is NEVER part of this list: the
+  // server sends only `images` + per-option `mockup`, never the master's print-ready asset URL.
+  // (Computed BEFORE any early return so hook order stays stable across loading/loaded renders.)
+  const galleryImages = useMemo(() => {
+    const list = [...(data?.images ?? [])];
+    if (selected?.mockup && !list.includes(selected.mockup)) list.unshift(selected.mockup);
+    return list.filter(Boolean);
+  }, [data?.images, selected?.mockup]);
+
   // SEO + view_item (once per print).
   useEffect(() => {
     if (!data) return;
@@ -167,20 +177,12 @@ export default function PrintDetailPage() {
     );
   }
 
-  const heroImage = selected?.mockup ?? data.image ?? data.images[0] ?? null;
-
   return (
     <Shell>
       <div className="grid gap-12 lg:grid-cols-[1fr_420px]">
-        {/* Image */}
+        {/* Image gallery — object-contain on a soft panel so any aspect ratio shows whole. */}
         <div>
-          <div className="aspect-[3/4] overflow-hidden bg-stone-200/60">
-            {heroImage ? (
-              <img src={heroImage} alt={`Fine-art print of ${data.title}`} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full grid place-items-center text-stone-400">No image</div>
-            )}
-          </div>
+          <PrintGallery images={galleryImages} title={data.title} />
           {data.artworkId != null && (
             <Link
               href={data.artworkPath ?? `/artworks/${data.artworkId}`}
@@ -272,6 +274,15 @@ export default function PrintDetailPage() {
   );
 }
 
+/**
+ * A live shipping quote for the chosen variant + destination. `idle` before a destination is known
+ * (we show "calculated at checkout", never a fake number); `ok` with a real Prodigi figure; or
+ * `unavailable` when Prodigi cannot quote yet — still no fabricated amount.
+ */
+type ShipQuote =
+  | { status: "idle" | "loading" | "unavailable" }
+  | { status: "ok"; shippingMinor: number; totalMinor: number; currency: string };
+
 function PurchasableBlock({ detail, option, navigate }: {
   detail: PrintDetail; option: Option; navigate: (to: string) => void;
 }) {
@@ -282,7 +293,35 @@ function PurchasableBlock({ detail, option, navigate }: {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [ship, setShip] = useState<ShipQuote>({ status: "idle" });
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // Fetch a REAL shipping quote once a destination is known (the form is open + a country chosen).
+  // Debounced; the server calls Prodigi. On any failure we fall back to "calculated at checkout" —
+  // shipping truly depends on destination, so we never show a number we didn't get from the provider.
+  useEffect(() => {
+    if (!buying || option.id == null || !country) { setShip({ status: "idle" }); return; }
+    let cancelled = false;
+    setShip({ status: "loading" });
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch("/api/commerce/prints/quote", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ variantId: option.id, quantity: qty, country }),
+        });
+        const b = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        if (r.ok && b.available && typeof b.shippingMinor === "number") {
+          setShip({ status: "ok", shippingMinor: b.shippingMinor, totalMinor: b.totalMinor, currency: b.currency ?? option.currency });
+        } else {
+          setShip({ status: "unavailable" });
+        }
+      } catch {
+        if (!cancelled) setShip({ status: "unavailable" });
+      }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [buying, option.id, country, qty, option.currency]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -323,7 +362,7 @@ function PurchasableBlock({ detail, option, navigate }: {
           {money(option.priceMinor!, option.currency)}
         </p>
         <p className="text-xs text-stone-500 mb-4">
-          Printed to order · ships worldwide{option.effectiveDpi ? ` · ${option.effectiveDpi} DPI` : ""}
+          Printed to order · ships worldwide · shipping calculated at checkout{option.effectiveDpi ? ` · ${option.effectiveDpi} DPI` : ""}
         </p>
         <button
           onClick={() => setBuying(true)}
@@ -335,11 +374,38 @@ function PurchasableBlock({ detail, option, navigate }: {
     );
   }
 
+  const printMinor = (option.priceMinor ?? 0) * qty;
+
   return (
     <form onSubmit={submit} className="space-y-5" noValidate>
-      <div className="flex items-baseline justify-between">
-        <p className="font-playfair text-2xl text-stone-900 tabular-nums">{money((option.priceMinor ?? 0) * qty, option.currency)}</p>
-        <label className="flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase text-stone-500">
+      <div className="flex items-start justify-between gap-4">
+        {/* Print / Shipping / Total — shipping is a REAL Prodigi quote to the chosen country; until
+            a destination resolves we say "calculated at checkout" rather than invent a figure. */}
+        <div className="space-y-1 text-sm">
+          <div className="flex items-baseline gap-3">
+            <span className="text-stone-500 w-16">Print</span>
+            <span className="text-stone-900 tabular-nums">{money(printMinor, option.currency)}</span>
+          </div>
+          <div className="flex items-baseline gap-3">
+            <span className="text-stone-500 w-16">Shipping</span>
+            <span className="text-stone-900 tabular-nums">
+              {ship.status === "ok"
+                ? money(ship.shippingMinor, ship.currency)
+                : ship.status === "loading"
+                  ? "Calculating…"
+                  : <span className="text-stone-500">Calculated at checkout</span>}
+            </span>
+          </div>
+          <div className="flex items-baseline gap-3 pt-1 border-t border-stone-200">
+            <span className="text-stone-500 w-16">Total</span>
+            <span className="font-playfair text-xl text-stone-900 tabular-nums">
+              {ship.status === "ok"
+                ? money(ship.totalMinor, ship.currency)
+                : <>{money(printMinor, option.currency)}<span className="text-sm text-stone-500 font-sans"> + shipping</span></>}
+            </span>
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase text-stone-500 shrink-0">
           Qty
           <select value={qty} onChange={(e) => setQty(Number(e.target.value))}
             className="bg-transparent border-b border-stone-300 focus:border-stone-800 focus:outline-none py-1 text-stone-900">
@@ -438,6 +504,50 @@ function ProductInfo() {
         Each print is made to order. Colours may vary slightly between your screen and the physical
         print, and between production batches — every screen renders colour a little differently.
       </p>
+    </div>
+  );
+}
+
+/**
+ * The PDP image gallery. A large "stage" that shows the active image WHOLE (object-contain on a soft
+ * panel — portrait and landscape prints alike, never cropped) with a thumbnail strip when there is
+ * more than one image. Only public storefront images + Prodigi mockups reach here; never the master.
+ */
+function PrintGallery({ images, title }: { images: string[]; title: string }) {
+  const [active, setActive] = useState(0);
+  const idx = Math.min(active, Math.max(0, images.length - 1));
+  const current = images[idx] ?? null;
+  return (
+    <div>
+      <div className="relative flex items-center justify-center overflow-hidden bg-stone-200/50 aspect-[4/5] p-6 md:p-10">
+        {current ? (
+          <img
+            src={current}
+            alt={`Fine-art print of ${title}`}
+            className="max-w-full max-h-full w-auto h-auto object-contain shadow-[0_10px_40px_-12px_rgba(28,25,23,0.35)]"
+          />
+        ) : (
+          <div className="grid place-items-center text-stone-400">No image</div>
+        )}
+      </div>
+      {images.length > 1 && (
+        <div className="flex flex-wrap gap-3 mt-4">
+          {images.map((src, i) => (
+            <button
+              key={`${src}-${i}`}
+              type="button"
+              onClick={() => setActive(i)}
+              aria-label={`View image ${i + 1}`}
+              aria-current={i === idx}
+              className={`w-16 h-16 flex items-center justify-center overflow-hidden bg-stone-200/50 border transition-colors ${
+                i === idx ? "border-stone-900" : "border-transparent hover:border-stone-400"
+              }`}
+            >
+              <img src={src} alt="" className="max-w-full max-h-full w-auto h-auto object-contain" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

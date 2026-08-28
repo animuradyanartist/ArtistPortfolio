@@ -60,7 +60,7 @@ export default function PrintsPage() {
 
   return (
     <div className="min-h-screen bg-[#f5f1ea]">
-      <div className="mx-auto max-w-6xl px-6 py-16 md:py-24">
+      <div className="mx-auto max-w-7xl px-6 md:px-10 py-16 md:py-24">
         <Eyebrow>Fine-Art Prints</Eyebrow>
         <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">Prints</h1>
         {previewMode && (
@@ -93,31 +93,33 @@ export default function PrintsPage() {
           </div>
         )}
 
+        {/* EDITORIAL LAYOUT — two large cards per row on desktop, one on mobile. The artwork is the
+            dominant element, shown whole (object-contain on a soft gallery panel) so portrait and
+            landscape prints alike are never stretched or destructively cropped. Deliberately NOT the
+            dense multi-column originals grid — a small, curated print collection reads as a gallery. */}
         {prints.length > 0 && (
-          <div className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 lg:gap-x-16 gap-y-14 md:gap-y-20">
             {prints.map((p) => (
               <Link key={p.id} href={`/prints/${p.slug}`} className="group block">
-                <div className="aspect-[3/4] overflow-hidden bg-stone-200/60 mb-4">
+                <div className="relative flex items-center justify-center overflow-hidden bg-stone-200/50 h-[62vw] md:h-[30vw] md:max-h-[520px] p-6 md:p-10">
                   {p.image ? (
                     <img
                       src={p.image}
                       alt={`Fine-art print of ${p.title}`}
                       loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-500"
+                      className="max-w-full max-h-full w-auto h-auto object-contain shadow-[0_10px_40px_-12px_rgba(28,25,23,0.35)] group-hover:scale-[1.015] transition-transform duration-500"
                     />
                   ) : (
-                    <div className="w-full h-full grid place-items-center text-stone-400 text-sm">No image</div>
+                    <div className="grid place-items-center text-stone-400 text-sm">No image</div>
                   )}
                 </div>
-                <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-1">Fine Art Print</p>
-                <h3 className="font-playfair text-xl text-stone-900 group-hover:text-stone-600 transition-colors">{p.title}</h3>
-                <div className="flex items-baseline flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                <div className="mt-5">
+                  <p className="text-[11px] tracking-[0.25em] uppercase text-stone-500 mb-2">Fine Art Print</p>
+                  <h3 className="font-playfair text-2xl md:text-3xl text-stone-900 group-hover:text-stone-600 transition-colors">{p.title}</h3>
                   {p.startingPriceMinor != null && (
-                    <span className="text-sm text-stone-700 tabular-nums">From {money(p.startingPriceMinor, p.currency)}</span>
+                    <p className="text-base text-stone-700 tabular-nums mt-2">Starting from {money(p.startingPriceMinor, p.currency)}</p>
                   )}
-                  {p.sizeCount ? <span className="text-xs text-stone-500">{p.sizeCount} sizes</span> : null}
                 </div>
-                {p.materialLabel && <p className="text-xs text-stone-400 mt-0.5">{p.materialLabel}</p>}
               </Link>
             ))}
           </div>

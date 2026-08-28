@@ -14,6 +14,7 @@ import { validateVariantSave, type VariantSaveInput } from "./adminPrintService"
 import {
   getMaster, upsertMaster, listVariants, getVariant, createVariant, updateVariant, deleteVariant, printArtworkId,
 } from "./adminPrintRepo";
+import { getAdminPrintsOverview } from "./printRepo";
 
 function readVariantInput(body: unknown): VariantSaveInput {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -32,6 +33,16 @@ export function registerAdminPrintRoutes(app: Express): void {
   // The verified SKU catalogue — powers the admin's SKU picker so no SKU is ever typed by hand.
   app.get("/api/admin/prints/catalogue", requireAdminAuth, (_req, res) => {
     res.json({ products: PRODIGI_LAUNCH_PRODUCTS });
+  });
+
+  // The admin management-table read: every print with its DERIVED summary (materials, counts,
+  // starting price, fail-closed status) + source-artwork title. No stored "is live"/"price" flags.
+  app.get("/api/admin/prints/overview", requireAdminAuth, async (_req, res) => {
+    try {
+      return res.json({ prints: await getAdminPrintsOverview() });
+    } catch {
+      return res.status(500).json({ message: "Could not load prints." });
+    }
   });
 
   // ── Master (per artwork) ──

@@ -23,7 +23,7 @@ describe("with nothing published", () => {
   });
 
   it("leaves the rest of the navigation untouched", () => {
-    expect(names(siteNavigation(0))).toEqual(["Home", "Originals", "The Path", "Exhibitions", "Gallery", "Contact"]);
+    expect(names(siteNavigation(0))).toEqual(["Home", "Originals", "Prints", "The Path", "Exhibitions", "Gallery", "Contact"]);
   });
 });
 
@@ -37,7 +37,7 @@ describe("with at least one published article", () => {
   });
 
   it("places it after Exhibitions without disturbing the order", () => {
-    expect(names(siteNavigation(3))).toEqual(["Home", "Originals", "The Path", "Exhibitions", "Articles", "Gallery", "Contact"]);
+    expect(names(siteNavigation(3))).toEqual(["Home", "Originals", "Prints", "The Path", "Exhibitions", "Articles", "Gallery", "Contact"]);
   });
 });
 

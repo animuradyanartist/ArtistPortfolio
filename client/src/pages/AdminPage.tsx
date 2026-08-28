@@ -13,7 +13,10 @@ import { useAdmin } from "@/hooks/useAdmin";
 import { apiRequest } from "@/lib/queryClient";
 import { insertHomepageSettingsSchema, insertArtistBioSchema, insertExhibitionSchema, insertContactSettingsSchema, insertGalleryPhotoSchema } from "@shared/schema";
 import type { Artwork, Print, Exhibition, HomepageSettings, ArtistBio, ContactSettings, GalleryPhoto, Collector, Message } from "@shared/schema";
-import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
+import { Plus, Edit, Trash, Eye, EyeOff, Upload, ChevronUp, ChevronDown, RefreshCw, MoreHorizontal, Layers, ExternalLink } from "lucide-react";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import AdminArticles from "@/components/AdminArticles";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
@@ -2263,6 +2266,62 @@ export default function AdminPage() {
   );
 }
 
+/**
+ * PRINTS ADMIN — a structured management table (not artwork cards). Every derived column comes from
+ * `/api/admin/prints/overview`: materials + variant count from the configured variants, "Starting
+ * from" from the lowest genuinely-purchasable variant, and a STATUS that respects the real
+ * fail-closed rules — a print reads "Published" only when the same gate that guards checkout passes,
+ * so a label can never make an unready print look live. Edit opens the existing print editor; the
+ * overflow menu jumps to variant/master management; Preview opens the public PDP.
+ */
+const PRINT_MATERIAL_LABEL: Record<string, string> = {
+  "german-etching": "German Etching",
+  "photo-rag": "Photo Rag",
+  "paper": "Paper",
+};
+const printMaterialLabel = (m: string) => PRINT_MATERIAL_LABEL[m] ?? m;
+
+function printMoney(minor: number | null, currency: string): string {
+  if (minor == null) return "—";
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(minor / 100);
+  } catch {
+    return `${(minor / 100).toFixed(0)} ${currency}`;
+  }
+}
+
+type PrintAdminStatus = "draft" | "not-ready" | "ready" | "published";
+interface PrintOverviewRow {
+  id: number;
+  title: string;
+  slug: string;
+  image: string | null;
+  imageCount: number;
+  artworkId: number | null;
+  artworkTitle: string | null;
+  productStatus: string;
+  summary: {
+    status: PrintAdminStatus;
+    materials: string[];
+    variantCount: number;
+    enabledCount: number;
+    startingPriceMinor: number | null;
+    currency: string;
+  };
+}
+
+const PRINT_STATUS_META: Record<PrintAdminStatus, { label: string; className: string }> = {
+  draft: { label: "Draft", className: "bg-gray-100 text-gray-700 hover:bg-gray-100" },
+  "not-ready": { label: "Not ready", className: "bg-amber-100 text-amber-800 hover:bg-amber-100" },
+  ready: { label: "Ready", className: "bg-blue-100 text-blue-800 hover:bg-blue-100" },
+  published: { label: "Published", className: "bg-green-100 text-green-700 hover:bg-green-100" },
+};
+
+function PrintStatusBadge({ status }: { status: PrintAdminStatus }) {
+  const meta = PRINT_STATUS_META[status];
+  return <Badge variant="secondary" className={meta.className}>{meta.label}</Badge>;
+}
+
 function PrintsManagement() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -2277,18 +2336,18 @@ function PrintsManagement() {
       toast({ title: fallbackMessage, variant: "destructive" });
     }
   };
-  
-  const { data: prints = [], isLoading: printsLoading } = useQuery<Print[]>({
-    queryKey: ["/api/prints"],
+
+  const { data, isLoading } = useQuery<{ prints: PrintOverviewRow[] }>({
+    queryKey: ["/api/admin/prints/overview"],
+    queryFn: async () => (await apiRequest("GET", "/api/admin/prints/overview")).json(),
   });
+  const prints = data?.prints ?? [];
 
   const deletePrintMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/prints/${id}`),
-    onSuccess: (_data, id) => {
-      queryClient.setQueryData(["/api/prints"], (old: any[]) =>
-        Array.isArray(old) ? old.filter((p) => p.id !== id) : old
-      );
+    onSuccess: () => {
       toast({ title: "Print deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/prints/overview"] });
       queryClient.invalidateQueries({ queryKey: ["/api/prints"] });
     },
     onError: (error: Error) => handleAuthError(error, "Failed to delete print"),
@@ -2296,176 +2355,140 @@ function PrintsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="font-playfair text-2xl text-deep-blue">Print Editions Management</h2>
-        <Button
-          onClick={() => setLocation("/admin/create-print")}
-          className="bg-deep-blue hover:bg-deep-blue/90"
-        >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="font-playfair text-2xl text-deep-blue">Prints</h2>
+          <p className="text-sm text-soft-gray mt-1">Manage your fine art print products</p>
+        </div>
+        <Button onClick={() => setLocation("/admin/create-print")} className="bg-deep-blue hover:bg-deep-blue/90">
           <Plus className="w-4 h-4 mr-2" />
-          Add New Print Edition
+          Add Print
         </Button>
       </div>
-      
+
       <Card>
-        <CardHeader>
-          <CardTitle className="font-playfair text-lg text-deep-blue">
-            About Print Editions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-soft-gray mb-4">
-            Print editions are completely separate from original artworks. Each print edition has its own images, 
-            pricing, sizes, and materials. You can optionally reference an original artwork, but prints have 
-            independent management and data.
-          </p>
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <h3 className="font-semibold text-deep-blue mb-2">Independent Data</h3>
-              <p className="text-xs text-soft-gray">
-                Prints have their own images, descriptions, and pricing separate from original artworks.
-              </p>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-8 space-y-3">
+              {[1, 2, 3].map((i) => <div key={i} className="h-14 bg-gray-100 rounded animate-pulse" />)}
             </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <h3 className="font-semibold text-deep-blue mb-2">Custom Sizes</h3>
-              <p className="text-xs text-soft-gray">
-                Configure multiple size options with different materials and custom pricing per print edition.
+          ) : prints.length === 0 ? (
+            <div className="p-10 text-center">
+              <h3 className="font-semibold text-lg text-charcoal mb-2">No prints yet</h3>
+              <p className="text-sm text-soft-gray mb-5 max-w-md mx-auto">
+                Each fine art print is its own product, separate from the original artwork — with its own
+                images, sizes, materials and pricing. Start by adding your first print.
               </p>
+              <Button onClick={() => setLocation("/admin/create-print")} className="bg-deep-blue hover:bg-deep-blue/90">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Print
+              </Button>
             </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <h3 className="font-semibold text-deep-blue mb-2">Optional Reference</h3>
-              <p className="text-xs text-soft-gray">
-                Optionally link to an original artwork for reference, but prints remain independently managed.
-              </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[72px]">Image</TableHead>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Original artwork</TableHead>
+                    <TableHead>Materials / variants</TableHead>
+                    <TableHead>Starting price</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {prints.map((p) => (
+                    <TableRow key={p.id} className="cursor-pointer" onClick={() => setLocation(`/admin/edit-print/${p.id}`)}>
+                      <TableCell>
+                        <div className="w-12 h-12 rounded bg-gray-100 overflow-hidden flex items-center justify-center">
+                          {p.image ? (
+                            <img src={p.image} alt="" className="max-w-full max-h-full w-auto h-auto object-contain" />
+                          ) : (
+                            <span className="text-[10px] text-gray-400">None</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium text-charcoal">{p.title}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-soft-gray">{p.artworkTitle ?? "—"}</span>
+                      </TableCell>
+                      <TableCell>
+                        {p.summary.materials.length > 0 ? (
+                          <span className="text-charcoal">
+                            {p.summary.materials.map(printMaterialLabel).join(" / ")}
+                            <span className="text-soft-gray">
+                              {" "}· {p.summary.variantCount} variant{p.summary.variantCount !== 1 ? "s" : ""}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-soft-gray">No variants</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="tabular-nums text-charcoal">
+                          {p.summary.startingPriceMinor != null
+                            ? `From ${printMoney(p.summary.startingPriceMinor, p.summary.currency)}`
+                            : "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <PrintStatusBadge status={p.summary.status} />
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button size="sm" variant="outline" className="text-xs" onClick={() => setLocation(`/admin/edit-print/${p.id}`)}>
+                            <Edit className="w-3 h-3 mr-1" /> Edit
+                          </Button>
+                          <a href={`/prints/${p.slug}`} target="_blank" rel="noreferrer">
+                            <Button size="sm" variant="ghost" className="text-xs" title="Preview public print page">
+                              <Eye className="w-3 h-3" />
+                            </Button>
+                          </a>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" variant="ghost" className="text-xs" title="More">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setLocation(`/admin/edit-print/${p.id}/variants`)}>
+                                <Layers className="w-4 h-4 mr-2" /> Manage variants & master
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => window.open(`/prints/${p.slug}`, "_blank")}>
+                                <ExternalLink className="w-4 h-4 mr-2" /> Open public page
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => {
+                                  if (window.confirm(`Delete "${p.title}"? This cannot be undone.`)) deletePrintMutation.mutate(p.id);
+                                }}
+                              >
+                                <Trash className="w-4 h-4 mr-2" /> Delete print
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
-      {printsLoading ? (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse">
-              <div className="bg-gray-200 h-48 rounded-lg"></div>
-              <div className="mt-2 h-4 bg-gray-200 rounded w-3/4"></div>
-              <div className="mt-1 h-3 bg-gray-200 rounded w-1/2"></div>
-            </div>
-          ))}
-        </div>
-      ) : prints.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <div className="text-soft-gray">
-              <h3 className="font-semibold text-lg mb-2">No Print Editions Yet</h3>
-              <p className="text-sm mb-4">
-                Start by creating your first print edition. Each print edition is independent with its own images, 
-                sizes, and pricing.
-              </p>
-              <Button
-                onClick={() => setLocation("/admin/create-print")}
-                className="bg-deep-blue hover:bg-deep-blue/90"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create First Print Edition
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {prints.map((print) => (
-            <Card key={print.id} className="overflow-hidden">
-              <div className="aspect-video bg-gray-100">
-                {print.images?.[0] && (
-                  <img 
-                    src={print.images[0]} 
-                    alt={print.title}
-                    className="w-full h-full object-cover"
-                  />
-                )}
-              </div>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-semibold text-charcoal text-sm truncate">
-                    {print.title}
-                  </h3>
-                  <div className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    print.status === 'active' 
-                      ? 'bg-green-100 text-green-700' 
-                      : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    {print.status === 'active' ? 'Active' : 'Discontinued'}
-                  </div>
-                </div>
-                <p className="text-soft-gray text-xs mb-3">
-                  {print.preferredMaterial} • {(() => {
-                    try {
-                      const sizes = JSON.parse(print.availableSizes);
-                      return `${sizes.length} size${sizes.length !== 1 ? 's' : ''}`;
-                    } catch {
-                      return 'No sizes';
-                    }
-                  })()}
-                </p>
-                
-                {print.description && (
-                  <p className="text-xs text-soft-gray mb-3 line-clamp-2">
-                    {print.description}
-                  </p>
-                )}
-                
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setLocation(`/admin/edit-print/${print.id}`)}
-                    className="flex-1 text-xs"
-                  >
-                    <Edit className="w-3 h-3 mr-1" />
-                    Edit
-                  </Button>
-                  
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="text-xs"
-                        disabled={deletePrintMutation.isPending}
-                      >
-                        <Trash className="w-3 h-3" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Print Edition</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to delete "{print.title}"? This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => deletePrintMutation.mutate(print.id)}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                  
-                  {print.featured && (
-                    <div className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full font-medium">
-                      Featured
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <p className="text-xs text-soft-gray max-w-2xl">
+        Status is derived from the real product data, never a manual label. A print becomes
+        <strong> Published</strong> only when it has a ready master, an eligible, verified and priced
+        variant that you have enabled — the same rules that let it be sold. Prints are managed entirely
+        separately from original artworks.
+      </p>
     </div>
   );
 }
