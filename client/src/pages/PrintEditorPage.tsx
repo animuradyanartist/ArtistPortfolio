@@ -21,6 +21,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { uploadMasterInChunks } from "@/lib/printMasterUpload";
+import { buildPrintSaveBody } from "@/lib/printSave";
+import { prepareStorefrontImage } from "@/lib/storefrontImage";
 import { ArrowLeft, Upload, X, Plus, Trash2, Check, AlertTriangle, Loader2, Image as ImageIcon, FileUp } from "lucide-react";
 import type { Print, Artwork } from "@shared/schema";
 import {
@@ -70,13 +73,6 @@ const usdToCents = (s: string): number | null => {
 
 const MATERIALS = Array.from(new Set(PRODIGI_LAUNCH_PRODUCTS.filter((p) => p.activeForLaunch).map((p) => p.material))) as PrintMaterial[];
 
-const fileToDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
 const humanSize = (bytes?: number | null): string => {
   if (!bytes || bytes <= 0) return "";
   const mb = bytes / (1024 * 1024);
@@ -154,17 +150,19 @@ export default function PrintEditorPage() {
   const saveProduct = async (): Promise<number | null> => {
     if (!title.trim()) { toast({ title: "Add a print title first", variant: "destructive" }); return null; }
     if (!description.trim()) { toast({ title: "Add a description first", variant: "destructive" }); return null; }
-    const body = {
-      title: title.trim(),
-      slug: slug.trim() || undefined,
-      description: description.trim(),
-      images: images.length ? images : [],
-      artworkId: artworkId ?? undefined,
+    // The print Save request carries METADATA + small public images only. The production master is NEVER
+    // in this body — it uploads out-of-band in chunks (uploadMasterFile) after the print id exists.
+    const body = buildPrintSaveBody({
+      title,
+      slug: slug || undefined,
+      description,
+      images,
+      artworkId,
       // The commerce editor manages listing via Publish/Unpublish; keep the current status on save.
       status: isEdit ? status : "draft",
       availableSizes: print?.availableSizes ?? "[]",
       preferredMaterial: print?.preferredMaterial ?? "paper",
-    };
+    });
     if (images.length === 0) { toast({ title: "Add at least one public image", variant: "destructive" }); return null; }
     setSavingProduct(true);
     try {
@@ -200,7 +198,9 @@ export default function PrintEditorPage() {
     if (!file.type.startsWith("image/")) { toast({ title: "Please choose an image file", variant: "destructive" }); return; }
     setUploadingImage(true);
     try {
-      const dataUrl = await fileToDataUrl(file);
+      // Downscale a large storefront image BEFORE base64 so it never bloats the print Save request past
+      // the Replit ingress cap (the production master is handled separately, in chunks).
+      const dataUrl = await prepareStorefrontImage(file);
       setImages((prev) => [...prev, dataUrl]);
     } finally {
       setUploadingImage(false);
@@ -214,48 +214,18 @@ export default function PrintEditorPage() {
   // reassemble + validate + commit. The server stores chunks in Object Storage (Autoscale-instance
   // independent). setUploadPct drives a progress indicator.
   const uploadMasterFile = async (targetPrintId: number, file: File): Promise<boolean> => {
-    const base = `/api/admin/prints/masters/${targetPrintId}/upload`;
     try {
-      const initRes = await fetch(`${base}/init`, { method: "POST", credentials: "include" });
-      const init = await initRes.json().catch(() => ({}));
-      if (!initRes.ok) { toast({ title: "Could not start the upload", description: init.message, variant: "destructive" }); return false; }
-      const chunkBytes: number = init.chunkBytes || 8 * 1024 * 1024;
-      const uploadId: string = init.uploadId;
-      const total = Math.max(1, Math.ceil(file.size / chunkBytes));
-
-      for (let i = 0; i < total; i++) {
-        const slice = file.slice(i * chunkBytes, Math.min(file.size, (i + 1) * chunkBytes));
-        const cr = await fetch(`${base}/${uploadId}/chunk?index=${i}`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/octet-stream" },
-          body: slice,
-        });
-        if (!cr.ok) {
-          const cb = await cr.json().catch(() => ({}));
-          // Best-effort abort so no half-uploaded chunk objects linger.
-          fetch(`${base}/${uploadId}/abort`, { method: "POST", credentials: "include" }).catch(() => {});
-          toast({ title: "Upload failed", description: cb.message || `Chunk ${i + 1} of ${total} failed`, variant: "destructive" });
-          setUploadPct(null);
-          return false;
-        }
-        setUploadPct(Math.round(((i + 1) / total) * 100));
-      }
-
-      const doneRes = await fetch(`${base}/${uploadId}/complete`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ originalName: file.name, totalChunks: total }),
-      });
-      const body = await doneRes.json().catch(() => ({}));
+      const result = await uploadMasterInChunks(targetPrintId, file, { onProgress: setUploadPct });
       setUploadPct(null);
-      if (!doneRes.ok) { toast({ title: "Could not save the master", description: body.message, variant: "destructive" }); return false; }
-      const m = body.master;
+      if (!result.ok) {
+        toast({ title: result.stage === "init" ? "Could not start the upload" : "Could not save the master", description: result.message, variant: "destructive" });
+        return false;
+      }
+      const m = result.master;
       toast({
         title: m?.status === "ready" ? "Master uploaded — resolution is eligible" : "Master uploaded",
         description: m?.status === "ready"
-          ? `${m.widthPx}×${m.heightPx}px · fits ${body.eligibleSizeCount} size${body.eligibleSizeCount === 1 ? "" : "s"}`
+          ? `${m.widthPx}×${m.heightPx}px · fits ${result.eligibleSizeCount} size${result.eligibleSizeCount === 1 ? "" : "s"}`
           : `${m?.widthPx}×${m?.heightPx}px · resolution too low to print at the offered sizes`,
       });
       return true;
