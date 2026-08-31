@@ -20,7 +20,7 @@
  * checkout may charge; a Singulart/original-artwork price is never a substitute here.
  */
 
-import { isActiveLaunchSku } from "./prodigiProducts";
+import { isActiveLaunchSku, isSkuOfferedForNewVariant } from "./prodigiProducts";
 
 export type MasterStatus = "missing" | "provisional" | "ready";
 
@@ -138,6 +138,24 @@ export function startingPriceMinor(
 /** Does this print product have at least one purchasable variant? Gates storefront/sitemap/feed. */
 export function hasPurchasableVariant(variants: PrintVariantView[], master: PrintMasterView | null): boolean {
   return variants.some((v) => isPubliclyPurchasable(v, master));
+}
+
+/**
+ * The variants a NEW public purchase may SELECT on the storefront PDP. Two gates:
+ *   1. not 'unavailable' — disabled or resolution-failing variants are hidden (unchanged behaviour), and
+ *   2. OFFERED for new variants — the retired Photo Rag stock is NEVER offered again publicly (historical
+ *      orders still fulfil; only *new* selection is blocked).
+ * Pure, so the PDP route and its tests judge "what the customer may pick" identically. This does NOT
+ * change the purchasability/pricing gate itself (isPubliclyPurchasable / startingPriceMinor) — it is only
+ * the public *selectable* set, so an offered German Etching / Canvas variant behaves exactly as before.
+ */
+export function publicSelectableVariants(
+  variants: PrintVariantView[],
+  master: PrintMasterView | null,
+): PrintVariantView[] {
+  return variants.filter(
+    (v) => assessVariant(v, master).state !== "unavailable" && isSkuOfferedForNewVariant(v.prodigiSku),
+  );
 }
 
 /**

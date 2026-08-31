@@ -17,7 +17,7 @@ import {
   printSlugOf,
   purchasablePrintSlugForArtwork,
 } from "./printRepo";
-import { assessVariant, isPubliclyPurchasable, startingPriceMinor, resolveVariantPrice } from "@shared/commerce/printProduct";
+import { assessVariant, isPubliclyPurchasable, startingPriceMinor, resolveVariantPrice, publicSelectableVariants } from "@shared/commerce/printProduct";
 import { buildFeedTsv } from "@shared/commerce/printFeed";
 import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
 import { quotePrintShipping } from "./printShipping";
@@ -255,29 +255,41 @@ export function registerPrintRoutes(app: Express): void {
         return res.status(404).json({ message: "Print not found" });
       }
 
-      // Expose only the options the configurator may present: enabled + eligible variants. A
-      // disabled or resolution-failing variant ('unavailable') is hidden entirely.
-      const options = detail.variants
+      // Expose only the options the configurator may present: enabled + eligible variants that are still
+      // OFFERED. A disabled or resolution-failing variant ('unavailable') is hidden, AND the retired
+      // Photo Rag stock is never offered for a new public purchase (historical orders still fulfil).
+      // This SAME selectable set drives purchasability + starting price below, so a print with no
+      // currently-offered variant (e.g. a historical Photo-Rag-only print) is not publicly purchasable.
+      const selectable = publicSelectableVariants(detail.variants, detail.master);
+      const options = selectable
         .map((v) => ({ v, a: assessVariant(v, detail.master) }))
-        .filter(({ a }) => a.state !== "unavailable")
-        .map(({ v, a }) => ({
-          id: v.id,
-          material: v.material,
-          sizeLabel: v.sizeLabel,
-          widthCm: v.widthCm,
-          heightCm: v.heightCm,
-          framed: v.framed,
-          frameColour: v.frameColour,
-          currency: v.currency,
-          priceMinor: v.retailMinor,
-          effectiveDpi: v.effectiveDpi,
-          mockup: v.mockups?.[0] ?? null,
-          state: a.state, // 'purchasable' | 'provisional'
-          reason: a.reason,
-          prodigiVerified: a.prodigiVerified,
-        }));
+        .map(({ v, a }) => {
+          // The customer-facing size NAME + precise physical cm come from the verified catalogue (the
+          // SKU stays server-side, never sent). `sizeName` is the displayName without the cm suffix
+          // ("A3", "12×16 in"); the decimals are the real physical size (29.7×42, 30.5×40.6, …).
+          const product = getProdigiProduct(v.prodigiSku);
+          const sizeName = product ? product.displayName.split(" (")[0] : v.sizeLabel;
+          return {
+            id: v.id,
+            material: v.material,
+            sizeLabel: v.sizeLabel,
+            sizeName,
+            widthCm: product?.widthCm ?? v.widthCm,
+            heightCm: product?.heightCm ?? v.heightCm,
+            framed: v.framed,
+            frameColour: v.frameColour,
+            currency: v.currency,
+            priceMinor: v.retailMinor,   // RETAIL price (customer-facing), never the Prodigi cost
+            effectiveDpi: v.effectiveDpi,
+            mockup: v.mockups?.[0] ?? null,
+            state: a.state, // 'purchasable' | 'provisional'
+            reason: a.reason,
+            prodigiVerified: a.prodigiVerified,
+          };
+        });
 
-      const purchasable = detail.variants.some((v) => isPubliclyPurchasable(v, detail.master));
+      // Purchasability + starting price are judged on the SAME publicly-selectable set the customer sees.
+      const purchasable = selectable.some((v) => isPubliclyPurchasable(v, detail.master));
 
       res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
       return res.json({
@@ -289,7 +301,7 @@ export function registerPrintRoutes(app: Express): void {
         image: detail.print.images[0] ?? null,
         artworkId: detail.print.artworkId,
         purchasable,
-        startingPriceMinor: startingPriceMinor(detail.variants, detail.master),
+        startingPriceMinor: startingPriceMinor(selectable, detail.master),
         masterReady: detail.master?.status === "ready",
         options,
       });
