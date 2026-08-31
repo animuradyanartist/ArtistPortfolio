@@ -36,12 +36,15 @@ describe("German Etching vs Photo Rag — the same master, per-SIZE aspect-ratio
     expect(assessMasterForSku(MASTER, "GLOBAL-HPR-16X20")!.reasonCode).toBe("aspect-ratio");
   });
 
-  it("KEY: the same master yields eligible options for BOTH materials (it is a per-size match, not a material difference)", () => {
+  it("KEY: the same master yields eligible options across materials (it is a per-size match, not a material difference)", () => {
     const eligible = eligibleSkusForMaster(MASTER);
     const materials = new Set(eligible.map((p) => p.material));
+    // A √2 master matches the A-ratio sizes in EVERY material — paper (both stocks) AND canvas (A3).
     expect(materials.has("german-etching")).toBe(true);
     expect(materials.has("photo-rag")).toBe(true);
-    expect(eligible.map((p) => p.sku).sort()).toEqual(["GLOBAL-HGE-A2", "GLOBAL-HGE-A3", "GLOBAL-HPR-A3"]);
+    expect(materials.has("stretched-canvas")).toBe(true);
+    // Canvas A3 (3561×5013 ≈ √2) matches; the other four canvas sizes differ in ratio and do not.
+    expect(eligible.map((p) => p.sku).sort()).toEqual(["GLOBAL-CAN-A3", "GLOBAL-HGE-A2", "GLOBAL-HGE-A3", "GLOBAL-HPR-A3"]);
   });
 });
 

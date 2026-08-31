@@ -16,6 +16,7 @@
 
 import { prodigi, prodigiMode, prodigiConfigured, ProdigiApiError } from "../server/commerce/prodigi/prodigiClient";
 import { quotePrintShipping, adminQuoteDiagnostic, selectShipping, buildPrintQuoteRequest } from "../server/commerce/prints/printShipping";
+import { requiredAttributesForSku } from "../shared/commerce/prodigiProducts";
 
 function line(s = "") { process.stdout.write(s + "\n"); }
 function money(minor: number | null | undefined, currency: string): string {
@@ -36,9 +37,13 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  line(`request: sku=${sku} · destination=${country} · currency=${currency} · copies=${copies}`);
-  // Show the exact request body the client will send (proves destinationCountryCode / assets / copies).
-  line(`body:    ${JSON.stringify(buildPrintQuoteRequest({ prodigiSku: sku, copies, country, currency }))}`);
+  // Catalogue-required attributes come from the SKU (canvas → { wrap: "MirrorWrap" }); paper → none.
+  // This is the SAME merge the admin estimator + checkout use, so the probe quotes the REAL product.
+  const attributes = requiredAttributesForSku(sku);
+  const quoteInput = { prodigiSku: sku, copies, country, currency, ...(Object.keys(attributes).length ? { attributes } : {}) };
+  line(`request: sku=${sku} · destination=${country} · currency=${currency} · copies=${copies} · attributes=${JSON.stringify(attributes)}`);
+  // Show the exact request body the client will send (proves destinationCountryCode / assets / copies / wrap).
+  line(`body:    ${JSON.stringify(buildPrintQuoteRequest(quoteInput))}`);
   line("");
 
   if (!prodigiConfigured()) {
@@ -49,7 +54,7 @@ async function main() {
 
   // 1) Raw quote (transparency: prints Prodigi's own `outcome` string + each quote's costs).
   try {
-    const raw = await prodigi.getQuote(buildPrintQuoteRequest({ prodigiSku: sku, copies, country, currency }));
+    const raw = await prodigi.getQuote(buildPrintQuoteRequest(quoteInput));
     line(`RAW  outcome=${raw.outcome} · quotes=${(raw.quotes ?? []).length}`);
     for (const q of raw.quotes ?? []) {
       line(`     method=${q.shipmentMethod} · items=${JSON.stringify(q.costSummary?.items)} · shipping=${JSON.stringify(q.costSummary?.shipping)}`);
@@ -66,7 +71,7 @@ async function main() {
   line("");
 
   // 2) The parsed production-path result — exactly what the admin route consumes.
-  const result = await quotePrintShipping({ prodigiSku: sku, copies, country, currency });
+  const result = await quotePrintShipping(quoteInput);
   if (result.ok) {
     const total = (result.itemsMinor ?? 0) + result.shippingMinor;
     line("RESULT: PRICED ✅");

@@ -120,16 +120,31 @@ describe("validateVariantSave — enabling requires genuine sellability", () => 
 });
 
 describe("(6) an UNVERIFIED canvas SKU cannot be enabled (or even derived)", () => {
-  it("refuses an unverified GLOBAL-CAN SKU outright — nothing invented", () => {
-    // No canvas row is verified yet, so the SKU does not resolve → refused, exactly like any invented SKU.
-    expect(deriveVariantFields("GLOBAL-CAN-16X20", readyMaster).ok).toBe(false);
-    expect(isSkuOfferedForNewVariant("GLOBAL-CAN-16X20")).toBe(false);
+  it("refuses a canvas SKU that is NOT in the verified set — nothing invented", () => {
+    // GLOBAL-CAN-8X10 is not one of the five verified sandbox SKUs → does not resolve → refused, exactly
+    // like any invented SKU. (The five real canvas SKUs, by contrast, resolve and are sellable.)
+    expect(deriveVariantFields("GLOBAL-CAN-8X10", readyMaster).ok).toBe(false);
+    expect(isSkuOfferedForNewVariant("GLOBAL-CAN-8X10")).toBe(false);
     const r = validateVariantSave(
-      { sku: "GLOBAL-CAN-16X20", framed: false, frameColour: null, retailMinor: 14000, currency: "USD", printReadyAssetUrl: null, enabled: true },
+      { sku: "GLOBAL-CAN-8X10", framed: false, frameColour: null, retailMinor: 14000, currency: "USD", printReadyAssetUrl: null, enabled: true },
       readyMaster,
     );
     expect(r.ok).toBe(false);
     expect(r.errors?.sku).toBeTruthy();
+  });
+
+  it("a VERIFIED canvas SKU derives its physical facts from the catalogue (and can be enabled when eligible)", () => {
+    // Master 4854×6054 exactly matches GLOBAL-CAN-16X20's print area (4:5-ish) → eligible directly.
+    const canvasMaster: MasterDims = { widthPx: 4854, heightPx: 6054, status: "ready", printReadyAssetUrl: "https://cdn/m.tif" };
+    const d = deriveVariantFields("GLOBAL-CAN-16X20", canvasMaster);
+    expect(d.ok).toBe(true);
+    if (!d.ok) return;
+    expect(d.fields).toMatchObject({ material: "stretched-canvas", printAreaWidthPx: 4854, printAreaHeightPx: 6054, eligible: true });
+    const r = validateVariantSave(
+      { sku: "GLOBAL-CAN-16X20", framed: false, frameColour: null, retailMinor: 18000, currency: "USD", printReadyAssetUrl: "https://cdn/m.tif", enabled: true },
+      canvasMaster,
+    );
+    expect(r.ok).toBe(true);
   });
 });
 

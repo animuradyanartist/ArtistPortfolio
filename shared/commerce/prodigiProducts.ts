@@ -67,20 +67,25 @@ export interface ProdigiLaunchProduct {
  *   • Black/White impose a solid border that changes the presentation of a fine-art image.
  *   • MirrorWrap keeps the FULL composition on the visible face and fills the sides with a mirror of
  *     the edge — nothing important is lost from the face and nothing is cropped onto the sides.
- * It is therefore the best "preserve the visible artwork composition" default. Confirm the exact
- * attribute VALUE ("MirrorWrap") against the sandbox with `npm run prodigi:discover-canvas` before
- * canvas rows go live; adjust here if Prodigi names it differently for GLOBAL-CAN.
+ * It is therefore the best "preserve the visible artwork composition" default. "MirrorWrap" was
+ * verified as a valid wrap option for all five launch GLOBAL-CAN SKUs in the Prodigi sandbox.
  */
 export const DEFAULT_CANVAS_WRAP = "MirrorWrap";
 
 /**
- * VERIFIED canvas SKUs. EMPTY until the sandbox discovery script confirms real GLOBAL-CAN SKUs, their
- * print-area pixel dimensions, ship-to and the exact `wrap` attribute values. Each row, once verified,
- * looks exactly like a paper row plus `paperType: "CAN"`, `substrateGsm: 0`,
- * `requiredAttributes: { wrap: DEFAULT_CANVAS_WRAP }`, `offeredForNewVariants: true`.
+ * VERIFIED canvas SKUs — Prodigi Stretched Canvas (400gsm Standard Canvas, 38mm standard stretcher
+ * bar). The five GLOBAL-CAN SKUs + their print-area PIXEL dimensions below were verified in the real
+ * Prodigi sandbox (GET /products/{sku}); MirrorWrap was confirmed as a valid wrap option for all five.
+ * The print-area pixels are the sandbox values EXACTLY (they include the wrap bleed, so they are
+ * slightly larger than the nominal face size). `widthCm`/`heightCm`/`displayName` are the customer-
+ * facing NOMINAL face size, matching the paper naming. Each row carries the required wrap attribute.
  */
 export const CANVAS_LAUNCH_PRODUCTS: readonly ProdigiLaunchProduct[] = [
-  // (verified GLOBAL-CAN rows land here — see scripts/prodigi-discover-canvas.ts)
+  { sku: "GLOBAL-CAN-A3", material: "stretched-canvas", paperType: "CAN", substrateGsm: 400, displayName: "A3 (29.7×42 cm)", friendlyLabel: "A3", widthCm: 29.7, heightCm: 42.0, printAreaWidthPx: 3561, printAreaHeightPx: 5013, activeForLaunch: true, offeredForNewVariants: true, requiredAttributes: { wrap: DEFAULT_CANVAS_WRAP } },
+  { sku: "GLOBAL-CAN-12X16", material: "stretched-canvas", paperType: "CAN", substrateGsm: 400, displayName: "12×16 in (30×40 cm)", friendlyLabel: "30 × 40 cm", widthCm: 30.5, heightCm: 40.6, printAreaWidthPx: 3654, printAreaHeightPx: 4854, activeForLaunch: true, offeredForNewVariants: true, requiredAttributes: { wrap: DEFAULT_CANVAS_WRAP } },
+  { sku: "GLOBAL-CAN-16X20", material: "stretched-canvas", paperType: "CAN", substrateGsm: 400, displayName: "16×20 in (40×50 cm)", friendlyLabel: "40 × 50 cm", widthCm: 40.6, heightCm: 50.8, printAreaWidthPx: 4854, printAreaHeightPx: 6054, activeForLaunch: true, offeredForNewVariants: true, requiredAttributes: { wrap: DEFAULT_CANVAS_WRAP } },
+  { sku: "GLOBAL-CAN-18X24", material: "stretched-canvas", paperType: "CAN", substrateGsm: 400, displayName: "18×24 in (45×60 cm)", friendlyLabel: "45 × 60 cm", widthCm: 45.7, heightCm: 61.0, printAreaWidthPx: 5454, printAreaHeightPx: 7254, activeForLaunch: true, offeredForNewVariants: true, requiredAttributes: { wrap: DEFAULT_CANVAS_WRAP } },
+  { sku: "GLOBAL-CAN-24X36", material: "stretched-canvas", paperType: "CAN", substrateGsm: 400, displayName: "24×36 in (60×90 cm)", friendlyLabel: "60 × 90 cm", widthCm: 61.0, heightCm: 91.4, printAreaWidthPx: 7254, printAreaHeightPx: 10854, activeForLaunch: true, offeredForNewVariants: true, requiredAttributes: { wrap: DEFAULT_CANVAS_WRAP } },
 ];
 
 /**
@@ -107,10 +112,7 @@ export const PRODIGI_LAUNCH_PRODUCTS: readonly ProdigiLaunchProduct[] = [
   { sku: "GLOBAL-HPR-16X20", material: "photo-rag", paperType: "HPR", substrateGsm: 308, displayName: "16×20 in (40×50 cm)", friendlyLabel: "40 × 50 cm", widthCm: 40.6, heightCm: 50.8, printAreaWidthPx: 4800, printAreaHeightPx: 6000, activeForLaunch: true, offeredForNewVariants: false },
   { sku: "GLOBAL-HPR-A3", material: "photo-rag", paperType: "HPR", substrateGsm: 308, displayName: "A3 (29.7×42 cm)", friendlyLabel: "A3", widthCm: 29.7, heightCm: 42.0, printAreaWidthPx: 3507, printAreaHeightPx: 4960, activeForLaunch: true, offeredForNewVariants: false },
 
-  // ── Stretched Canvas · CAN · GLOBAL-CAN — VERIFIED ROWS GO HERE ──
-  // Intentionally EMPTY until `npm run prodigi:discover-canvas` returns real SKUs + print-area pixels
-  // from the sandbox. Do NOT hand-write a canvas row: an unverified pixel count is a silent lie about
-  // what can be printed. Each verified row carries `requiredAttributes: { wrap: DEFAULT_CANVAS_WRAP }`.
+  // ── Stretched Canvas · CAN · GLOBAL-CAN — five sandbox-verified sizes (see CANVAS_LAUNCH_PRODUCTS) ──
   ...CANVAS_LAUNCH_PRODUCTS,
 ];
 

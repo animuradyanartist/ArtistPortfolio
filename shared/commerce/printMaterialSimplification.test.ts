@@ -82,21 +82,41 @@ describe("(4) historical Photo Rag data still renders + resolves safely", () => 
   });
 });
 
+// The verified sandbox print-area PIXELS for the five launch canvas SKUs (include the wrap bleed).
+const CANVAS_PRINT_AREA: Record<string, [number, number]> = {
+  "GLOBAL-CAN-A3": [3561, 5013],
+  "GLOBAL-CAN-12X16": [3654, 4854],
+  "GLOBAL-CAN-16X20": [4854, 6054],
+  "GLOBAL-CAN-18X24": [5454, 7254],
+  "GLOBAL-CAN-24X36": [7254, 10854],
+};
+
 describe("(5) Canvas maps only to verified GLOBAL-CAN SKUs", () => {
-  it("no unverified canvas SKU exists in the registry (nothing invented)", () => {
-    // Until discovery runs, canvas has no verified rows and is not offered/purchasable.
-    expect(CANVAS_LAUNCH_PRODUCTS.length).toBe(0);
-    expect(categoryOfferedForNewVariants("canvas")).toBe(false);
-    expect(getProdigiProduct("GLOBAL-CAN-16X20")).toBeUndefined();
+  it("Canvas is now offered (five verified sandbox SKUs)", () => {
+    expect(categoryOfferedForNewVariants("canvas")).toBe(true);
+    expect(offeredMaterialsForCategory("canvas")).toEqual(["stretched-canvas"]);
+    expect(getProdigiProduct("GLOBAL-CAN-16X20")).toBeTruthy();
+    // A canvas SKU that is NOT in the verified set still does not resolve (nothing invented).
+    expect(getProdigiProduct("GLOBAL-CAN-8X10")).toBeUndefined();
   });
-  it("EVERY canvas row (when present) is a verified GLOBAL-CAN / CAN / stretched-canvas product", () => {
+  it("exactly the FIVE launch Canvas sizes, all verified GLOBAL-CAN / CAN / stretched-canvas + MirrorWrap", () => {
+    const skus = offeredProductsForMaterial("stretched-canvas").map((p) => p.sku).sort();
+    expect(skus).toEqual(["GLOBAL-CAN-12X16", "GLOBAL-CAN-16X20", "GLOBAL-CAN-18X24", "GLOBAL-CAN-24X36", "GLOBAL-CAN-A3"]);
+    expect(CANVAS_LAUNCH_PRODUCTS).toHaveLength(5);
     for (const p of CANVAS_LAUNCH_PRODUCTS) {
       expect(p.material).toBe("stretched-canvas");
       expect(p.paperType).toBe("CAN");
+      expect(p.substrateGsm).toBe(400);
       expect(p.sku).toMatch(/^GLOBAL-CAN-/);
-      expect(p.printAreaWidthPx).toBeGreaterThan(0);
-      expect(p.printAreaHeightPx).toBeGreaterThan(0);
       expect(p.requiredAttributes?.wrap).toBe(DEFAULT_CANVAS_WRAP);
+      expect(DEFAULT_CANVAS_WRAP).toBe("MirrorWrap");
+    }
+  });
+  it("carries the EXACT verified sandbox print-area pixel dimensions (never invented)", () => {
+    for (const [sku, [w, h]] of Object.entries(CANVAS_PRINT_AREA)) {
+      const p = getProdigiProduct(sku)!;
+      expect(p).toBeTruthy();
+      expect([p.printAreaWidthPx, p.printAreaHeightPx]).toEqual([w, h]);
     }
   });
   it("stretched-canvas belongs to the Canvas category", () => {
@@ -105,9 +125,26 @@ describe("(5) Canvas maps only to verified GLOBAL-CAN SKUs", () => {
   });
 });
 
+describe("launch assortment is EXACTLY 5 sizes per material", () => {
+  it("Fine Art Paper (German Etching): exactly the 5 launch sizes", () => {
+    const skus = offeredProductsForMaterial("german-etching").map((p) => p.sku).sort();
+    expect(skus).toEqual(["GLOBAL-HGE-12X16", "GLOBAL-HGE-16X20", "GLOBAL-HGE-18X24", "GLOBAL-HGE-A2", "GLOBAL-HGE-A3"]);
+    expect(skus).toHaveLength(5);
+  });
+  it("Canvas (Stretched Canvas): exactly the 5 launch sizes", () => {
+    const skus = offeredProductsForMaterial("stretched-canvas").map((p) => p.sku).sort();
+    expect(skus).toEqual(["GLOBAL-CAN-12X16", "GLOBAL-CAN-16X20", "GLOBAL-CAN-18X24", "GLOBAL-CAN-24X36", "GLOBAL-CAN-A3"]);
+    expect(skus).toHaveLength(5);
+  });
+});
+
 describe("(7)/(10) Canvas required attributes (wrap) flow into quote + order payloads", () => {
   it("the canvas material carries the wrap as its required catalogue attribute", () => {
     expect(defaultAttributesForMaterial("stretched-canvas")).toEqual({ wrap: DEFAULT_CANVAS_WRAP });
+    // Every verified canvas SKU resolves its required wrap from the catalogue.
+    for (const p of CANVAS_LAUNCH_PRODUCTS) {
+      expect(requiredAttributesForSku(p.sku)).toEqual({ wrap: "MirrorWrap" });
+    }
     // Paper carries no required attribute.
     expect(defaultAttributesForMaterial("german-etching")).toEqual({});
     expect(requiredAttributesForSku("GLOBAL-HGE-A3")).toEqual({});
