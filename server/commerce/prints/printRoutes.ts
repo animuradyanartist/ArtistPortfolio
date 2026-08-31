@@ -21,8 +21,11 @@ import { assessVariant, isPubliclyPurchasable, startingPriceMinor, resolveVarian
 import { buildFeedTsv } from "@shared/commerce/printFeed";
 import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
 import { quotePrintShipping } from "./printShipping";
-import { getPrintMasterRef } from "./adminPrintRepo";
+import { getPrintMasterRef, getVariant, getPrintMaster, cropFromRow } from "./adminPrintRepo";
 import { verifyMasterToken, readMasterStream, findMasterObjectKey } from "./masterStorage";
+import { getProdigiProduct } from "../prodigi/prodigiProducts";
+import { cropExtractPx } from "@shared/commerce/printCrop";
+import sharp from "sharp";
 
 function baseUrlOf(req: Request): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
@@ -97,6 +100,28 @@ export function registerPrintRoutes(app: Express): void {
       const ref = await getPrintMasterRef(printId);
       const assetKey = ref?.assetKey ?? (await findMasterObjectKey(printId));
       if (!assetKey) return res.status(404).end();
+
+      // OPTIONAL CROP DERIVATIVE. When `?variant=<id>` names a variant OF THIS PRINT that carries a crop,
+      // the provider is served the CROPPED region — derived on the fly from the master + the variant's
+      // crop metadata (the permanent master is only READ, never modified) — resized to the SKU's exact
+      // print-area pixels so no further crop/rotation happens at the provider. Deterministic + retry-safe.
+      let crop: ReturnType<typeof cropFromRow> = null;
+      let cropDims: { left: number; top: number; width: number; height: number } | null = null;
+      let outW = 0, outH = 0;
+      const variantIdRaw = req.query.variant;
+      if (typeof variantIdRaw === "string" && /^\d+$/.test(variantIdRaw)) {
+        const variant = await getVariant(Number(variantIdRaw));
+        const master = await getPrintMaster(printId);
+        const product = variant ? getProdigiProduct(variant.prodigi_sku) : undefined;
+        if (variant && variant.print_id === printId && product && master?.widthPx && master?.heightPx) {
+          crop = cropFromRow(variant);
+          if (crop) {
+            cropDims = cropExtractPx(master.widthPx, master.heightPx, crop);
+            outW = product.printAreaWidthPx; outH = product.printAreaHeightPx;
+          }
+        }
+      }
+
       // Stream the bytes FROM OBJECT STORAGE (not a local disk). Fail-closed on a missing object: if the
       // DB references a master that is gone from storage, answer 410 Gone (never a broken/partial file);
       // a storage error is 502. This is the token-gated fulfilment route (low frequency), so the one
@@ -109,9 +134,23 @@ export function registerPrintRoutes(app: Express): void {
       }
       if (!stream) return res.status(410).end(); // object unexpectedly missing
       res.set("Cache-Control", "no-store");
+      stream.on("error", () => { if (!res.headersSent) res.status(500).end(); });
+
+      if (crop && cropDims) {
+        // Extract the crop region → resize to the exact print-area pixels (aspect matches, so no stretch).
+        res.type("image/jpeg");
+        res.set("Content-Disposition", `attachment; filename="print-${printId}-v${variantIdRaw}.jpg"`);
+        const pipeline = sharp({ limitInputPixels: false })
+          .rotate()
+          .extract(cropDims)
+          .resize(outW, outH, { fit: "fill" })
+          .jpeg({ quality: 95 });
+        pipeline.on("error", () => { if (!res.headersSent) res.status(500).end(); });
+        return stream.pipe(pipeline).pipe(res);
+      }
+
       res.type(ref?.contentType || "application/octet-stream");
       if (ref?.filename) res.set("Content-Disposition", `attachment; filename="${ref.filename.replace(/[^\w.\-]/g, "_")}"`);
-      stream.on("error", () => { if (!res.headersSent) res.status(500).end(); });
       return stream.pipe(res);
     } catch {
       return res.status(500).end();

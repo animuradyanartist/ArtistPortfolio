@@ -24,6 +24,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { uploadMasterInChunks } from "@/lib/printMasterUpload";
 import { buildPrintSaveBody } from "@/lib/printSave";
 import { prepareStorefrontImage } from "@/lib/storefrontImage";
+import PrintCropEditor from "@/components/PrintCropEditor";
 import { ArrowLeft, Upload, X, Plus, Trash2, Check, AlertTriangle, Loader2, Image as ImageIcon, FileUp } from "lucide-react";
 import type { Print, Artwork } from "@shared/schema";
 import {
@@ -47,15 +48,17 @@ interface VariantApiRow {
   print_ready_asset_url: string | null; effective_dpi: number | null; min_dpi: number | null;
   eligible: boolean; enabled: boolean; prodigi_verified: boolean;
   reason?: string | null; reason_code?: string | null;
+  crop_required?: boolean; crop_configured?: boolean;
+  crop_x?: number | null; crop_y?: number | null; crop_w?: number | null; crop_h?: number | null;
 }
 
-/** Short, human labels for why a size is ineligible — shown next to "Not eligible" so the admin knows
- *  exactly what to change (a very high-DPI option can still be ineligible on aspect ratio). */
+/** Short, human labels for the exact reason a size is not (yet) sellable. */
 const REASON_LABEL: Record<string, string> = {
-  "aspect-ratio": "Aspect ratio mismatch",
+  "crop-required": "Crop required",
+  "crop-invalid": "Re-set crop",
   "resolution": "Resolution too low",
   "unverified-sku": "Unverified Prodigi SKU",
-  "no-master": "Awaiting master",
+  "no-master": "Master missing",
   "not-ready": "Master not ready",
 };
 interface MasterApi {
@@ -144,7 +147,15 @@ export default function PrintEditorPage() {
   }, [print]);
 
   const variants = useMemo(
-    () => (variantData?.variants ?? []).map((v) => ({ ...toVariantView(v, printId ?? 0), reason: v.reason ?? null, reasonCode: v.reason_code ?? null })),
+    () => (variantData?.variants ?? []).map((v) => ({
+      ...toVariantView(v, printId ?? 0),
+      reason: v.reason ?? null,
+      reasonCode: v.reason_code ?? null,
+      cropRequired: !!v.crop_required,
+      cropConfigured: !!v.crop_configured,
+      crop: (v.crop_x != null && v.crop_y != null && v.crop_w != null && v.crop_h != null)
+        ? { x: v.crop_x, y: v.crop_y, w: v.crop_w, h: v.crop_h } : null,
+    })),
     [variantData, printId],
   );
   const master = useMemo(() => toMasterView(variantData?.master ?? null), [variantData]);
@@ -418,7 +429,9 @@ export default function PrintEditorPage() {
                 <div className="space-y-2 mb-4">
                   {variants.length === 0 && <p className="text-sm text-slate-500">No options yet. Add a material and size below.</p>}
                   {variants.map((v) => (
-                    <VariantRow key={v.id} v={v} printId={printId!} master={master} onChanged={refetchVariants} />
+                    <VariantRow key={v.id} v={v} printId={printId!} master={master}
+                      masterDims={variantData?.master?.widthPx && variantData?.master?.heightPx ? { widthPx: variantData.master.widthPx, heightPx: variantData.master.heightPx } : null}
+                      onChanged={refetchVariants} />
                   ))}
                 </div>
                 <AddOption printId={printId!} onAdded={refetchVariants} />
@@ -535,12 +548,18 @@ function PendingMasterPanel({ name, dims, sizeMb, onReplace, onClear }: {
 }
 
 // ── One existing variant row ──
-function VariantRow({ v, printId, master, onChanged }: {
-  v: PrintVariantView & { reason?: string | null; reasonCode?: string | null }; printId: number; master: PrintMasterView | null; onChanged: () => void;
+type VariantRowData = PrintVariantView & {
+  reason?: string | null; reasonCode?: string | null;
+  cropRequired?: boolean; cropConfigured?: boolean; crop?: { x: number; y: number; w: number; h: number } | null;
+};
+function VariantRow({ v, printId, master, masterDims, onChanged }: {
+  v: VariantRowData; printId: number; master: PrintMasterView | null;
+  masterDims: { widthPx: number; heightPx: number } | null; onChanged: () => void;
 }) {
   const { toast } = useToast();
   const [price, setPrice] = useState(centsToUsd(v.retailMinor));
   const [busy, setBusy] = useState(false);
+  const [cropOpen, setCropOpen] = useState(false);
   useEffect(() => { setPrice(centsToUsd(v.retailMinor)); }, [v.retailMinor]);
 
   const save = async (patch: { price?: string; enabled?: boolean }) => {
@@ -575,12 +594,46 @@ function VariantRow({ v, printId, master, onChanged }: {
         <input type="checkbox" checked={v.enabled} disabled={busy || (!v.enabled && !canEnable)} onChange={(e) => save({ enabled: e.target.checked })} />
         {v.enabled ? "Enabled" : "Enable"}
       </label>
-      {v.eligible
-        ? <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100">Eligible</Badge>
-        : <Badge variant="secondary" className="bg-slate-100 text-slate-500 hover:bg-slate-100" title={v.reason || undefined}>
-            Not eligible{v.reasonCode && REASON_LABEL[v.reasonCode] ? ` · ${REASON_LABEL[v.reasonCode]}` : ""}
-          </Badge>}
+
+      {/* Crop-aware status. An aspect mismatch is "Crop required" (with a Set/Edit crop button), NOT a
+          dead end. Only a genuine problem (resolution/unverified/master) shows as "Not eligible". */}
+      {v.eligible ? (
+        <div className="flex items-center gap-1.5">
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100">Eligible</Badge>
+          {v.cropConfigured && masterDims && (
+            <button onClick={() => setCropOpen(true)} className="text-xs text-slate-500 underline hover:text-slate-700">Edit crop</button>
+          )}
+        </div>
+      ) : v.cropRequired ? (
+        <div className="flex items-center gap-1.5">
+          <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100" title={v.reason || undefined}>
+            {v.reasonCode === "resolution" ? "Resolution too low" : "Crop required"}
+          </Badge>
+          {masterDims && (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setCropOpen(true)}>
+              {v.cropConfigured ? "Edit crop" : "Set crop"}
+            </Button>
+          )}
+        </div>
+      ) : (
+        <Badge variant="secondary" className="bg-slate-100 text-slate-500 hover:bg-slate-100" title={v.reason || undefined}>
+          Not eligible{v.reasonCode && REASON_LABEL[v.reasonCode] ? ` · ${REASON_LABEL[v.reasonCode]}` : ""}
+        </Badge>
+      )}
+
       <button onClick={del} className="text-red-600 hover:text-red-700" aria-label="Delete option"><Trash2 className="w-4 h-4" /></button>
+
+      {cropOpen && masterDims && (
+        <PrintCropEditor
+          printId={printId}
+          variantId={v.id}
+          prodigiSku={v.prodigiSku}
+          master={masterDims}
+          initialCrop={v.crop ?? null}
+          onClose={() => setCropOpen(false)}
+          onSaved={onChanged}
+        />
+      )}
     </div>
   );
 }

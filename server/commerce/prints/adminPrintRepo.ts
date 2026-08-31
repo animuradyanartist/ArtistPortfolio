@@ -7,7 +7,7 @@
 
 import { pool, hasDatabase } from "../../db";
 import { deriveVariantFields } from "./adminPrintService";
-import type { DerivedVariantFields, VariantSaveInput, MasterDims } from "./adminPrintService";
+import type { DerivedVariantFields, VariantSaveInput, MasterDims, NormalizedCrop } from "./adminPrintService";
 
 export interface AdminVariantRow {
   id: number;
@@ -27,6 +27,16 @@ export interface AdminVariantRow {
   eligible: boolean;
   enabled: boolean;
   prodigi_verified: boolean;
+  crop_x: number | null;
+  crop_y: number | null;
+  crop_w: number | null;
+  crop_h: number | null;
+}
+
+/** The normalized crop for a variant row, or null when no crop is stored. */
+export function cropFromRow(r: Pick<AdminVariantRow, "crop_x" | "crop_y" | "crop_w" | "crop_h">): NormalizedCrop | null {
+  if (r.crop_x == null || r.crop_y == null || r.crop_w == null || r.crop_h == null) return null;
+  return { x: Number(r.crop_x), y: Number(r.crop_y), w: Number(r.crop_w), h: Number(r.crop_h) };
 }
 
 export interface MasterMeta extends MasterDims {
@@ -273,13 +283,33 @@ export async function reassessVariantsForMaster(printId: number, master: MasterD
   if (!hasDatabase) return;
   const variants = await listVariants(printId);
   for (const v of variants) {
-    const d = deriveVariantFields(v.prodigi_sku, master);
+    // Recompute against THIS variant's stored crop — a crop that no longer fits the (changed) master
+    // becomes ineligible ("crop-invalid"), never silently applied. The crop rectangle is left in place
+    // so the admin can re-confirm it; only the derived eligibility flags are refreshed.
+    const d = deriveVariantFields(v.prodigi_sku, master, cropFromRow(v));
     if (!d.ok) continue; // an unverified SKU can't be recomputed — leave the row as-is
     await pool.query(
       `UPDATE print_variants SET eligible = $2, effective_dpi = $3, updated_at = now() WHERE id = $1`,
       [v.id, d.fields.eligible, d.fields.effectiveDpi],
     );
   }
+}
+
+/** Persist a variant's crop (or clear it) and re-derive its eligibility against the print's master. The
+ *  caller validates the crop shape/aspect first. Returns the updated row, or null if the variant is gone. */
+export async function setVariantCrop(id: number, crop: NormalizedCrop | null, master: MasterDims | null): Promise<AdminVariantRow | null> {
+  if (!hasDatabase) return null;
+  const existing = await getVariant(id);
+  if (!existing) return null;
+  const d = deriveVariantFields(existing.prodigi_sku, master, crop);
+  const eligible = d.ok ? d.fields.eligible : false;
+  const effectiveDpi = d.ok ? d.fields.effectiveDpi : null;
+  const { rows } = await pool.query(
+    `UPDATE print_variants SET crop_x = $2, crop_y = $3, crop_w = $4, crop_h = $5,
+        eligible = $6, effective_dpi = $7, updated_at = now() WHERE id = $1 RETURNING *`,
+    [id, crop?.x ?? null, crop?.y ?? null, crop?.w ?? null, crop?.h ?? null, eligible, effectiveDpi],
+  );
+  return (rows[0] as AdminVariantRow) ?? null;
 }
 
 /** The print product's artwork id, so variant validation can find the master behind it. */

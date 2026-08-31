@@ -52,6 +52,14 @@ describe("master download token — signed, expiring, per-PRINT", () => {
     expect(S.verifyMasterToken(tok, 7)).toBe(true);
     expect(S.verifyMasterToken(tok, 8)).toBe(false);
   });
+
+  it("signedMasterUrl carries the variant id when a cropped derivative is required (fulfilment)", () => {
+    const url = S.signedMasterUrl("https://x.test", 7, 900, 42);
+    expect(new URL(url).searchParams.get("variant")).toBe("42"); // route serves THIS variant's crop
+    expect(S.verifyMasterToken(new URL(url).searchParams.get("token")!, 7)).toBe(true); // token still per-print
+    // No variant → no crop param (raw master).
+    expect(new URL(S.signedMasterUrl("https://x.test", 7, 900)).searchParams.get("variant")).toBeNull();
+  });
 });
 
 describe("storeMasterFromStaging — validation + print-owned object keys", () => {

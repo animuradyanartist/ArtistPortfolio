@@ -44,26 +44,30 @@ describe("deriveVariantFields — the admin cannot invent physical facts", () =>
     expect(r.fields.reasonCode).toBe("not-ready");
   });
 
-  it("is NOT eligible when the master ratio doesn't match the SKU (no crop) — reasonCode 'aspect-ratio'", () => {
+  it("master ratio doesn't match the SKU (no crop) → CROP REQUIRED (not permanently ineligible)", () => {
     const square: MasterDims = { widthPx: 6000, heightPx: 6000, status: "ready" };
     const r = deriveVariantFields("GLOBAL-HGE-12X16", square);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.fields.eligible).toBe(false);
-    expect(r.fields.reasonCode).toBe("aspect-ratio");
+    expect(r.fields.cropRequired).toBe(true);
+    expect(r.fields.cropConfigured).toBe(false);
+    expect(r.fields.reasonCode).toBe("crop-required");
   });
 
-  it("a high-DPI but WRONG-RATIO master is ineligible on aspect ratio, not resolution (the reported case)", () => {
-    // √2 master, huge (12×16 would show ~620 DPI) — but 12×16 is 4:3, so it fails on ratio.
-    const sqrt2 = { widthPx: 9920, heightPx: 7015, status: "ready" as const };
-    const r = deriveVariantFields("GLOBAL-HGE-12X16", sqrt2);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.fields.effectiveDpi).toBe(620); // resolution is fine
-    expect(r.fields.eligible).toBe(false);
-    expect(r.fields.reasonCode).toBe("aspect-ratio"); // …ratio is the blocker
-    // …and the SAME master IS eligible at the matching German Etching size.
-    expect(deriveVariantFields("GLOBAL-HGE-A2", sqrt2).ok && deriveVariantFields("GLOBAL-HGE-A2", sqrt2)).toMatchObject({ fields: { eligible: true, reasonCode: null } });
+  it("a high-DPI WRONG-RATIO master → crop-required; a valid crop makes it eligible (DPI from the crop)", () => {
+    const sqrt2: MasterDims = { widthPx: 9920, heightPx: 7015, status: "ready" };
+    const noCrop = deriveVariantFields("GLOBAL-HGE-12X16", sqrt2);
+    expect(noCrop.ok && noCrop.fields.cropRequired).toBe(true);
+    expect(noCrop.ok && noCrop.fields.reasonCode).toBe("crop-required");
+    // With a valid crop (portrait 3:4 slice of the master) → eligible, DPI from the CROPPED region.
+    const crop = { x: 0.235, y: 0, w: 0.53, h: 1 }; // ~3600:4800 (0.75) region of the √2 master
+    const withCrop = deriveVariantFields("GLOBAL-HGE-12X16", sqrt2, crop);
+    expect(withCrop.ok && withCrop.fields.eligible).toBe(true);
+    expect(withCrop.ok && withCrop.fields.reasonCode).toBeNull();
+    expect(withCrop.ok && (withCrop.fields.effectiveDpi ?? 0)).toBeLessThan(620); // cropping loses pixels
+    // …and the SAME master is still eligible with NO crop at the matching A2 size.
+    expect(deriveVariantFields("GLOBAL-HGE-A2", sqrt2)).toMatchObject({ fields: { eligible: true, cropRequired: false, reasonCode: null } });
   });
 
   it("eligible variant reports reasonCode null", () => {

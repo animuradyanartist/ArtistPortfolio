@@ -12,7 +12,7 @@
 import { ensureFulfilmentIdempotencyKey, setPrintFulfilment, type OrderRow } from "../orders";
 import { printOrderToInternal } from "./printCheckout";
 import { createPrintFulfilment } from "../prodigi/printFulfilment";
-import { getPrintMaster } from "./adminPrintRepo";
+import { getPrintMaster, getVariant, cropFromRow } from "./adminPrintRepo";
 import { signedMasterUrl } from "./masterStorage";
 
 // How long the fulfilment provider's signed master URL stays valid — long enough to cover order
@@ -43,15 +43,21 @@ export async function fulfilPrintOrder(order: OrderRow, baseUrl: string): Promis
     // per-PRINT download URL for the provider. A permanent public master URL never exists, and Print
     // A's token can never fetch Print B's file.
     let printId: number | null = null;
+    let variantId: number | null = null;
     try {
       const snap = JSON.parse(order.artwork_snapshot ?? "{}");
       if (typeof snap.printId === "number") printId = snap.printId;
+      if (typeof snap.printVariantId === "number") variantId = snap.printVariantId;
     } catch { /* no/invalid snapshot — handled below as "no master" */ }
     if (printId != null) {
       const master = await getPrintMaster(printId);
       if (master?.assetKey) {
-        internal.variant.printReadyAssetUrl = signedMasterUrl(baseUrl, printId, FULFILMENT_TOKEN_TTL);
-        if (master.checksumMd5) internal.variant.md5Hash = master.checksumMd5;
+        // If THIS variant has a crop, the provider is served the crop-derived asset (variant-scoped URL),
+        // and we do NOT send the master's md5 (the cropped derivative's bytes differ from the master).
+        const variant = variantId != null ? await getVariant(variantId) : null;
+        const hasCrop = variant ? cropFromRow(variant) != null : false;
+        internal.variant.printReadyAssetUrl = signedMasterUrl(baseUrl, printId, FULFILMENT_TOKEN_TTL, hasCrop ? variantId! : undefined);
+        if (!hasCrop && master.checksumMd5) internal.variant.md5Hash = master.checksumMd5;
       }
     }
 

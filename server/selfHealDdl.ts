@@ -222,6 +222,10 @@ export const SELF_HEAL_DDL: readonly string[] = [
         updated_at timestamp DEFAULT now()
       )`,
   `ALTER TABLE print_variants ADD COLUMN IF NOT EXISTS prodigi_verified boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE print_variants ADD COLUMN IF NOT EXISTS crop_x double precision`,
+  `ALTER TABLE print_variants ADD COLUMN IF NOT EXISTS crop_y double precision`,
+  `ALTER TABLE print_variants ADD COLUMN IF NOT EXISTS crop_w double precision`,
+  `ALTER TABLE print_variants ADD COLUMN IF NOT EXISTS crop_h double precision`,
   `CREATE INDEX IF NOT EXISTS print_variants_print_idx ON print_variants (print_id)`,
   // PRINT MASTERS — the readiness record for the high-resolution source. Fails closed: default
   // status 'missing' means nothing is publicly purchasable until a real master is supplied.

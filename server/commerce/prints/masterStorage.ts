@@ -231,8 +231,11 @@ export function verifyMasterToken(token: string | undefined | null, printId: num
   return true;
 }
 
-/** The absolute, signed URL handed to the fulfilment provider at order time (never stored). */
-export function signedMasterUrl(baseUrl: string, printId: number, ttlSeconds = 900): string {
+/** The absolute, signed URL handed to the fulfilment provider at order time (never stored). When a
+ *  `variantId` is given AND that variant has a crop, the route serves the crop-derived asset (the master
+ *  is only read, never modified); the token stays scoped to the PRINT. */
+export function signedMasterUrl(baseUrl: string, printId: number, ttlSeconds = 900, variantId?: number): string {
   const base = baseUrl.replace(/\/+$/, "");
-  return `${base}/api/commerce/prints/master-file/${printId}?token=${signMasterToken(printId, ttlSeconds)}`;
+  const variantParam = variantId != null ? `&variant=${variantId}` : "";
+  return `${base}/api/commerce/prints/master-file/${printId}?token=${signMasterToken(printId, ttlSeconds)}${variantParam}`;
 }

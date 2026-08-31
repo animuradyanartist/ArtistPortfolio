@@ -11,20 +11,22 @@ import express, { type Express, type Response } from "express";
 import multer from "multer";
 import { requireAdminAuth } from "../../auth";
 import { hasDatabase } from "../../db";
-import { PRODIGI_LAUNCH_PRODUCTS, eligibleSkusForMaster } from "../prodigi/prodigiProducts";
+import { PRODIGI_LAUNCH_PRODUCTS, eligibleSkusForMaster, getProdigiProduct } from "../prodigi/prodigiProducts";
 import { printReadiness } from "@shared/commerce/printProduct";
+import { isValidCropShape, cropFitsSku, type NormalizedCrop } from "@shared/commerce/printCrop";
 import { validateVariantSave, type VariantSaveInput } from "./adminPrintService";
 import {
   getMaster, upsertMaster,
   getPrintMaster, upsertPrintMasterFile, clearPrintMaster, getPrintMasterRef,
   listVariants, getVariant, createVariant, updateVariant, deleteVariant, printArtworkId,
-  printHasVariantForSku, reassessVariantsForMaster,
+  printHasVariantForSku, reassessVariantsForMaster, setVariantCrop, cropFromRow,
 } from "./adminPrintRepo";
 import { deriveVariantFields } from "./adminPrintService";
+import sharp from "sharp";
 import { getAdminPrintsOverview, getPrintAdminDetail, setPrintStatus } from "./printRepo";
 import {
   ensureMasterDirs, stagingDir, storeMasterFromStaging, removeMasterFiles, removeMasterObject,
-  masterObjectExists, cleanupStaged, MasterValidationError,
+  masterObjectExists, cleanupStaged, readMasterStream, MasterValidationError,
 } from "./masterStorage";
 import { MasterStorageError } from "./masterObjectStore";
 import { initUpload, putChunk, reassembleUpload, discardUpload, UPLOAD_CHUNK_BYTES } from "./masterUpload";
@@ -373,14 +375,21 @@ export function registerAdminPrintRoutes(app: Express): void {
       // The master now belongs to the PRINT, not the artwork.
       const master = await getPrintMaster(printId);
       const artworkId = await printArtworkId(printId);
-      // RECOMPUTE eligibility LIVE against the CURRENT master. `eligible`/`effective_dpi` are cached on
-      // the row at save time; a later master upload/replace would leave them stale (and wrongly disable
-      // Enable). Deriving here from the current master keeps the editor honest and lets us return the
-      // EXACT reason a size is ineligible (aspect-ratio / resolution / …) instead of a bare "Not eligible".
+      // RECOMPUTE eligibility LIVE against the CURRENT master + THIS variant's crop. The cached
+      // `eligible`/`effective_dpi` go stale on a master change; deriving here keeps the editor honest and
+      // returns the exact reason (crop-required / resolution / …) + crop state instead of "Not eligible".
       const variants = (await listVariants(printId)).map((v) => {
-        const d = deriveVariantFields(v.prodigi_sku, master);
-        if (!d.ok) return { ...v, eligible: false, reason: d.error, reason_code: "unverified-sku" as const };
-        return { ...v, eligible: d.fields.eligible, effective_dpi: d.fields.effectiveDpi, reason: d.fields.reason, reason_code: d.fields.reasonCode };
+        const d = deriveVariantFields(v.prodigi_sku, master, cropFromRow(v));
+        if (!d.ok) return { ...v, eligible: false, crop_required: false, crop_configured: false, reason: d.error, reason_code: "unverified-sku" as const };
+        return {
+          ...v,
+          eligible: d.fields.eligible,
+          effective_dpi: d.fields.effectiveDpi,
+          crop_required: d.fields.cropRequired,
+          crop_configured: d.fields.cropConfigured,
+          reason: d.fields.reason,
+          reason_code: d.fields.reasonCode,
+        };
       });
       return res.json({ variants, master, artworkId });
     } catch {
@@ -415,12 +424,83 @@ export function registerAdminPrintRoutes(app: Express): void {
       const existing = await getVariant(id);
       if (!existing) return res.status(404).json({ message: "Variant not found" });
       const master = await getPrintMaster(existing.print_id);
-      const validated = validateVariantSave(readVariantInput(req.body), master);
+      // Enable/price/frame updates must judge eligibility with THIS variant's already-confirmed crop.
+      const validated = validateVariantSave(readVariantInput(req.body), master, cropFromRow(existing));
       if (!validated.ok) return res.status(400).json({ message: "Please check the variant", errors: validated.errors });
       const updated = await updateVariant(id, validated.row!);
       return res.json({ variant: updated });
     } catch {
       return res.status(500).json({ message: "Could not update variant." });
+    }
+  });
+
+  // ── SET / CLEAR a variant's crop (from the crop editor). The crop must be a valid rectangle inside
+  //    the master AND match the SKU's print-area aspect ratio (so nothing is ever stretched/distorted).
+  //    Persisting re-derives eligibility from the CROPPED pixels. The editor opens with a suggested
+  //    centered crop (computed client-side via shared printCrop), but the artist must confirm to save. ──
+  app.put("/api/admin/prints/variants/:id/crop", requireAdminAuth, async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      if (!Number.isInteger(id)) return res.status(400).json({ message: "Bad variant id" });
+      const existing = await getVariant(id);
+      if (!existing) return res.status(404).json({ message: "Variant not found" });
+      const master = await getPrintMaster(existing.print_id);
+      const product = getProdigiProduct(existing.prodigi_sku);
+      if (!product) return res.status(400).json({ message: "This size is not a verified Prodigi SKU." });
+
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const raw = body.crop as unknown;
+      // Clear the crop (raw === null) → back to "crop required" for a mismatched size.
+      if (raw === null) {
+        const updated = await setVariantCrop(id, null, master);
+        return res.json({ variant: updated });
+      }
+      const c = raw as Record<string, unknown> | undefined;
+      const crop: NormalizedCrop = { x: Number(c?.x), y: Number(c?.y), w: Number(c?.w), h: Number(c?.h) };
+      if (!isValidCropShape(crop)) return res.status(400).json({ message: "Invalid crop rectangle." });
+      if (!master || master.widthPx == null || master.heightPx == null) {
+        return res.status(409).json({ message: "Upload a print-ready master before cropping." });
+      }
+      // The crop MUST match the SKU aspect ratio — the editor enforces this; the server re-checks so a
+      // crafted request can never store a stretching crop.
+      if (!cropFitsSku(master.widthPx, master.heightPx, crop, product)) {
+        return res.status(400).json({ message: "The crop does not match this size's aspect ratio." });
+      }
+      const updated = await setVariantCrop(id, crop, master);
+      // Re-derive so the client gets the live eligibility/reason after cropping.
+      const d = deriveVariantFields(existing.prodigi_sku, master, crop);
+      return res.json({
+        variant: updated,
+        eligible: d.ok ? d.fields.eligible : false,
+        effectiveDpi: d.ok ? d.fields.effectiveDpi : null,
+        reason: d.ok ? d.fields.reason : null,
+        reasonCode: d.ok ? d.fields.reasonCode : "unverified-sku",
+      });
+    } catch {
+      return res.status(500).json({ message: "Could not save the crop." });
+    }
+  });
+
+  // A DOWNSCALED, admin-only JPEG of the master for the crop editor to display. NOT the full master, NOT
+  // public, NOT token-gated (admin session only). The permanent master is only read, never modified.
+  app.get("/api/admin/prints/:printId/master-preview", requireAdminAuth, async (req, res) => {
+    try {
+      const printId = Number.parseInt(String(req.params.printId), 10);
+      if (!Number.isInteger(printId)) return res.status(400).end();
+      const ref = await getPrintMasterRef(printId);
+      if (!ref?.assetKey) return res.status(404).end();
+      let stream;
+      try { stream = await readMasterStream(ref.assetKey); } catch { return res.status(502).end(); }
+      if (!stream) return res.status(410).end();
+      res.set("Cache-Control", "private, max-age=300");
+      res.type("image/jpeg");
+      // Downscale the (possibly huge) master to a web-displayable preview. limitInputPixels:false so a
+      // real 300-DPI master is accepted; the OUTPUT is a small JPEG.
+      const pipeline = sharp({ limitInputPixels: false }).rotate().resize(1600, 1600, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 82 });
+      pipeline.on("error", () => { if (!res.headersSent) res.status(500).end(); });
+      return stream.pipe(pipeline).pipe(res);
+    } catch {
+      return res.status(500).end();
     }
   });
 
