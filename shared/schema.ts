@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, bigint, boolean, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
@@ -164,7 +164,12 @@ export const prints = pgTable("prints", {
   masterAssetKey: text("master_asset_key"),      // disk key, e.g. "42/master.tif"
   masterFilename: text("master_filename"),
   masterContentType: text("master_content_type"),
-  masterByteSize: integer("master_byte_size"),
+  // bigint (not integer) to EXACTLY match the production column: the deploy build runs no db:push, so
+  // production's master_byte_size was created by the boot self-heal DDL (`... bigint`). Declaring it
+  // `integer` here is the one place the canonical Drizzle schema disagreed with production — a mismatch a
+  // schema-diff tool could turn into a lossy ALTER. mode:"number" keeps the JS value a number (a master
+  // is ≤ 500 MB, far inside Number's safe range). Matches server/selfHealDdl.ts.
+  masterByteSize: bigint("master_byte_size", { mode: "number" }),
   masterChecksumMd5: text("master_checksum_md5"),
   masterWidthPx: integer("master_width_px"),
   masterHeightPx: integer("master_height_px"),
