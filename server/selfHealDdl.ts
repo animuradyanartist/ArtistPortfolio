@@ -228,10 +228,15 @@ export const SELF_HEAL_DDL: readonly string[] = [
         updated_at timestamp DEFAULT now()
       )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS print_masters_artwork_unique ON print_masters (artwork_id)`,
-  // The uploaded high-resolution master file (a base64 data URL), stored server-side and served over
-  // HTTPS from an app route to the fulfilment provider — NEVER linked from any public page. Additive.
+  // The high-resolution master lives on a PERSISTENT DISK, not in Postgres. These columns hold only
+  // the REFERENCE + metadata: the disk key/path, filename, content type, byte size (checksum_md5 and
+  // width_px/height_px already exist). asset_data (a legacy base64 column) is kept for compatibility
+  // but is NEVER written any more — new uploads store bytes on disk, never in the DB. Additive.
   `ALTER TABLE print_masters ADD COLUMN IF NOT EXISTS asset_data text`,
   `ALTER TABLE print_masters ADD COLUMN IF NOT EXISTS asset_filename text`,
+  `ALTER TABLE print_masters ADD COLUMN IF NOT EXISTS asset_key text`,
+  `ALTER TABLE print_masters ADD COLUMN IF NOT EXISTS content_type text`,
+  `ALTER TABLE print_masters ADD COLUMN IF NOT EXISTS byte_size bigint`,
   // ── SEO GROWTH SYSTEM (DataForSEO). Additive; nothing runs until credentials are set. ──
   `CREATE TABLE IF NOT EXISTS seo_keywords (
         id serial PRIMARY KEY,

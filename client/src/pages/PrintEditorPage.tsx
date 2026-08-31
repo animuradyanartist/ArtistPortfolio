@@ -46,7 +46,9 @@ interface VariantApiRow {
 }
 interface MasterApi {
   widthPx: number | null; heightPx: number | null; status: string;
-  printReadyAssetUrl: string | null; note?: string | null; assetFilename?: string | null; hasAsset?: boolean;
+  printReadyAssetUrl: string | null; note?: string | null;
+  assetKey?: string | null; assetFilename?: string | null; contentType?: string | null;
+  byteSize?: number | null; hasAsset?: boolean;
 }
 const toVariantView = (v: VariantApiRow, printId: number): PrintVariantView => ({
   id: v.id, printId, material: v.material, prodigiSku: v.prodigi_sku, sizeLabel: v.size_label,
@@ -75,13 +77,11 @@ const fileToDataUrl = (file: File): Promise<string> =>
     r.onerror = reject;
     r.readAsDataURL(file);
   });
-const imageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> =>
-  new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = reject;
-    img.src = dataUrl;
-  });
+const humanSize = (bytes?: number | null): string => {
+  if (!bytes || bytes <= 0) return "";
+  const mb = bytes / (1024 * 1024);
+  return mb >= 1 ? `${mb.toFixed(mb >= 10 ? 0 : 1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+};
 
 export default function PrintEditorPage() {
   const { id } = useParams<{ id?: string }>();
@@ -200,24 +200,25 @@ export default function PrintEditorPage() {
     }
   };
 
-  // ── Master upload (high-res production file; client measures pixels) ──
+  // ── Master upload — STREAMED multipart (no base64, no JSON body limit). The server measures the
+  //    pixels, stores the file on the persistent disk, and returns the metadata. ──
   const onPickMaster = async (file?: File) => {
     if (!file || artworkId == null || !isEdit) return;
     if (!file.type.startsWith("image/")) { toast({ title: "Please choose an image file", variant: "destructive" }); return; }
     setUploadingMaster(true);
     try {
-      const dataUrl = await fileToDataUrl(file);
-      const { width, height } = await imageDimensions(dataUrl);
-      const r = await apiRequest("POST", `/api/admin/prints/masters/${artworkId}/file`, {
-        dataUrl, widthPx: width, heightPx: height, filename: file.name,
-      });
-      const body = await r.json();
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(`/api/admin/prints/masters/${artworkId}/file`, { method: "POST", credentials: "include", body: fd });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) { toast({ title: "Could not upload the master", description: body.message, variant: "destructive" }); return; }
       refetchVariants();
+      const m = body.master;
       toast({
-        title: body?.master?.status === "ready" ? "Master uploaded — resolution is eligible" : "Master uploaded",
-        description: body?.master?.status === "ready"
-          ? `${width}×${height}px · fits ${body.eligibleSizeCount} size${body.eligibleSizeCount === 1 ? "" : "s"}`
-          : `${width}×${height}px · resolution too low to print at the offered sizes`,
+        title: m?.status === "ready" ? "Master uploaded — resolution is eligible" : "Master uploaded",
+        description: m?.status === "ready"
+          ? `${m.widthPx}×${m.heightPx}px · fits ${body.eligibleSizeCount} size${body.eligibleSizeCount === 1 ? "" : "s"}`
+          : `${m?.widthPx}×${m?.heightPx}px · resolution too low to print at the offered sizes`,
       });
     } catch (e: any) {
       toast({ title: "Could not upload the master", description: e?.message, variant: "destructive" });
@@ -425,7 +426,9 @@ function MasterPanel({ master, uploading, onUpload, onRemove }: {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium text-slate-800 truncate">{master!.assetFilename || "Master file"}</p>
-          <p className="text-sm text-slate-500 tabular-nums">{master!.widthPx}×{master!.heightPx}px</p>
+          <p className="text-sm text-slate-500 tabular-nums">
+            {master!.widthPx}×{master!.heightPx}px{humanSize(master!.byteSize) ? ` · ${humanSize(master!.byteSize)}` : ""}
+          </p>
           <div className="mt-2">
             {ready
               ? <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100"><Check className="w-3 h-3 mr-1" /> Resolution eligible</Badge>

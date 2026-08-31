@@ -7,37 +7,31 @@
  * variant can only be enabled when it is genuinely sellable.
  */
 
-import type { Express, Request } from "express";
-import { createHash } from "crypto";
+import type { Express } from "express";
+import { unlink } from "fs/promises";
+import multer from "multer";
 import { requireAdminAuth } from "../../auth";
 import { PRODIGI_LAUNCH_PRODUCTS, eligibleSkusForMaster } from "../prodigi/prodigiProducts";
 import { printReadiness } from "@shared/commerce/printProduct";
 import { validateVariantSave, type VariantSaveInput } from "./adminPrintService";
 import {
-  getMaster, upsertMaster, upsertMasterFile, clearMaster, getMasterAsset,
+  getMaster, upsertMaster, upsertMasterFile, clearMaster,
   listVariants, getVariant, createVariant, updateVariant, deleteVariant, printArtworkId,
 } from "./adminPrintRepo";
 import { getAdminPrintsOverview, getPrintAdminDetail, setPrintStatus } from "./printRepo";
+import { ensureMasterDirs, stagingDir, storeMasterFromStaging, removeMasterFiles } from "./masterStorage";
 
-/** Absolute app origin for building the fulfilment-facing master asset URL. */
-function originOf(req: Request): string {
-  const configured = process.env.PUBLIC_BASE_URL?.trim();
-  if (configured) return configured.replace(/\/+$/, "");
-  const proto = (req.headers["x-forwarded-proto"] as string) ?? req.protocol ?? "https";
-  return `${proto}://${req.get("host")}`;
-}
-
-/** Parse a `data:<mime>;base64,<data>` URL into its bytes + mime. Null if it isn't one. */
-function parseDataUrl(s: unknown): { mime: string; buffer: Buffer } | null {
-  if (typeof s !== "string") return null;
-  const m = /^data:([^;,]+);base64,(.+)$/i.exec(s.trim());
-  if (!m) return null;
-  try {
-    return { mime: m[1], buffer: Buffer.from(m[2], "base64") };
-  } catch {
-    return null;
-  }
-}
+/** Master upload — STREAMED straight to the persistent-disk staging area (never buffered in memory,
+ *  never base64/JSON), so real 300-DPI files up to 500 MB are handled without touching Postgres. */
+const MASTER_MAX_BYTES = 500 * 1024 * 1024;
+const masterUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => { ensureMasterDirs().then(() => cb(null, stagingDir())).catch((e) => cb(e as Error, "")); },
+    filename: (_req, _file, cb) => cb(null, `upload-${Date.now()}-${Math.round(Math.random() * 1e9)}`),
+  }),
+  limits: { fileSize: MASTER_MAX_BYTES },
+  fileFilter: (_req, file, cb) => cb(null, file.mimetype.startsWith("image/")),
+});
 
 function readVariantInput(body: unknown): VariantSaveInput {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -103,51 +97,67 @@ export function registerAdminPrintRoutes(app: Express): void {
     }
   });
 
-  // ── Master FILE UPLOAD (per artwork). Replaces the manual "paste an HTTPS URL" flow: the admin
-  //    uploads a high-res file, the client measured its pixels, and the SERVER derives readiness
-  //    (a genuine hi-res file that clears at least one launch size → 'ready', else 'provisional').
-  //    The bytes are stored server-side and served over HTTPS from an app route — never linked
-  //    publicly. Nothing physical is trusted beyond the pixels; eligibility is derived here. ──
-  app.post("/api/admin/prints/masters/:artworkId/file", requireAdminAuth, async (req, res) => {
+  // ── Master FILE UPLOAD (per artwork) — MULTIPART, STREAMED to the persistent disk. multer writes
+  //    the file straight to disk (no base64, no 100 MB JSON limit), then the SERVER reads its pixel
+  //    dimensions (sharp, header only), computes the checksum + size, stores ONLY the reference +
+  //    metadata in Postgres, and derives readiness (clears ≥1 launch size → 'ready', else
+  //    'provisional'). The bytes never touch the DB and are never a public URL. ──
+  app.post("/api/admin/prints/masters/:artworkId/file", requireAdminAuth, masterUpload.single("file"), async (req, res) => {
+    const staged = req.file?.path;
     try {
       const artworkId = Number.parseInt(String(req.params.artworkId), 10);
-      if (!Number.isInteger(artworkId)) return res.status(400).json({ message: "Bad artwork id" });
-      const b = (req.body ?? {}) as Record<string, unknown>;
-      const parsed = parseDataUrl(b.dataUrl);
-      if (!parsed || !parsed.mime.startsWith("image/")) {
-        return res.status(400).json({ message: "Please upload a valid image file." });
+      if (!Number.isInteger(artworkId)) { if (staged) await unlink(staged).catch(() => {}); return res.status(400).json({ message: "Bad artwork id" }); }
+      if (!req.file) return res.status(400).json({ message: "Please choose a high-resolution image file." });
+
+      const stored = await storeMasterFromStaging(artworkId, req.file.path, req.file.originalname, req.file.mimetype);
+      if (!stored.widthPx || !stored.heightPx) {
+        await removeMasterFiles(artworkId);
+        return res.status(400).json({ message: "The image dimensions could not be read from that file." });
       }
-      const widthPx = Number(b.widthPx);
-      const heightPx = Number(b.heightPx);
-      if (!Number.isInteger(widthPx) || !Number.isInteger(heightPx) || widthPx <= 0 || heightPx <= 0) {
-        return res.status(400).json({ message: "The image dimensions could not be read." });
-      }
-      const filename = typeof b.filename === "string" ? b.filename.slice(0, 200) : "master";
-      const checksumMd5 = createHash("md5").update(parsed.buffer).digest("hex");
       // A master is 'ready' only when its resolution clears at least one verified launch size; a file
       // too small to print at any size is stored but stays 'provisional' (never yields an eligible sale).
-      const eligibleSkus = eligibleSkusForMaster({ widthPx, heightPx });
+      const eligibleSkus = eligibleSkusForMaster({ widthPx: stored.widthPx, heightPx: stored.heightPx });
       const status = eligibleSkus.length > 0 ? "ready" : "provisional";
-      const assetUrl = `${originOf(req)}/api/commerce/prints/master-asset/${artworkId}`;
+      // A stable, TOKEN-GATED relative marker (not a working URL) so the purchasability gate sees an
+      // asset. The real signed download URL is generated fresh at fulfilment time, never stored.
+      const markerUrl = `/api/commerce/prints/master-file/${artworkId}`;
 
       await upsertMasterFile(artworkId, {
-        widthPx, heightPx, assetData: String(b.dataUrl), assetFilename: filename, assetUrl, checksumMd5, status,
+        widthPx: stored.widthPx, heightPx: stored.heightPx, assetKey: stored.assetKey,
+        assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
+        checksumMd5: stored.checksumMd5, status, markerUrl,
       });
-      return res.json({
-        ok: true,
-        master: await getMaster(artworkId),
-        eligibleSizeCount: eligibleSkus.length,
+      // Prefer the persisted row; fall back to the just-stored metadata (local preview has no DB).
+      const master = (await getMaster(artworkId)) ?? {
+        widthPx: stored.widthPx, heightPx: stored.heightPx, status,
+        printReadyAssetUrl: markerUrl, assetKey: stored.assetKey, assetFilename: stored.filename,
+        contentType: stored.contentType, byteSize: stored.byteSize, checksumMd5: stored.checksumMd5,
+        note: null, hasAsset: true,
+      };
+      return res.json({ ok: true, master, eligibleSizeCount: eligibleSkus.length });
+    } catch (e) {
+      if (staged) await unlink(staged).catch(() => {});
+      const tooBig = e instanceof Error && /file too large|LIMIT_FILE_SIZE/i.test(e.message);
+      return res.status(tooBig ? 413 : 500).json({
+        message: tooBig ? "That file is larger than the 500 MB limit." : "Could not save the master file.",
       });
-    } catch {
-      return res.status(500).json({ message: "Could not save the master file." });
     }
   });
 
-  // Remove an uploaded master (back to 'missing').
+  // multer errors (e.g. file-too-large) surface as an error passed to the route; translate to 413.
+  app.use("/api/admin/prints/masters/:artworkId/file", (err: any, _req: any, res: any, next: any) => {
+    if (err && (err.code === "LIMIT_FILE_SIZE" || /file too large/i.test(err.message ?? ""))) {
+      return res.status(413).json({ message: "That file is larger than the 500 MB limit." });
+    }
+    return next(err);
+  });
+
+  // Remove a master (back to 'missing') — deletes the disk file AND clears the DB reference.
   app.delete("/api/admin/prints/masters/:artworkId/file", requireAdminAuth, async (req, res) => {
     try {
       const artworkId = Number.parseInt(String(req.params.artworkId), 10);
       if (!Number.isInteger(artworkId)) return res.status(400).json({ message: "Bad artwork id" });
+      await removeMasterFiles(artworkId);
       await clearMaster(artworkId);
       return res.json({ ok: true, master: await getMaster(artworkId) });
     } catch {

@@ -21,7 +21,8 @@ import { assessVariant, isPubliclyPurchasable, startingPriceMinor, resolveVarian
 import { buildFeedTsv } from "@shared/commerce/printFeed";
 import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
 import { quotePrintShipping } from "./printShipping";
-import { getMasterAsset } from "./adminPrintRepo";
+import { getMasterRef } from "./adminPrintRepo";
+import { verifyMasterToken, readMasterStream, findMasterKeyOnDisk } from "./masterStorage";
 
 function baseUrlOf(req: Request): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
@@ -80,22 +81,29 @@ export function registerPrintRoutes(app: Express): void {
     }
   });
 
-  // ── The uploaded high-resolution MASTER, served to the fulfilment provider over HTTPS. It is NOT
-  //    linked from any public page (the PDP exposes only public images + a masterReady boolean); the
-  //    provider must be able to fetch the print file, so this route serves the stored bytes. Registered
-  //    before :slug so the path segment resolves here, not as a print slug. ──
-  app.get("/api/commerce/prints/master-asset/:artworkId", async (req, res) => {
+  // ── The high-resolution MASTER download, for the fulfilment provider ONLY. It is NOT a public
+  //    asset: access requires a cryptographically-signed, short-lived, per-artwork token (generated
+  //    fresh at fulfilment time). No admin auth, no filesystem path exposed, no permanent public URL.
+  //    The bytes are STREAMED from the persistent disk. Registered before :slug so the segment
+  //    resolves here, not as a print slug. The public PDP exposes only a `masterReady` boolean. ──
+  app.get("/api/commerce/prints/master-file/:artworkId", async (req, res) => {
     try {
       const artworkId = Number.parseInt(String(req.params.artworkId), 10);
       if (!Number.isInteger(artworkId)) return res.status(400).end();
-      const asset = await getMasterAsset(artworkId);
-      if (!asset) return res.status(404).end();
-      const m = /^data:([^;,]+);base64,(.+)$/i.exec(asset.dataUrl);
-      if (!m) return res.status(404).end();
-      const buffer = Buffer.from(m[2], "base64");
-      res.set("Cache-Control", "private, max-age=3600");
-      res.type(m[1]);
-      return res.send(buffer);
+      // Fail closed: a missing, malformed, expired, or wrong-artwork token gets 403 — never the file.
+      if (!verifyMasterToken(typeof req.query.token === "string" ? req.query.token : null, artworkId)) {
+        return res.status(403).end();
+      }
+      const ref = await getMasterRef(artworkId);
+      const assetKey = ref?.assetKey ?? (await findMasterKeyOnDisk(artworkId));
+      if (!assetKey) return res.status(404).end();
+      const stream = readMasterStream(assetKey);
+      if (!stream) return res.status(404).end();
+      res.set("Cache-Control", "no-store");
+      res.type(ref?.contentType || "application/octet-stream");
+      if (ref?.filename) res.set("Content-Disposition", `attachment; filename="${ref.filename.replace(/[^\w.\-]/g, "_")}"`);
+      stream.on("error", () => { if (!res.headersSent) res.status(500).end(); });
+      return stream.pipe(res);
     } catch {
       return res.status(500).end();
     }

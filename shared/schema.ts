@@ -230,10 +230,13 @@ export const printMasters = pgTable("print_masters", {
   heightPx: integer("height_px"),
   /** The print-ready, colour-managed derived asset URL fulfilment sends to Prodigi. Never a web image. */
   printReadyAssetUrl: text("print_ready_asset_url"),
-  /** The uploaded master file itself (base64 data URL), stored server-side and served over HTTPS from
-   *  an app route to the fulfilment provider — never linked from any public page. */
-  assetData: text("asset_data"),
+  /** REFERENCE + metadata for the master, which lives on a persistent DISK (never in Postgres). */
+  assetKey: text("asset_key"),            // relative disk key, e.g. "42/master.tif"
   assetFilename: text("asset_filename"),
+  contentType: text("content_type"),
+  byteSize: integer("byte_size"),
+  /** LEGACY base64 column — kept for compatibility, never written any more (bytes go to disk). */
+  assetData: text("asset_data"),
   /** MD5 of the print-ready asset, passed to Prodigi so it can verify the file it downloaded. */
   checksumMd5: text("checksum_md5"),
   /**
