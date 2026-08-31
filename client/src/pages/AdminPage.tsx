@@ -2405,8 +2405,8 @@ function PrintsManagement() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => setLocation(`/admin/edit-print/${p.id}/variants`)}>
-                                <Layers className="w-4 h-4 mr-2" /> Manage variants & master
+                              <DropdownMenuItem onClick={() => setLocation(`/admin/edit-print/${p.id}`)}>
+                                <Layers className="w-4 h-4 mr-2" /> Edit options & master
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => window.open(`/prints/${p.slug}`, "_blank")}>
                                 <ExternalLink className="w-4 h-4 mr-2" /> Open public page

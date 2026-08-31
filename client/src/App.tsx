@@ -20,8 +20,7 @@ import ContactPage from "@/pages/ContactPage";
 import AdminPage from "@/pages/AdminPage";
 import CreateArtworkPage from "@/pages/CreateArtworkPage";
 import EditArtworkPage from "@/pages/EditArtworkPage";
-import CreatePrintPage from "@/pages/CreatePrintPage";
-import EditPrintPage from "@/pages/EditPrintPage";
+import PrintEditorPage from "@/pages/PrintEditorPage";
 import AdminPrintVariantsPage from "@/pages/AdminPrintVariantsPage";
 import AdminSeoPage from "@/pages/AdminSeoPage";
 import NotFound from "@/pages/not-found";
@@ -70,8 +69,9 @@ function Router() {
       <Route path="/admin" component={AdminPage} />
       <Route path="/admin/create-artwork" component={CreateArtworkPage} />
       <Route path="/admin/edit-artwork/:id" component={EditArtworkPage} />
-      <Route path="/admin/create-print" component={CreatePrintPage} />
-      <Route path="/admin/edit-print/:id" component={EditPrintPage} />
+      <Route path="/admin/create-print" component={PrintEditorPage} />
+      <Route path="/admin/edit-print/:id" component={PrintEditorPage} />
+      {/* Advanced variant/master view — the unified editor is the primary flow; this stays reachable. */}
       <Route path="/admin/edit-print/:id/variants" component={AdminPrintVariantsPage} />
       <Route path="/blog" component={BlogPage} />
       <Route path="/blog/:slug" component={BlogPostPage} />

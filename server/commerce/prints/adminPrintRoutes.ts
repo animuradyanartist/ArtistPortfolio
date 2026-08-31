@@ -8,13 +8,30 @@
  */
 
 import type { Express } from "express";
+import { unlink } from "fs/promises";
+import multer from "multer";
 import { requireAdminAuth } from "../../auth";
-import { PRODIGI_LAUNCH_PRODUCTS } from "../prodigi/prodigiProducts";
+import { PRODIGI_LAUNCH_PRODUCTS, eligibleSkusForMaster } from "../prodigi/prodigiProducts";
+import { printReadiness } from "@shared/commerce/printProduct";
 import { validateVariantSave, type VariantSaveInput } from "./adminPrintService";
 import {
-  getMaster, upsertMaster, listVariants, getVariant, createVariant, updateVariant, deleteVariant, printArtworkId,
+  getMaster, upsertMaster, upsertMasterFile, clearMaster,
+  listVariants, getVariant, createVariant, updateVariant, deleteVariant, printArtworkId,
 } from "./adminPrintRepo";
-import { getAdminPrintsOverview } from "./printRepo";
+import { getAdminPrintsOverview, getPrintAdminDetail, setPrintStatus } from "./printRepo";
+import { ensureMasterDirs, stagingDir, storeMasterFromStaging, removeMasterFiles } from "./masterStorage";
+
+/** Master upload — STREAMED straight to the persistent-disk staging area (never buffered in memory,
+ *  never base64/JSON), so real 300-DPI files up to 500 MB are handled without touching Postgres. */
+const MASTER_MAX_BYTES = 500 * 1024 * 1024;
+const masterUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => { ensureMasterDirs().then(() => cb(null, stagingDir())).catch((e) => cb(e as Error, "")); },
+    filename: (_req, _file, cb) => cb(null, `upload-${Date.now()}-${Math.round(Math.random() * 1e9)}`),
+  }),
+  limits: { fileSize: MASTER_MAX_BYTES },
+  fileFilter: (_req, file, cb) => cb(null, file.mimetype.startsWith("image/")),
+});
 
 function readVariantInput(body: unknown): VariantSaveInput {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -77,6 +94,116 @@ export function registerAdminPrintRoutes(app: Express): void {
       return res.json({ ok: true, master: await getMaster(artworkId) });
     } catch {
       return res.status(500).json({ message: "Could not save master." });
+    }
+  });
+
+  // ── Master FILE UPLOAD (per artwork) — MULTIPART, STREAMED to the persistent disk. multer writes
+  //    the file straight to disk (no base64, no 100 MB JSON limit), then the SERVER reads its pixel
+  //    dimensions (sharp, header only), computes the checksum + size, stores ONLY the reference +
+  //    metadata in Postgres, and derives readiness (clears ≥1 launch size → 'ready', else
+  //    'provisional'). The bytes never touch the DB and are never a public URL. ──
+  app.post("/api/admin/prints/masters/:artworkId/file", requireAdminAuth, masterUpload.single("file"), async (req, res) => {
+    const staged = req.file?.path;
+    try {
+      const artworkId = Number.parseInt(String(req.params.artworkId), 10);
+      if (!Number.isInteger(artworkId)) { if (staged) await unlink(staged).catch(() => {}); return res.status(400).json({ message: "Bad artwork id" }); }
+      if (!req.file) return res.status(400).json({ message: "Please choose a high-resolution image file." });
+
+      const stored = await storeMasterFromStaging(artworkId, req.file.path, req.file.originalname, req.file.mimetype);
+      if (!stored.widthPx || !stored.heightPx) {
+        await removeMasterFiles(artworkId);
+        return res.status(400).json({ message: "The image dimensions could not be read from that file." });
+      }
+      // A master is 'ready' only when its resolution clears at least one verified launch size; a file
+      // too small to print at any size is stored but stays 'provisional' (never yields an eligible sale).
+      const eligibleSkus = eligibleSkusForMaster({ widthPx: stored.widthPx, heightPx: stored.heightPx });
+      const status = eligibleSkus.length > 0 ? "ready" : "provisional";
+      // A stable, TOKEN-GATED relative marker (not a working URL) so the purchasability gate sees an
+      // asset. The real signed download URL is generated fresh at fulfilment time, never stored.
+      const markerUrl = `/api/commerce/prints/master-file/${artworkId}`;
+
+      await upsertMasterFile(artworkId, {
+        widthPx: stored.widthPx, heightPx: stored.heightPx, assetKey: stored.assetKey,
+        assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
+        checksumMd5: stored.checksumMd5, status, markerUrl,
+      });
+      // Prefer the persisted row; fall back to the just-stored metadata (local preview has no DB).
+      const master = (await getMaster(artworkId)) ?? {
+        widthPx: stored.widthPx, heightPx: stored.heightPx, status,
+        printReadyAssetUrl: markerUrl, assetKey: stored.assetKey, assetFilename: stored.filename,
+        contentType: stored.contentType, byteSize: stored.byteSize, checksumMd5: stored.checksumMd5,
+        note: null, hasAsset: true,
+      };
+      return res.json({ ok: true, master, eligibleSizeCount: eligibleSkus.length });
+    } catch (e) {
+      if (staged) await unlink(staged).catch(() => {});
+      const tooBig = e instanceof Error && /file too large|LIMIT_FILE_SIZE/i.test(e.message);
+      return res.status(tooBig ? 413 : 500).json({
+        message: tooBig ? "That file is larger than the 500 MB limit." : "Could not save the master file.",
+      });
+    }
+  });
+
+  // multer errors (e.g. file-too-large) surface as an error passed to the route; translate to 413.
+  app.use("/api/admin/prints/masters/:artworkId/file", (err: any, _req: any, res: any, next: any) => {
+    if (err && (err.code === "LIMIT_FILE_SIZE" || /file too large/i.test(err.message ?? ""))) {
+      return res.status(413).json({ message: "That file is larger than the 500 MB limit." });
+    }
+    return next(err);
+  });
+
+  // Remove a master (back to 'missing') — deletes the disk file AND clears the DB reference.
+  app.delete("/api/admin/prints/masters/:artworkId/file", requireAdminAuth, async (req, res) => {
+    try {
+      const artworkId = Number.parseInt(String(req.params.artworkId), 10);
+      if (!Number.isInteger(artworkId)) return res.status(400).json({ message: "Bad artwork id" });
+      await removeMasterFiles(artworkId);
+      await clearMaster(artworkId);
+      return res.json({ ok: true, master: await getMaster(artworkId) });
+    } catch {
+      return res.status(500).json({ message: "Could not remove the master file." });
+    }
+  });
+
+  // ── PUBLISH / UNPUBLISH. Publishing re-checks readiness on the SERVER (the same fail-closed gate
+  //    as checkout) and refuses with the exact missing reasons — it can never make an unready print
+  //    live. Unpublish returns it to Draft, hidden from the public storefront but kept in admin. ──
+  app.post("/api/admin/prints/:printId/publish", requireAdminAuth, async (req, res) => {
+    try {
+      const printId = Number.parseInt(String(req.params.printId), 10);
+      if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
+      const detail = await getPrintAdminDetail(printId);
+      if (!detail) return res.status(404).json({ message: "Print not found" });
+      const readiness = printReadiness(
+        {
+          title: detail.print.title,
+          description: detail.print.description,
+          artworkId: detail.print.artworkId,
+          imageCount: detail.print.images.length,
+          master: detail.master,
+          variants: detail.variants,
+        },
+        detail.print.status,
+      );
+      if (!readiness.canPublish) {
+        return res.status(409).json({ code: "not-ready", message: "Cannot publish yet.", missing: readiness.missing });
+      }
+      await setPrintStatus(printId, "active");
+      return res.json({ ok: true, status: "active" });
+    } catch {
+      return res.status(500).json({ message: "Could not publish this print." });
+    }
+  });
+
+  app.post("/api/admin/prints/:printId/unpublish", requireAdminAuth, async (req, res) => {
+    try {
+      const printId = Number.parseInt(String(req.params.printId), 10);
+      if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
+      const ok = await setPrintStatus(printId, "draft");
+      if (!ok) return res.status(404).json({ message: "Print not found" });
+      return res.json({ ok: true, status: "draft" });
+    } catch {
+      return res.status(500).json({ message: "Could not unpublish this print." });
     }
   });
 

@@ -28,9 +28,20 @@ services:
     preDeployCommand: npm run db:push
     startCommand: npm start
     healthCheckPath: /api/health
+    # PERSISTENT DISK for high-resolution print masters (300-DPI fine-art files, tens–hundreds of MB).
+    # Stored on disk, NOT as base64 in Postgres; the DB keeps only a reference + metadata. A disk pins
+    # this web service to a SINGLE instance (no horizontal autoscale) — acceptable for a one-artist
+    # shop with a small print catalogue. Grow sizeGB as the catalogue grows.
+    disk:
+      name: print-masters
+      mountPath: /var/data/print-masters
+      sizeGB: 10
     envVars:
       - key: NODE_ENV
         value: production
+      # Where masters are stored on the persistent disk above (matches the mountPath).
+      - key: PRINT_MASTERS_DIR
+        value: /var/data/print-masters
       # REQUIRED SECRET — the SAME Neon Postgres this site already uses. No data migration.
       - key: DATABASE_URL
         sync: false

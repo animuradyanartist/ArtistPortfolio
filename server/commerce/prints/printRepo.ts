@@ -177,32 +177,55 @@ export interface AdminPrintOverviewRow {
  * table cannot show a print as Published unless the same gate that guards checkout genuinely passes.
  */
 export async function getAdminPrintsOverview(): Promise<AdminPrintOverviewRow[]> {
-  if (!hasDatabase) return [];
+  // Local preview (no SQL) — read the same in-memory prints the legacy admin used, so a print created
+  // in preview mode still appears in the admin list (commerce variants/masters live only in the DB, so
+  // preview rows are summarised with none → correctly "draft"/"not-ready").
+  if (!hasDatabase) {
+    const { storage } = await import("../../storage");
+    const all = await storage.getAllPrints();
+    return all.map((p) => ({
+      id: p.id,
+      title: p.title,
+      slug: printSlugOf({ slug: p.slug ?? null, title: p.title }),
+      image: p.images?.[0] ?? null,
+      imageCount: p.images?.length ?? 0,
+      artworkId: p.artworkId ?? null,
+      artworkTitle: null,
+      productStatus: p.status,
+      summary: printAdminSummary(p.status, [], null),
+    }));
+  }
   const { rows } = await pool.query(`SELECT * FROM prints ORDER BY position ASC, id ASC`);
   const out: AdminPrintOverviewRow[] = [];
   const titleCache = new Map<number, string | null>();
   for (const r of rows) {
-    const print = mapPrint(r);
-    const [variants, master] = await Promise.all([variantsFor(print.id), masterFor(print.artworkId)]);
-    let artworkTitle: string | null = null;
-    if (print.artworkId != null) {
-      if (!titleCache.has(print.artworkId)) {
-        const a = await pool.query(`SELECT title FROM artworks WHERE id = $1 LIMIT 1`, [print.artworkId]);
-        titleCache.set(print.artworkId, a.rows[0]?.title ?? null);
+    // PER-ROW resilience: one malformed row (or a transient sub-query failure) must NEVER blank the
+    // whole admin list. A failed row is logged and skipped; every other print still lists.
+    try {
+      const print = mapPrint(r);
+      const [variants, master] = await Promise.all([variantsFor(print.id), masterFor(print.artworkId)]);
+      let artworkTitle: string | null = null;
+      if (print.artworkId != null) {
+        if (!titleCache.has(print.artworkId)) {
+          const a = await pool.query(`SELECT title FROM artworks WHERE id = $1 LIMIT 1`, [print.artworkId]);
+          titleCache.set(print.artworkId, a.rows[0]?.title ?? null);
+        }
+        artworkTitle = titleCache.get(print.artworkId) ?? null;
       }
-      artworkTitle = titleCache.get(print.artworkId) ?? null;
+      out.push({
+        id: print.id,
+        title: print.title,
+        slug: printSlugOf(print),
+        image: print.images[0] ?? null,
+        imageCount: print.images.length,
+        artworkId: print.artworkId,
+        artworkTitle,
+        productStatus: print.status,
+        summary: printAdminSummary(print.status, variants, master),
+      });
+    } catch (err) {
+      console.error(`[prints] overview row ${r?.id} failed, skipping:`, err instanceof Error ? err.message : err);
     }
-    out.push({
-      id: print.id,
-      title: print.title,
-      slug: printSlugOf(print),
-      image: print.images[0] ?? null,
-      imageCount: print.images.length,
-      artworkId: print.artworkId,
-      artworkTitle,
-      productStatus: print.status,
-      summary: printAdminSummary(print.status, variants, master),
-    });
   }
   return out;
 }
@@ -218,6 +241,29 @@ export async function purchasablePrintSlugForArtwork(artworkId: number): Promise
     if (hasPurchasableVariant(variants, master)) return printSlugOf(print);
   }
   return null;
+}
+
+/**
+ * A print product + its variants + master in the SHARED shapes, by print id — for the admin editor's
+ * readiness/publish logic. Unlike the public reads this does NOT filter by status (a draft must load).
+ */
+export async function getPrintAdminDetail(printId: number): Promise<PrintProductDetail | null> {
+  if (!hasDatabase) return null;
+  const { rows } = await pool.query(`SELECT * FROM prints WHERE id = $1 LIMIT 1`, [printId]);
+  if (!rows[0]) return null;
+  const print = mapPrint(rows[0]);
+  const [variants, master] = await Promise.all([variantsFor(print.id), masterFor(print.artworkId)]);
+  return { print, variants, master };
+}
+
+/** Set a print product's status (publish → 'active', unpublish → 'draft'). Returns false if absent. */
+export async function setPrintStatus(printId: number, status: string): Promise<boolean> {
+  if (!hasDatabase) return false;
+  const { rowCount } = await pool.query(
+    `UPDATE prints SET status = $2, updated_at = now() WHERE id = $1`,
+    [printId, status],
+  );
+  return (rowCount ?? 0) > 0;
 }
 
 export interface CheckoutVariant {

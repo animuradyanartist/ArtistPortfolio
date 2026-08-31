@@ -28,9 +28,25 @@ export interface AdminVariantRow {
   prodigi_verified: boolean;
 }
 
-export async function getMaster(artworkId: number): Promise<MasterDims & { note: string | null } | null> {
+export interface MasterMeta extends MasterDims {
+  note: string | null;
+  assetKey: string | null;
+  assetFilename: string | null;
+  contentType: string | null;
+  byteSize: number | null;
+  checksumMd5: string | null;
+  hasAsset: boolean;
+}
+
+export async function getMaster(artworkId: number): Promise<MasterMeta | null> {
   if (!hasDatabase) return null;
-  const { rows } = await pool.query(`SELECT * FROM print_masters WHERE artwork_id = $1 LIMIT 1`, [artworkId]);
+  // Reference + metadata only — the master BYTES live on the persistent disk, never in this row.
+  const { rows } = await pool.query(
+    `SELECT width_px, height_px, status, print_ready_asset_url, note,
+            asset_key, asset_filename, content_type, byte_size, checksum_md5
+       FROM print_masters WHERE artwork_id = $1 LIMIT 1`,
+    [artworkId],
+  );
   const r = rows[0];
   if (!r) return null;
   return {
@@ -39,7 +55,60 @@ export async function getMaster(artworkId: number): Promise<MasterDims & { note:
     status: r.status ?? "missing",
     printReadyAssetUrl: r.print_ready_asset_url ?? null,
     note: r.note ?? null,
+    assetKey: r.asset_key ?? null,
+    assetFilename: r.asset_filename ?? null,
+    contentType: r.content_type ?? null,
+    byteSize: r.byte_size != null ? Number(r.byte_size) : null,
+    checksumMd5: r.checksum_md5 ?? null,
+    hasAsset: Boolean(r.asset_key),
   };
+}
+
+/** Store the REFERENCE + metadata for a master whose bytes were just written to the persistent disk.
+ *  `print_ready_asset_url` is a stable, token-gated relative path (a "master exists" marker) — the
+ *  real signed download URL is generated fresh at fulfilment time, never stored. asset_data is left
+ *  untouched/NULL: bytes never go into Postgres. */
+export async function upsertMasterFile(
+  artworkId: number,
+  m: {
+    widthPx: number; heightPx: number; assetKey: string; assetFilename: string;
+    contentType: string; byteSize: number; checksumMd5: string; status: string; markerUrl: string;
+  },
+): Promise<void> {
+  if (!hasDatabase) return; // local preview has no commerce DB; the file still lands on disk
+  await pool.query(
+    `INSERT INTO print_masters
+       (artwork_id, width_px, height_px, print_ready_asset_url, asset_key, asset_filename, content_type, byte_size, checksum_md5, status, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
+     ON CONFLICT (artwork_id) DO UPDATE SET
+       width_px = EXCLUDED.width_px, height_px = EXCLUDED.height_px,
+       print_ready_asset_url = EXCLUDED.print_ready_asset_url, asset_key = EXCLUDED.asset_key,
+       asset_filename = EXCLUDED.asset_filename, content_type = EXCLUDED.content_type,
+       byte_size = EXCLUDED.byte_size, checksum_md5 = EXCLUDED.checksum_md5,
+       asset_data = NULL, status = EXCLUDED.status, updated_at = now()`,
+    [artworkId, m.widthPx, m.heightPx, m.markerUrl, m.assetKey, m.assetFilename, m.contentType, m.byteSize, m.checksumMd5, m.status],
+  );
+}
+
+/** Clear a master back to 'missing' (the editor's "remove" action). File deletion is done by the route. */
+export async function clearMaster(artworkId: number): Promise<void> {
+  if (!hasDatabase) return;
+  await pool.query(
+    `UPDATE print_masters SET width_px = NULL, height_px = NULL, print_ready_asset_url = NULL,
+       asset_key = NULL, asset_filename = NULL, content_type = NULL, byte_size = NULL, checksum_md5 = NULL,
+       asset_data = NULL, status = 'missing', updated_at = now()
+     WHERE artwork_id = $1`,
+    [artworkId],
+  );
+}
+
+/** The disk REFERENCE (key + metadata) for the fulfilment-facing download route. No bytes. */
+export async function getMasterRef(artworkId: number): Promise<{ assetKey: string; filename: string | null; contentType: string | null } | null> {
+  if (!hasDatabase) return null;
+  const { rows } = await pool.query(`SELECT asset_key, asset_filename, content_type FROM print_masters WHERE artwork_id = $1 LIMIT 1`, [artworkId]);
+  const r = rows[0];
+  if (!r || !r.asset_key) return null;
+  return { assetKey: r.asset_key as string, filename: r.asset_filename ?? null, contentType: r.content_type ?? null };
 }
 
 export async function upsertMaster(

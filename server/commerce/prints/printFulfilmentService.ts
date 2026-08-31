@@ -12,6 +12,12 @@
 import { ensureFulfilmentIdempotencyKey, setPrintFulfilment, type OrderRow } from "../orders";
 import { printOrderToInternal } from "./printCheckout";
 import { createPrintFulfilment } from "../prodigi/printFulfilment";
+import { getMaster } from "./adminPrintRepo";
+import { signedMasterUrl } from "./masterStorage";
+
+// How long the fulfilment provider's signed master URL stays valid — long enough to cover order
+// creation + retries (the provider downloads the asset when the order is placed), never permanent.
+const FULFILMENT_TOKEN_TTL = Number(process.env.MASTER_FULFILMENT_TOKEN_TTL_SECONDS) || 6 * 3600;
 
 export async function fulfilPrintOrder(order: OrderRow, baseUrl: string): Promise<void> {
   try {
@@ -30,6 +36,17 @@ export async function fulfilPrintOrder(order: OrderRow, baseUrl: string): Promis
         error: "Could not build the fulfilment request (missing snapshot, shipping address or a print-ready asset).",
       });
       return;
+    }
+
+    // THE MASTER URL IS GENERATED HERE, FRESH, AND NEVER STORED. The order snapshot carries only a
+    // marker; at fulfilment we mint a short-lived, signed, per-artwork download URL for the provider,
+    // from the master that lives on the persistent disk. A permanent public master URL never exists.
+    if (order.artwork_id != null) {
+      const master = await getMaster(order.artwork_id);
+      if (master?.assetKey) {
+        internal.variant.printReadyAssetUrl = signedMasterUrl(baseUrl, order.artwork_id, FULFILMENT_TOKEN_TTL);
+        if (master.checksumMd5) internal.variant.md5Hash = master.checksumMd5;
+      }
     }
 
     const outcome = await createPrintFulfilment(internal);
