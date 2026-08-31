@@ -86,6 +86,7 @@ export interface PreviewProduct {
 const MATERIAL_DISPLAY: Record<PrintMaterial, string> = {
   "german-etching": "Hahnemühle German Etching",
   "photo-rag": "Hahnemühle Photo Rag",
+  "stretched-canvas": "Stretched Canvas",
 };
 
 /** Build a demo product from a spec + the resolved real artwork. Sizes come from the VERIFIED

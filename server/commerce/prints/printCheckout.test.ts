@@ -141,11 +141,33 @@ describe("printOrderToInternal — paid order → provider request", () => {
   it("returns null for a non-print snapshot", () => {
     expect(printOrderToInternal(order({ artwork_snapshot: JSON.stringify({ itemType: "artwork" }) }), { idempotencyKey: "k" })).toBeNull();
   });
+
+  it("(7) a CANVAS order carries the wrap attribute in the provider request (not just frame)", () => {
+    const canvasOrder = order({
+      artwork_snapshot: JSON.stringify({
+        itemType: "print", printId: 10, printVariantId: 8, artworkId: 42, title: "Blue Hour",
+        material: "stretched-canvas", sizeLabel: "16×20", widthCm: 40.6, heightCm: 50.8, framed: false, frameColour: null,
+        prodigiSku: "GLOBAL-CAN-16X20", printReadyAssetUrl: "https://cdn.example.com/master/1.tif",
+        quantity: 1, unitPriceMinor: 14000, currency: "EUR", image: "/img/artwork/42/0",
+      }),
+    });
+    const internal = printOrderToInternal(canvasOrder, { idempotencyKey: "am-print-canvas" });
+    expect(internal).not.toBeNull();
+    // The catalogue wrap is included so Prodigi stretches + wraps the canvas correctly.
+    expect(internal!.variant.attributes).toEqual({ wrap: "MirrorWrap" });
+  });
+
+  it("(7) a paper order still carries ONLY frame (no spurious wrap)", () => {
+    const internal = printOrderToInternal(order(), { idempotencyKey: "k" });
+    expect(internal!.variant.attributes).toEqual({ frameColour: "black" });
+  });
 });
 
 describe("paidActionFor — the paid-webhook branch invariant", () => {
-  it("a PRINT order fulfils and NEVER marks the source painting sold", () => {
+  it("(12) a PRINT order fulfils and NEVER marks the source painting sold (paper OR canvas)", () => {
     expect(paidActionFor({ item_type: "print", artwork_id: 42 })).toBe("fulfil-print");
+    // Canvas is still a print — buying one must never mark the original artwork sold.
+    expect(paidActionFor({ item_type: "print", artwork_id: 7 })).toBe("fulfil-print");
   });
   it("an ORIGINAL order marks its artwork sold", () => {
     expect(paidActionFor({ item_type: "artwork", artwork_id: 42 })).toBe("mark-sold");

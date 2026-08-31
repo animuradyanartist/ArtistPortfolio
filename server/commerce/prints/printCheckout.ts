@@ -21,6 +21,7 @@ import {
   type PrintMasterView,
   type PrintItemSnapshot,
 } from "@shared/commerce/printProduct";
+import { MATERIAL_INFO, CATEGORY_LABEL, requiredAttributesForSku, defaultAttributesForMaterial, type PrintMaterial } from "@shared/commerce/prodigiProducts";
 import type { InternalPrintOrder } from "../prodigi/printFulfilment";
 import type { OrderRow } from "../orders";
 
@@ -83,13 +84,13 @@ export type PrintCheckoutResult =
   | { ok: false; refusal: PrintCheckoutRefusal };
 
 function variantDescription(v: PrintVariantView): string {
-  const material = v.material === "german-etching"
-    ? "Hahnemühle German Etching"
-    : v.material === "photo-rag"
-      ? "Hahnemühle Photo Rag"
-      : v.material;
-  const frame = v.framed ? `Framed (${v.frameColour ?? "natural"})` : "Unframed";
-  return [`Fine-Art Print`, `${v.widthCm}×${v.heightCm} cm`, material, frame].join(" · ");
+  // Customer-facing wording only: category + size + stock label. No Prodigi/SKU/wrap terminology.
+  const info = MATERIAL_INFO[v.material as PrintMaterial];
+  const category = info ? CATEGORY_LABEL[info.category] : "Fine Art Print";
+  const stock = info?.stockLabel ?? v.material;
+  const parts = [category, `${v.widthCm}×${v.heightCm} cm`, stock];
+  if (v.framed) parts.push(`Framed (${v.frameColour ?? "natural"})`);
+  return parts.join(" · ");
 }
 
 /**
@@ -169,7 +170,14 @@ export function printOrderToInternal(
   if (snap.itemType !== "print" || !snap.prodigiSku || !snap.printReadyAssetUrl) return null;
   if (!order.ship_address1 || !order.ship_city || !order.ship_postal_code || !order.ship_country) return null;
 
-  const attributes: Record<string, string> = {};
+  // Catalogue-required attributes (canvas WRAP) come from the SERVER, never the buyer. The material's
+  // default (canvas → wrap) is the base; a SKU-specific requiredAttributes wins if the verified row sets
+  // one. Both are server-derived (snapshot.material was resolved from the verified SKU at checkout), so a
+  // canvas order always carries its wrap even though paper carries none. Frame is layered on last.
+  const attributes: Record<string, string> = {
+    ...defaultAttributesForMaterial(snap.material as PrintMaterial),
+    ...requiredAttributesForSku(snap.prodigiSku),
+  };
   if (snap.framed && snap.frameColour) attributes.frameColour = snap.frameColour;
 
   return {

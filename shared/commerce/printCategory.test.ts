@@ -24,7 +24,7 @@ describe("customer-facing product category (Fine Art Paper / Canvas)", () => {
     expect(MATERIAL_CATEGORY["german-etching"]).toBe("fine-art-paper");
     expect(MATERIAL_CATEGORY["photo-rag"]).toBe("fine-art-paper");
     // The stock name + a plain finish are the secondary detail.
-    expect(MATERIAL_INFO["german-etching"]).toMatchObject({ category: "fine-art-paper", stockLabel: "Hahnemühle German Etching", finish: "Textured matte fine art paper" });
+    expect(MATERIAL_INFO["german-etching"]).toMatchObject({ category: "fine-art-paper", stockLabel: "Hahnemühle German Etching", finish: "310gsm · Textured matte · Giclée" });
     expect(MATERIAL_INFO["photo-rag"]).toMatchObject({ category: "fine-art-paper", stockLabel: "Hahnemühle Photo Rag", finish: "Smooth cotton fine art paper" });
     // "Hahnemühle …" is never a category.
     expect(Object.values(CATEGORY_LABEL)).not.toContain("Hahnemühle German Etching");

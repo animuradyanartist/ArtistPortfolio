@@ -35,14 +35,13 @@ import {
 } from "@shared/commerce/printProduct";
 import {
   PRODIGI_LAUNCH_PRODUCTS,
-  MATERIAL_LABEL,
   MATERIAL_INFO,
   MATERIAL_CATEGORY,
   CATEGORY_LABEL,
   ALL_CATEGORIES,
-  materialsForCategory,
-  categoryHasVerifiedProducts,
-  productsForMaterial,
+  categoryOfferedForNewVariants,
+  offeredMaterialsForCategory,
+  offeredProductsForMaterial,
   getProdigiProduct,
   type PrintMaterial,
   type PrintCategory,
@@ -711,12 +710,13 @@ function VariantCostEstimator({ variantId, sellingMinor }: { variantId: number; 
 function AddOption({ printId, onAdded }: { printId: number; onAdded: () => void }) {
   const { toast } = useToast();
   const [category, setCategory] = useState<PrintCategory | "">("");
-  const [material, setMaterial] = useState<PrintMaterial | "">("");
   const [sku, setSku] = useState("");
   const [price, setPrice] = useState("");
   const [busy, setBusy] = useState(false);
-  const stocks = category ? materialsForCategory(category) : [];
-  const sizes = material ? productsForMaterial(material) : [];
+  // Each category now has exactly ONE offered stock (Fine Art Paper → German Etching; Canvas →
+  // Stretched Canvas), so the admin picks Material → Size directly — no paper-brand choice.
+  const material: PrintMaterial | null = category ? (offeredMaterialsForCategory(category)[0] ?? null) : null;
+  const sizes = material ? offeredProductsForMaterial(material) : [];
 
   const add = async () => {
     if (!sku) { toast({ title: "Choose a material and size", variant: "destructive" }); return; }
@@ -729,7 +729,7 @@ function AddOption({ printId, onAdded }: { printId: number; onAdded: () => void 
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) { toast({ title: body.message ?? "Could not add option", description: body.errors?.sku, variant: "destructive" }); return; }
-      setCategory(""); setMaterial(""); setSku(""); setPrice("");
+      setCategory(""); setSku(""); setPrice("");
       onAdded();
       toast({ title: "Option added" });
     } finally { setBusy(false); }
@@ -738,31 +738,24 @@ function AddOption({ printId, onAdded }: { printId: number; onAdded: () => void 
   return (
     <div className="rounded-lg border border-dashed border-slate-300 p-3">
       <p className="text-sm font-medium text-slate-700 mb-3">Add an option</p>
-      <div className="grid sm:grid-cols-[1fr_1fr_1fr_auto_auto] gap-2 items-end">
-        {/* Primary, understandable choice: the product CATEGORY. Canvas is shown but disabled until a
-            verified Prodigi canvas SKU exists (categoryHasVerifiedProducts). */}
+      <div className="grid sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
+        {/* The primary, understandable choice — Fine Art Paper or Canvas. Canvas is disabled until a
+            verified Prodigi canvas SKU exists (categoryOfferedForNewVariants). */}
         <LabeledMini label="Material">
-          <Select value={category} onValueChange={(v) => { setCategory(v as PrintCategory); setMaterial(""); setSku(""); }}>
+          <Select value={category} onValueChange={(v) => { setCategory(v as PrintCategory); setSku(""); }}>
             <SelectTrigger className="h-9"><SelectValue placeholder="Choose" /></SelectTrigger>
             <SelectContent>
               {ALL_CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c} disabled={!categoryHasVerifiedProducts(c)}>
-                  {CATEGORY_LABEL[c]}{categoryHasVerifiedProducts(c) ? "" : " — coming soon"}
+                <SelectItem key={c} value={c} disabled={!categoryOfferedForNewVariants(c)}>
+                  {CATEGORY_LABEL[c]}{categoryOfferedForNewVariants(c) ? "" : " — coming soon"}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </LabeledMini>
-        {/* Secondary: the paper stock. */}
-        <LabeledMini label="Paper">
-          <Select value={material} onValueChange={(v) => { setMaterial(v as PrintMaterial); setSku(""); }} disabled={!category}>
-            <SelectTrigger className="h-9"><SelectValue placeholder={category ? "Choose" : "Pick material first"} /></SelectTrigger>
-            <SelectContent>{stocks.map((m) => <SelectItem key={m} value={m}>{MATERIAL_INFO[m].stockLabel}</SelectItem>)}</SelectContent>
-          </Select>
-        </LabeledMini>
         <LabeledMini label="Size">
           <Select value={sku} onValueChange={setSku} disabled={!material}>
-            <SelectTrigger className="h-9"><SelectValue placeholder={material ? "Choose" : "Pick paper first"} /></SelectTrigger>
+            <SelectTrigger className="h-9"><SelectValue placeholder={material ? "Choose" : "Pick material first"} /></SelectTrigger>
             <SelectContent>{sizes.map((s) => <SelectItem key={s.sku} value={s.sku}>{s.displayName}</SelectItem>)}</SelectContent>
           </Select>
         </LabeledMini>
@@ -772,7 +765,8 @@ function AddOption({ printId, onAdded }: { printId: number; onAdded: () => void 
         </LabeledMini>
         <Button onClick={add} disabled={busy || !sku} className="h-9 bg-deep-blue hover:bg-deep-blue/90"><Plus className="w-4 h-4 mr-1" /> Add</Button>
       </div>
-      {material && <p className="text-[11px] text-slate-400 mt-2">{MATERIAL_INFO[material].finish}</p>}
+      {/* Secondary info: the exact stock under the chosen material (never a brand the customer must pick). */}
+      {material && <p className="text-[11px] text-slate-400 mt-2">{MATERIAL_INFO[material].stockLabel} · {MATERIAL_INFO[material].finish}</p>}
     </div>
   );
 }

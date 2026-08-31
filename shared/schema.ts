@@ -189,7 +189,7 @@ export const prints = pgTable("prints", {
 export const printVariants = pgTable("print_variants", {
   id: serial("id").primaryKey(),
   printId: integer("print_id").notNull(),
-  material: text("material").notNull(), // 'german-etching' | 'photo-rag'
+  material: text("material").notNull(), // 'german-etching' | 'photo-rag' (retired) | 'stretched-canvas'
   prodigiSku: text("prodigi_sku").notNull(),
   sizeLabel: text("size_label").notNull(), // 'S' | 'M' | 'L'
   widthCm: integer("width_cm").notNull(),

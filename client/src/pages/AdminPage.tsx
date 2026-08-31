@@ -2216,6 +2216,7 @@ export default function AdminPage() {
 const PRINT_MATERIAL_LABEL: Record<string, string> = {
   "german-etching": "Hahnemühle German Etching 310gsm",
   "photo-rag": "Hahnemühle Photo Rag 308gsm (Matte)",
+  "stretched-canvas": "Stretched Canvas",
   "paper": "Fine art paper",
 };
 const printMaterialLabel = (m: string) => PRINT_MATERIAL_LABEL[m] ?? m;
