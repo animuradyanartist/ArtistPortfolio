@@ -42,3 +42,6 @@ path = "scripts/post-merge.sh"
 # dropping the commerce schema. The sync itself now runs first and takes about a second; this
 # budget is for the npm install that follows it.
 timeoutMs = 600000
+
+[objectStorage]
+defaultBucketID = "replit-objstore-a33b387b-b02c-4202-a9d3-e0196c7a4e76"
