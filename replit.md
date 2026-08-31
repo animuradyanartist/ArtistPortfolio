@@ -68,11 +68,28 @@ Preferred communication style: Simple, everyday language.
   held and logs `[boot][DATA LOSS]` if the table is ever found empty afterwards. It cannot
   prevent the loss; it stops it being silent.
 
+### Print masters live in Replit Object Storage (NOT a local disk)
+- Production is a **Replit Autoscale deployment** whose filesystem is EPHEMERAL (reset on every
+  Publish/redeploy, per-instance). High-resolution print masters therefore live in **Replit Object
+  Storage** (`server/commerce/prints/masterObjectStore.ts`), keyed per print
+  (`prints/<printId>/master-<rand>.<ext>`). Postgres keeps only the reference (`prints.master_asset_key`)
+  + metadata; the bytes are never in Postgres and never a public URL. Prodigi downloads via the
+  short-lived, HMAC-signed, per-print token route `/api/commerce/prints/master-file/:printId?token=…`,
+  which streams the object through the app.
+- **Local upload staging is disposable** (OS temp dir): a master is streamed to a local temp file only
+  to be validated (sharp) and checksummed, then uploaded to Object Storage and the temp file deleted.
+  Permanent bytes never depend on local filesystem persistence.
+- **Manual setup required (once):** add **Object Storage** to the Repl (Tools → Object Storage → create
+  a bucket). That injects the default bucket the SDK uses. Optionally pin a specific bucket with the
+  **`PRINT_MASTERS_BUCKET_ID`** Replit Secret. In production a missing/unreachable store fails LOUD at
+  boot (`[master-storage][FATAL]`) and every upload returns 502 — it NEVER silently writes to a local
+  disk. (Dev without a bucket uses a local-filesystem store; tests force it via `MASTER_STORAGE_BACKEND=local`.)
+- The old `PRINT_MASTERS_DIR=/var/data/print-masters` assumption (a Render persistent-disk path) is gone.
+
 ### Publishing articles (the blog)
-- **`render.yaml` is NOT the live deploy path.** Production (animuradyan.com) is served by
-  the **Replit Autoscale deployment** — `server: Google Frontend`. Render's dashboard holds
-  exactly one service, `career-os-worker`; no `artistportfolio` service was ever created,
-  so the blueprint describes a migration that never happened.
+- **There is no `render.yaml`.** It was removed: ArtistPortfolio is not deployed on Render (Render hosts
+  only Career OS's `career-os-worker`). Production (animuradyan.com) is served by the **Replit Autoscale
+  deployment** — `server: Google Frontend`. Do not re-add a Render blueprint to this repo.
 - **Merging to `main` does NOT deploy. A human pressing Publish does.** Settled from the
   Publishing panel, which is authoritative: production reads "Ani published N minutes ago",
   and EVERY entry in the deploy history is "Ani published". There is no GitHub Action and no
