@@ -4,6 +4,7 @@ import {
   isPubliclyPurchasable,
   startingPriceMinor,
   hasPurchasableVariant,
+  publicSelectableVariants,
   resolveVariantPrice,
   buildPrintItemSnapshot,
   printReadyAssetOf,
@@ -53,6 +54,38 @@ function variant(over: Partial<PrintVariantView> = {}): PrintVariantView {
     ...over,
   };
 }
+
+describe("publicSelectableVariants — what a NEW public purchase may pick (PDP options)", () => {
+  const paper = variant({ id: 1, material: "german-etching", prodigiSku: "GLOBAL-HGE-A3" });
+  const canvas = variant({ id: 2, material: "stretched-canvas", prodigiSku: "GLOBAL-CAN-A3" });
+  const photoRag = variant({ id: 3, material: "photo-rag", prodigiSku: "GLOBAL-HPR-A3" });
+
+  it("offers German Etching + Canvas (the two launch materials)", () => {
+    const sel = publicSelectableVariants([paper, canvas], readyMaster);
+    expect(sel.map((v) => v.id).sort()).toEqual([1, 2]);
+  });
+
+  it("does NOT offer retired Photo Rag for a new purchase (even when enabled + eligible + master ready)", () => {
+    // Photo Rag is not 'unavailable' (it is a launch SKU historically), but it is no longer OFFERED.
+    expect(assessVariant(photoRag, readyMaster).state).toBe("purchasable"); // would show without the offered gate
+    const sel = publicSelectableVariants([paper, photoRag, canvas], readyMaster);
+    expect(sel.map((v) => v.id).sort()).toEqual([1, 2]);           // Photo Rag (id 3) excluded
+    expect(sel.some((v) => v.material === "photo-rag")).toBe(false);
+  });
+
+  it("excludes 'unavailable' variants (disabled or resolution-failing) — only eligible+enabled appear", () => {
+    const disabled = variant({ id: 4, material: "german-etching", prodigiSku: "GLOBAL-HGE-16X20", enabled: false });
+    const lowRes = variant({ id: 5, material: "german-etching", prodigiSku: "GLOBAL-HGE-18X24", eligible: false });
+    const sel = publicSelectableVariants([paper, disabled, lowRes], readyMaster);
+    expect(sel.map((v) => v.id)).toEqual([1]);
+  });
+
+  it("keeps OFFERED provisional variants (not-yet-ready master) — they show as 'available soon', still selectable", () => {
+    const sel = publicSelectableVariants([paper, canvas], missingMaster); // provisional (master missing)
+    expect(sel.map((v) => v.id).sort()).toEqual([1, 2]);
+    expect(sel.every((v) => assessVariant(v, missingMaster).state === "provisional")).toBe(true);
+  });
+});
 
 describe("assessVariant — the sale-state gate", () => {
   it("is PURCHASABLE only with a ready master, eligible+enabled, priced, and an asset", () => {

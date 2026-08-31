@@ -17,7 +17,7 @@ import {
   printSlugOf,
   purchasablePrintSlugForArtwork,
 } from "./printRepo";
-import { assessVariant, isPubliclyPurchasable, startingPriceMinor, resolveVariantPrice } from "@shared/commerce/printProduct";
+import { assessVariant, isPubliclyPurchasable, startingPriceMinor, resolveVariantPrice, publicSelectableVariants } from "@shared/commerce/printProduct";
 import { buildFeedTsv } from "@shared/commerce/printFeed";
 import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
 import { quotePrintShipping } from "./printShipping";
@@ -255,11 +255,11 @@ export function registerPrintRoutes(app: Express): void {
         return res.status(404).json({ message: "Print not found" });
       }
 
-      // Expose only the options the configurator may present: enabled + eligible variants. A
-      // disabled or resolution-failing variant ('unavailable') is hidden entirely.
-      const options = detail.variants
+      // Expose only the options the configurator may present: enabled + eligible variants that are still
+      // OFFERED. A disabled or resolution-failing variant ('unavailable') is hidden, AND the retired
+      // Photo Rag stock is never offered for a new public purchase (historical orders still fulfil).
+      const options = publicSelectableVariants(detail.variants, detail.master)
         .map((v) => ({ v, a: assessVariant(v, detail.master) }))
-        .filter(({ a }) => a.state !== "unavailable")
         .map(({ v, a }) => ({
           id: v.id,
           material: v.material,

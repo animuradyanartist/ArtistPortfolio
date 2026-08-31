@@ -15,7 +15,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Eyebrow } from "@/components/editorial";
 import { countryOptions } from "@/lib/countries";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
-import { MATERIAL_INFO, MATERIAL_CATEGORY, CATEGORY_LABEL, type PrintMaterial } from "@shared/commerce/prodigiProducts";
+import { type PrintCategory } from "@shared/commerce/prodigiProducts";
+import {
+  categoryOfMaterial,
+  publicMaterialCategories,
+  sizesForCategory,
+  seedSelection,
+  firstOptionInCategory,
+  materialCategoryLabel,
+} from "@/lib/printSelector";
 import {
   readAttribution,
   trackViewItemPrint,
@@ -67,12 +75,8 @@ function money(minor: number, currency: string): string {
   }
 }
 
-// Customer-facing hierarchy: a plain-language CATEGORY (Fine Art Paper) is the primary choice; the
-// Hahnemühle stock + a short finish are SECONDARY. No Prodigi/SKU/cost/margin is ever shown here.
-const stockLabel = (m: string) => MATERIAL_INFO[m as PrintMaterial]?.stockLabel ?? m;
-const stockFinish = (m: string) => MATERIAL_INFO[m as PrintMaterial]?.finish ?? "";
-const categoryOf = (m: string) => MATERIAL_CATEGORY[m as PrintMaterial] ?? "fine-art-paper";
-const categoryLabel = (m: string) => CATEGORY_LABEL[categoryOf(m)];
+// Public UX is Material (CATEGORY: Fine Art Paper / Canvas) → Size, and NOTHING else. The paper/canvas
+// stock, the Prodigi SKU, the canvas wrap, cost and margin are never shown or selectable (see printSelector).
 const frameKeyOf = (o: { framed: boolean; frameColour: string | null }) =>
   o.framed ? `framed:${o.frameColour ?? "natural"}` : "unframed";
 const frameLabel = (key: string) =>
@@ -95,30 +99,40 @@ export default function PrintDetailPage() {
   });
 
   const options = data?.options ?? [];
-  const materials = useMemo(() => Array.from(new Set(options.map((o) => o.material))), [options]);
-  const sizes = useMemo(() => {
-    const seen = new Map<string, Option>();
-    for (const o of options) if (!seen.has(o.sizeLabel)) seen.set(o.sizeLabel, o);
-    return Array.from(seen.values());
-  }, [options]);
-  const frames = useMemo(() => Array.from(new Set(options.map(frameKeyOf))), [options]);
+  // Public selector: Material (CATEGORY) → Size. The stock/SKU/wrap are never a customer choice.
+  const categories = useMemo(() => publicMaterialCategories(options), [options]);
 
-  const [material, setMaterial] = useState<string | null>(null);
+  const [category, setCategory] = useState<PrintCategory | null>(null);
   const [size, setSize] = useState<string | null>(null);
   const [frame, setFrame] = useState<string | null>(null);
 
+  // Sizes for the SELECTED category only — they change with the chosen material.
+  const sizes = useMemo(() => sizesForCategory(options, category), [options, category]);
+  const frames = useMemo(
+    () => Array.from(new Set(options.filter((o) => !category || categoryOfMaterial(o.material) === category).map(frameKeyOf))),
+    [options, category],
+  );
+
   // Seed the selection once options arrive, preferring a purchasable combination.
   useEffect(() => {
-    if (!options.length || material) return;
-    const seed = options.find((o) => o.state === "purchasable") ?? options[0];
-    setMaterial(seed.material);
+    if (!options.length || category) return;
+    const seed = seedSelection(options);
+    if (!seed) return;
+    setCategory(seed.category);
     setSize(seed.sizeLabel);
-    setFrame(frameKeyOf(seed));
-  }, [options, material]);
+    setFrame(frameKeyOf(seed.option));
+  }, [options, category]);
+
+  // Switching Material picks a valid size within the new category (purchasable-first).
+  const selectCategory = (cat: PrintCategory) => {
+    setCategory(cat);
+    const seed = firstOptionInCategory(options, cat);
+    if (seed) { setSize(seed.sizeLabel); setFrame(frameKeyOf(seed)); }
+  };
 
   const selected = useMemo(
-    () => options.find((o) => o.material === material && o.sizeLabel === size && frameKeyOf(o) === frame) ?? null,
-    [options, material, size, frame],
+    () => options.find((o) => categoryOfMaterial(o.material) === category && o.sizeLabel === size && frameKeyOf(o) === frame) ?? null,
+    [options, category, size, frame],
   );
 
   // GALLERY IMAGES — the public storefront images plus the selected variant's Prodigi mockup (if it
@@ -215,26 +229,16 @@ export default function PrintDetailPage() {
             is a unique, one-of-a-kind work.
           </p>
 
-          {materials.length > 0 && (
-            <>
-              {/* Primary, understandable choice: the material CATEGORY. */}
-              <Choice label="Material">
-                {Array.from(new Set(materials.map(categoryOf))).map((cat) => (
-                  <Pill key={cat} active onClick={() => {}}>{CATEGORY_LABEL[cat]}</Pill>
-                ))}
-              </Choice>
-              {/* Secondary: the paper stock + a short, plain-language finish. */}
-              <Choice label="Paper">
-                {materials.map((m) => (
-                  <Pill key={m} active={material === m} onClick={() => setMaterial(m)}>
-                    <span className="flex flex-col items-start leading-tight">
-                      <span>{stockLabel(m)}</span>
-                      {stockFinish(m) && <span className="text-[11px] opacity-70">{stockFinish(m)}</span>}
-                    </span>
-                  </Pill>
-                ))}
-              </Choice>
-            </>
+          {/* The ONLY material choice: the plain-language category (Fine Art Paper / Canvas). No paper-
+              stock selector, no canvas-type/wrap selector — the stock behind each category is implicit. */}
+          {categories.length > 0 && (
+            <Choice label="Material">
+              {categories.map((cat) => (
+                <Pill key={cat} active={category === cat} onClick={() => selectCategory(cat)}>
+                  {materialCategoryLabel(cat)}
+                </Pill>
+              ))}
+            </Choice>
           )}
           {sizes.length > 0 && (
             <Choice label="Size">
