@@ -114,12 +114,22 @@ export default function PrintEditorPage() {
 
   const { data: artworks = [] } = useQuery<Artwork[]>({ queryKey: ["/api/artworks"] });
 
-  // Variants + master (edit mode only, once we have a printId).
+  // Variants (edit mode only, once we have a printId).
   const variantsKey = [`/api/admin/prints/${printId}/variants`];
   const { data: variantData } = useQuery<{ variants: VariantApiRow[]; master: MasterApi | null; artworkId: number | null }>({
     queryKey: variantsKey,
     queryFn: async () => (await apiRequest("GET", `/api/admin/prints/${printId}/variants`)).json(),
     enabled: isEdit,
+  });
+
+  // Master is keyed to the ARTWORK, not the print — so it loads (and can be uploaded) as soon as a
+  // source artwork is chosen, before the print has ever been saved. Selecting a different artwork
+  // immediately shows THAT artwork's saved master (filename / dimensions / eligibility) if one exists.
+  const masterKey = ["/api/admin/prints/masters", artworkId];
+  const { data: masterResp } = useQuery<{ master: MasterApi | null }>({
+    queryKey: masterKey,
+    queryFn: async () => (await apiRequest("GET", `/api/admin/prints/masters/${artworkId}`)).json(),
+    enabled: artworkId != null,
   });
 
   // Hydrate the form once the print loads. THIS is what the old edit page failed to do.
@@ -137,7 +147,8 @@ export default function PrintEditorPage() {
     () => (variantData?.variants ?? []).map((v) => toVariantView(v, printId ?? 0)),
     [variantData, printId],
   );
-  const master = useMemo(() => toMasterView(variantData?.master ?? null), [variantData]);
+  const masterApi = masterResp?.master ?? null;
+  const master = useMemo(() => toMasterView(masterApi), [masterApi]);
 
   const readiness: PrintReadiness = useMemo(
     () => printReadiness({ title, description, artworkId, imageCount: images.length, master, variants }, status),
@@ -146,6 +157,7 @@ export default function PrintEditorPage() {
   const isPublished = status === "active";
 
   const refetchVariants = () => qc.invalidateQueries({ queryKey: variantsKey });
+  const refetchMaster = () => qc.invalidateQueries({ queryKey: masterKey });
 
   // ── Product save (create → then continue in edit mode; or update in place) ──
   const saveProduct = async (): Promise<number | null> => {
@@ -174,7 +186,7 @@ export default function PrintEditorPage() {
       } else {
         const created = await (await apiRequest("POST", "/api/prints", body)).json();
         qc.invalidateQueries({ queryKey: ["/api/admin/prints/overview"] });
-        toast({ title: "Draft created", description: "Now add a production file and print options." });
+        toast({ title: "Saved", description: "You can now add print options below." });
         setLocation(`/admin/edit-print/${created.id}`); // continue in the SAME editor, now with an id
         return created.id as number;
       }
@@ -202,8 +214,10 @@ export default function PrintEditorPage() {
 
   // ── Master upload — STREAMED multipart (no base64, no JSON body limit). The server measures the
   //    pixels, stores the file on the persistent disk, and returns the metadata. ──
+  //    Works as soon as an artwork is selected — the master belongs to the artwork, not the print,
+  //    so no saved Print record is needed to upload it.
   const onPickMaster = async (file?: File) => {
-    if (!file || artworkId == null || !isEdit) return;
+    if (!file || artworkId == null) return;
     if (!file.type.startsWith("image/")) { toast({ title: "Please choose an image file", variant: "destructive" }); return; }
     setUploadingMaster(true);
     try {
@@ -212,8 +226,10 @@ export default function PrintEditorPage() {
       const r = await fetch(`/api/admin/prints/masters/${artworkId}/file`, { method: "POST", credentials: "include", body: fd });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) { toast({ title: "Could not upload the master", description: body.message, variant: "destructive" }); return; }
-      refetchVariants();
       const m = body.master;
+      qc.setQueryData(masterKey, { master: m }); // show it immediately
+      refetchMaster();
+      if (isEdit) refetchVariants(); // variant eligibility depends on the master
       toast({
         title: m?.status === "ready" ? "Master uploaded — resolution is eligible" : "Master uploaded",
         description: m?.status === "ready"
@@ -230,7 +246,9 @@ export default function PrintEditorPage() {
   const removeMaster = async () => {
     if (artworkId == null) return;
     await apiRequest("DELETE", `/api/admin/prints/masters/${artworkId}/file`);
-    refetchVariants();
+    qc.setQueryData(masterKey, { master: null });
+    refetchMaster();
+    if (isEdit) refetchVariants();
     toast({ title: "Master removed" });
   };
 
@@ -326,14 +344,13 @@ export default function PrintEditorPage() {
             </Field>
           </Section>
 
-          {/* ── SECTION B — production master ── */}
+          {/* ── SECTION B — production master. Available as soon as a source artwork is chosen (the
+                master belongs to the artwork, not the print), so it does NOT wait for Save. ── */}
           <Section title="Production file" letter="B">
-            {!isEdit ? (
-              <LockNote>Save the print first, then upload the high-resolution master here.</LockNote>
-            ) : artworkId == null ? (
-              <LockNote>Choose a source artwork above to attach its high-resolution master.</LockNote>
+            {artworkId == null ? (
+              <LockNote>Select the source artwork first.</LockNote>
             ) : (
-              <MasterPanel master={variantData?.master ?? null}
+              <MasterPanel master={masterApi}
                 uploading={uploadingMaster}
                 onUpload={() => masterInputRef.current?.click()}
                 onRemove={removeMaster} />
@@ -381,7 +398,7 @@ export default function PrintEditorPage() {
           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
             <Button onClick={saveProduct} disabled={savingProduct} variant="outline" className="w-full">
               {savingProduct ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              {isEdit ? "Save changes" : "Save draft"}
+              Save
             </Button>
             {isEdit && !isPublished && (
               <Button onClick={publish} disabled={publishing || !readiness.canPublish} className="w-full bg-deep-blue hover:bg-deep-blue/90"
