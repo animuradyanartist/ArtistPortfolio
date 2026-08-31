@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Eyebrow } from "@/components/editorial";
 import { countryOptions } from "@/lib/countries";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
+import { MATERIAL_INFO, MATERIAL_CATEGORY, CATEGORY_LABEL, type PrintMaterial } from "@shared/commerce/prodigiProducts";
 import {
   readAttribution,
   trackViewItemPrint,
@@ -66,11 +67,12 @@ function money(minor: number, currency: string): string {
   }
 }
 
-const MATERIAL_LABEL: Record<string, string> = {
-  "german-etching": "German Etching",
-  "photo-rag": "Photo Rag",
-};
-const materialLabel = (m: string) => MATERIAL_LABEL[m] ?? m;
+// Customer-facing hierarchy: a plain-language CATEGORY (Fine Art Paper) is the primary choice; the
+// Hahnemühle stock + a short finish are SECONDARY. No Prodigi/SKU/cost/margin is ever shown here.
+const stockLabel = (m: string) => MATERIAL_INFO[m as PrintMaterial]?.stockLabel ?? m;
+const stockFinish = (m: string) => MATERIAL_INFO[m as PrintMaterial]?.finish ?? "";
+const categoryOf = (m: string) => MATERIAL_CATEGORY[m as PrintMaterial] ?? "fine-art-paper";
+const categoryLabel = (m: string) => CATEGORY_LABEL[categoryOf(m)];
 const frameKeyOf = (o: { framed: boolean; frameColour: string | null }) =>
   o.framed ? `framed:${o.frameColour ?? "natural"}` : "unframed";
 const frameLabel = (key: string) =>
@@ -214,11 +216,25 @@ export default function PrintDetailPage() {
           </p>
 
           {materials.length > 0 && (
-            <Choice label="Paper">
-              {materials.map((m) => (
-                <Pill key={m} active={material === m} onClick={() => setMaterial(m)}>{materialLabel(m)}</Pill>
-              ))}
-            </Choice>
+            <>
+              {/* Primary, understandable choice: the material CATEGORY. */}
+              <Choice label="Material">
+                {Array.from(new Set(materials.map(categoryOf))).map((cat) => (
+                  <Pill key={cat} active onClick={() => {}}>{CATEGORY_LABEL[cat]}</Pill>
+                ))}
+              </Choice>
+              {/* Secondary: the paper stock + a short, plain-language finish. */}
+              <Choice label="Paper">
+                {materials.map((m) => (
+                  <Pill key={m} active={material === m} onClick={() => setMaterial(m)}>
+                    <span className="flex flex-col items-start leading-tight">
+                      <span>{stockLabel(m)}</span>
+                      {stockFinish(m) && <span className="text-[11px] opacity-70">{stockFinish(m)}</span>}
+                    </span>
+                  </Pill>
+                ))}
+              </Choice>
+            </>
           )}
           {sizes.length > 0 && (
             <Choice label="Size">

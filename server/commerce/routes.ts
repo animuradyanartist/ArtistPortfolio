@@ -28,7 +28,7 @@ import { publicOrderView, publicTrackingView } from "./orderView";
 import { clientIpOf } from "../loginRateLimit";
 import { getVariantForCheckout } from "./prints/printRepo";
 import { validatePrintSelection, planPrintCheckout } from "./prints/printCheckout";
-import { quotePrintShipping } from "./prints/printShipping";
+import { quotePrintShipping, checkoutShippingOutcome } from "./prints/printShipping";
 import { fulfilPrintOrder, paidActionFor } from "./prints/printFulfilmentService";
 
 /**
@@ -125,10 +125,14 @@ async function handlePrintCheckout(req: Request, res: Response, stripe: NonNulla
     });
   }
 
-  // REAL shipping, at the point a destination is known. The plan's shipping is 0 by default; we ask
-  // Prodigi for a live quote to the buyer's country. Fails closed: if Prodigi is unconfigured or
-  // cannot quote, shipping stays 0 (shipping is absorbed — no sale is blocked and no number is
-  // invented). When it succeeds, the Stripe total includes the real shipping as its own line.
+  // REAL shipping, at the point a destination is known. Shipping for a made-to-order print depends on
+  // the SKU + destination, so it must be a LIVE Prodigi quote — never a fabricated flat amount.
+  //
+  // FAILS CLOSED: if we cannot obtain a valid Prodigi shipping quote (unconfigured / no-quote / error),
+  // we DO NOT silently offer free shipping and DO NOT proceed with an incorrect total. The checkout is
+  // refused with a clear message so the customer is never charged a wrong amount. When it succeeds, the
+  // Stripe total includes the real quoted shipping as its own line, and we record Prodigi's own
+  // production + shipping cost on the order for accounting (never shown to the customer).
   const attributes: Record<string, string> = {};
   if (resolved.variant.framed && resolved.variant.frameColour) attributes.frameColour = resolved.variant.frameColour;
   const shipQuote = await quotePrintShipping({
@@ -138,11 +142,17 @@ async function handlePrintCheckout(req: Request, res: Response, stripe: NonNulla
     currency: plan.plan.currency,
     ...(Object.keys(attributes).length ? { attributes } : {}),
   });
-  const shippingMinor = shipQuote.ok ? shipQuote.shippingMinor : plan.plan.shippingMinor;
-  const shippingBasis = shipQuote.ok
-    ? `prodigi-quote (${shipQuote.method || "standard"} to ${buyer.value.country})`
-    : plan.plan.shippingBasis;
+  const shipOutcome = checkoutShippingOutcome(shipQuote);
+  if (!shipOutcome.proceed) {
+    return res.status(503).json({ code: "shipping-unavailable", reason: shipOutcome.reason, message: shipOutcome.message });
+  }
+  const shippingMinor = shipOutcome.shippingMinor;
+  const shippingBasis = `prodigi-quote (${shipOutcome.method || "standard"} to ${buyer.value.country})`;
   const totalMinor = plan.plan.itemsMinor + shippingMinor;
+  // Prodigi's OWN costs (from the same quote) — production = costSummary.items, shipping = costSummary.shipping.
+  // Recorded for margin/accounting; NEVER returned to the customer or exposed on any public route.
+  const prodigiCostMinor = shipOutcome.prodigiCostMinor;   // null if Prodigi omitted the items cost
+  const prodigiShippingMinor = shipOutcome.shippingMinor;
 
   const reference = await nextReference();
   const order = await createOrder({
@@ -166,6 +176,9 @@ async function handlePrintCheckout(req: Request, res: Response, stripe: NonNulla
     shipping_minor: shippingMinor,
     total_minor: totalMinor,
     shipping_basis: shippingBasis,
+    // Fulfilment-side accounting (Prodigi's own costs at order time) — internal, never shown publicly.
+    prodigi_cost_minor: prodigiCostMinor,
+    prodigi_shipping_minor: prodigiShippingMinor,
     attribution: sanitiseAttribution((req.body ?? {}).attribution),
   } as never);
 

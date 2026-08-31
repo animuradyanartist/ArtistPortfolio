@@ -564,6 +564,10 @@ export const orders = pgTable("orders", {
   currency: text("currency").notNull().default("EUR"),
   shippingMinor: integer("shipping_minor"),
   totalMinor: integer("total_minor"),
+  // ── FULFILMENT-SIDE COSTS (Prodigi's own charge to us, captured from the checkout quote). Internal
+  //    accounting only — never returned by a public route. Null for originals / when unavailable. ──
+  prodigiCostMinor: integer("prodigi_cost_minor"),
+  prodigiShippingMinor: integer("prodigi_shipping_minor"),
   /** How the shipping figure was reached — the estimator's own provenance string, or the
    *  fact that a human set it. An order must be able to explain its shipping line. */
   shippingBasis: text("shipping_basis"),
