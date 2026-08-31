@@ -108,6 +108,9 @@ export function skuAspect(p: ProdigiLaunchProduct): number {
   return Math.max(a, b) / Math.min(a, b);
 }
 
+/** Machine-readable eligibility outcome, so the admin UI can show a precise reason (not just "Not eligible"). */
+export type EligibilityReasonCode = "aspect-ratio" | "resolution" | null;
+
 export interface SkuEligibility {
   sku: string;
   /** master and print-area aspect ratios agree within tolerance (so no crop/stretch is needed). */
@@ -119,6 +122,8 @@ export interface SkuEligibility {
   /** eligible = ratio matches AND resolution clears the floor. Never upscales. */
   eligible: boolean;
   reason: string | null;
+  /** Why it is not eligible, as a stable code the UI maps to a short label. Null when eligible. */
+  reasonCode: EligibilityReasonCode;
 }
 
 /**
@@ -148,11 +153,19 @@ export function assessMasterForSku(
   const meetsFloor = effectiveDpi >= policy.minimumDpi;
   const eligible = ratioMatches && meetsFloor;
 
+  // A ratio mismatch is reported FIRST because it disqualifies regardless of how high the DPI is — a
+  // very high-DPI master (e.g. 620 DPI) is still "Not eligible" for a size whose aspect ratio differs.
   let reason: string | null = null;
-  if (!ratioMatches) reason = `Aspect ratio ${masterRatio.toFixed(3)} does not match this size's ${skuRatio.toFixed(3)} — it would crop or stretch.`;
-  else if (!meetsFloor) reason = `Effective ${effectiveDpi} DPI is below the ${policy.minimumDpi} DPI floor — a higher-resolution master is required (no upscaling).`;
+  let reasonCode: EligibilityReasonCode = null;
+  if (!ratioMatches) {
+    reason = `Aspect ratio ${masterRatio.toFixed(3)} does not match this size's ${skuRatio.toFixed(3)} — it would crop or stretch.`;
+    reasonCode = "aspect-ratio";
+  } else if (!meetsFloor) {
+    reason = `Effective ${effectiveDpi} DPI is below the ${policy.minimumDpi} DPI floor — a higher-resolution master is required (no upscaling).`;
+    reasonCode = "resolution";
+  }
 
-  return { sku, ratioMatches, effectiveDpi, meetsPreferred, meetsFloor, eligible, reason };
+  return { sku, ratioMatches, effectiveDpi, meetsPreferred, meetsFloor, eligible, reason, reasonCode };
 }
 
 /** Every active-launch SKU a given master can actually be printed at (ratio + resolution ok). */

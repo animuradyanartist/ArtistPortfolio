@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, bigint, boolean, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, bigint, doublePrecision, boolean, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
@@ -206,6 +206,13 @@ export const printVariants = pgTable("print_variants", {
   minDpi: integer("min_dpi"),
   eligible: boolean("eligible").notNull().default(false),
   enabled: boolean("enabled").notNull().default(false),
+  // ── PER-VARIANT NON-DESTRUCTIVE CROP (normalized rectangle over the master, all in [0,1]). Null =
+  //    no crop (used when the master's aspect already matches the SKU). Different sizes may crop the
+  //    SAME master differently; the master itself is never modified. See shared/commerce/printCrop.ts. ──
+  cropX: doublePrecision("crop_x"),
+  cropY: doublePrecision("crop_y"),
+  cropW: doublePrecision("crop_w"),
+  cropH: doublePrecision("crop_h"),
   /**
    * PRODIGI RECONCILIATION STATE. False means the `prodigiSku` + attributes are our own
    * PROVISIONAL configuration, not yet checked against a live Prodigi product response. It flips

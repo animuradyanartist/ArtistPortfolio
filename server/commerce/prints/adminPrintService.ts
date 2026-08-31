@@ -10,11 +10,13 @@
 
 import {
   getProdigiProduct,
-  assessMasterForSku,
   DEFAULT_SKU_POLICY,
   type PrintMaterial,
   type SkuEligibilityPolicy,
 } from "../prodigi/prodigiProducts";
+import { assessVariantEligibility, type NormalizedCrop, type VariantReasonCode } from "@shared/commerce/printCrop";
+
+export type { VariantReasonCode, NormalizedCrop } from "@shared/commerce/printCrop";
 
 export interface MasterDims {
   widthPx: number | null;
@@ -30,11 +32,17 @@ export interface DerivedVariantFields {
   heightCm: number;
   printAreaWidthPx: number;
   printAreaHeightPx: number;
-  /** DPI at this SKU's physical size for the given master; null when the master has no dimensions. */
+  /** DPI at this SKU's physical size for the CROPPED region (or full master when no crop). Null w/o master. */
   effectiveDpi: number | null;
-  /** eligible = a ready master, matching ratio, clearing the DPI floor. False if any is missing. */
+  /** eligible = ready master, aspect matches (directly OR via a valid crop), clears the DPI floor. */
   eligible: boolean;
+  /** This size needs a crop (the master's aspect differs). Not the same as ineligible. */
+  cropRequired: boolean;
+  /** A valid crop is configured for this variant. */
+  cropConfigured: boolean;
   reason: string | null;
+  /** Stable code for the reason (for the admin UI). Null when eligible. */
+  reasonCode: VariantReasonCode;
 }
 
 export type DeriveResult =
@@ -42,13 +50,15 @@ export type DeriveResult =
   | { ok: false; error: string };
 
 /**
- * Derive a variant's physical fields from a VERIFIED SKU + the artwork master. Refuses an unknown
- * SKU outright (no invented products). Eligibility requires a master with real pixel dimensions
- * AND `status === 'ready'` — a web-resolution or unverified master never yields an eligible variant.
+ * Derive a variant's physical fields from a VERIFIED SKU + the master + THIS variant's crop. Refuses an
+ * unknown SKU outright (no invented products). Eligibility uses the crop-aware state machine
+ * (shared/commerce/printCrop): an aspect mismatch is "crop required", not permanently ineligible, and
+ * DPI is computed from the ACTUAL (cropped) pixels — never the full master, never upscaling.
  */
 export function deriveVariantFields(
   sku: string,
   master: MasterDims | null,
+  crop: NormalizedCrop | null = null,
   policy: SkuEligibilityPolicy = DEFAULT_SKU_POLICY,
 ): DeriveResult {
   const product = getProdigiProduct(sku);
@@ -56,36 +66,29 @@ export function deriveVariantFields(
     return { ok: false, error: `"${sku}" is not a verified Prodigi launch SKU — it cannot be sold.` };
   }
 
-  const base: DerivedVariantFields = {
-    material: product.material,
-    sizeLabel: product.displayName,
-    widthCm: product.widthCm,
-    heightCm: product.heightCm,
-    printAreaWidthPx: product.printAreaWidthPx,
-    printAreaHeightPx: product.printAreaHeightPx,
-    effectiveDpi: null,
-    eligible: false,
-    reason: null,
-  };
-
-  if (!master || master.widthPx == null || master.heightPx == null) {
-    return { ok: true, fields: { ...base, reason: "No master dimensions yet — awaiting a print-ready master." } };
-  }
-
-  const e = assessMasterForSku({ widthPx: master.widthPx, heightPx: master.heightPx }, sku, policy);
-  if (!e) {
-    return { ok: false, error: `Eligibility could not be computed for "${sku}".` };
-  }
-
-  const masterReady = master.status === "ready";
-  const eligible = e.eligible && masterReady;
-  const reason = !masterReady
-    ? "Master is not marked print-ready yet."
-    : e.reason; // ratio/resolution reason, or null when eligible
+  const a = assessVariantEligibility(
+    master ? { widthPx: master.widthPx, heightPx: master.heightPx, status: master.status } : null,
+    sku,
+    crop,
+    policy,
+  );
 
   return {
     ok: true,
-    fields: { ...base, effectiveDpi: e.effectiveDpi, eligible, reason },
+    fields: {
+      material: product.material,
+      sizeLabel: product.displayName,
+      widthCm: product.widthCm,
+      heightCm: product.heightCm,
+      printAreaWidthPx: product.printAreaWidthPx,
+      printAreaHeightPx: product.printAreaHeightPx,
+      effectiveDpi: a.effectiveDpi,
+      eligible: a.eligible,
+      cropRequired: a.cropRequired,
+      cropConfigured: a.cropConfigured,
+      reason: a.reason,
+      reasonCode: a.reasonCode,
+    },
   };
 }
 
@@ -117,11 +120,12 @@ const ALLOWED_FRAME_COLOURS = new Set(["natural", "black", "white"]);
 export function validateVariantSave(
   input: VariantSaveInput,
   master: MasterDims | null,
+  crop: NormalizedCrop | null = null,
   policy: SkuEligibilityPolicy = DEFAULT_SKU_POLICY,
 ): ValidatedVariantSave {
   const errors: Record<string, string> = {};
 
-  const derived = deriveVariantFields(input.sku, master, policy);
+  const derived = deriveVariantFields(input.sku, master, crop, policy);
   if (!derived.ok) {
     errors.sku = derived.error;
     return { ok: false, errors };
@@ -139,7 +143,11 @@ export function validateVariantSave(
 
   // A variant may only be ENABLED for sale when it is genuinely sellable.
   if (input.enabled) {
-    if (!derived.fields.eligible) errors.enabled = "Cannot enable: the master is not eligible for this size yet.";
+    if (!derived.fields.eligible) {
+      errors.enabled = derived.fields.cropRequired && !derived.fields.cropConfigured
+        ? "Cannot enable: set the crop for this size first."
+        : "Cannot enable: the master is not eligible for this size yet.";
+    }
     else if (input.retailMinor == null || input.retailMinor <= 0) errors.enabled = "Cannot enable: set a price first.";
     else if (!input.printReadyAssetUrl && !master?.printReadyAssetUrl) errors.enabled = "Cannot enable: a print-ready asset URL is required.";
     else if (input.framed) errors.enabled = "Framed SKUs are not verified yet — a framed variant cannot be enabled for sale.";

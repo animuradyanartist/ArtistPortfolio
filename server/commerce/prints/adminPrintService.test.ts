@@ -26,26 +26,54 @@ describe("deriveVariantFields — the admin cannot invent physical facts", () =>
     expect(deriveVariantFields("GLOBAL-FAP-16X24", readyMaster).ok).toBe(false); // real but not launch
   });
 
-  it("is NOT eligible without master dimensions (web images / no master)", () => {
+  it("is NOT eligible without master dimensions (web images / no master) — reasonCode 'no-master'", () => {
     const r = deriveVariantFields("GLOBAL-HGE-12X16", { widthPx: null, heightPx: null, status: "missing" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.fields.eligible).toBe(false);
     expect(r.fields.effectiveDpi).toBeNull();
+    expect(r.fields.reasonCode).toBe("no-master");
   });
 
-  it("is NOT eligible when the master exists but isn't marked print-ready", () => {
+  it("is NOT eligible when the master exists but isn't marked print-ready — reasonCode 'not-ready'", () => {
     const r = deriveVariantFields("GLOBAL-HGE-12X16", { ...readyMaster, status: "provisional" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.fields.eligible).toBe(false);
     expect(r.fields.reason).toMatch(/not marked print-ready/);
+    expect(r.fields.reasonCode).toBe("not-ready");
   });
 
-  it("is NOT eligible when the master ratio doesn't match the SKU (no crop)", () => {
+  it("master ratio doesn't match the SKU (no crop) → CROP REQUIRED (not permanently ineligible)", () => {
     const square: MasterDims = { widthPx: 6000, heightPx: 6000, status: "ready" };
     const r = deriveVariantFields("GLOBAL-HGE-12X16", square);
-    expect(r.ok && r.fields.eligible).toBe(false);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.fields.eligible).toBe(false);
+    expect(r.fields.cropRequired).toBe(true);
+    expect(r.fields.cropConfigured).toBe(false);
+    expect(r.fields.reasonCode).toBe("crop-required");
+  });
+
+  it("a high-DPI WRONG-RATIO master → crop-required; a valid crop makes it eligible (DPI from the crop)", () => {
+    const sqrt2: MasterDims = { widthPx: 9920, heightPx: 7015, status: "ready" };
+    const noCrop = deriveVariantFields("GLOBAL-HGE-12X16", sqrt2);
+    expect(noCrop.ok && noCrop.fields.cropRequired).toBe(true);
+    expect(noCrop.ok && noCrop.fields.reasonCode).toBe("crop-required");
+    // With a valid crop (portrait 3:4 slice of the master) → eligible, DPI from the CROPPED region.
+    const crop = { x: 0.235, y: 0, w: 0.53, h: 1 }; // ~3600:4800 (0.75) region of the √2 master
+    const withCrop = deriveVariantFields("GLOBAL-HGE-12X16", sqrt2, crop);
+    expect(withCrop.ok && withCrop.fields.eligible).toBe(true);
+    expect(withCrop.ok && withCrop.fields.reasonCode).toBeNull();
+    expect(withCrop.ok && (withCrop.fields.effectiveDpi ?? 0)).toBeLessThan(620); // cropping loses pixels
+    // …and the SAME master is still eligible with NO crop at the matching A2 size.
+    expect(deriveVariantFields("GLOBAL-HGE-A2", sqrt2)).toMatchObject({ fields: { eligible: true, cropRequired: false, reasonCode: null } });
+  });
+
+  it("eligible variant reports reasonCode null", () => {
+    const r = deriveVariantFields("GLOBAL-HGE-12X16", readyMaster);
+    expect(r.ok && r.fields.eligible).toBe(true);
+    expect(r.ok && r.fields.reasonCode).toBeNull();
   });
 });
 
