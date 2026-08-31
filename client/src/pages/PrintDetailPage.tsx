@@ -21,9 +21,10 @@ import {
   publicMaterialCategories,
   sizesForCategory,
   seedSelection,
-  firstOptionInCategory,
+  retainedSizeOnCategoryChange,
   materialCategoryLabel,
 } from "@/lib/printSelector";
+import { SizeSelect } from "@/components/SizeSelect";
 import {
   readAttribution,
   trackViewItemPrint,
@@ -35,6 +36,7 @@ interface Option {
   id: number | null;
   material: string;
   sizeLabel: string;
+  sizeName?: string | null;
   widthCm?: number;
   heightCm?: number;
   framed: boolean;
@@ -113,21 +115,30 @@ export default function PrintDetailPage() {
     [options, category],
   );
 
-  // Seed the selection once options arrive, preferring a purchasable combination.
+  // Seed the MATERIAL once options arrive (prefer a purchasable one). Size stays unset so the dropdown
+  // opens on "Select a size" — the customer explicitly picks a size.
   useEffect(() => {
     if (!options.length || category) return;
     const seed = seedSelection(options);
-    if (!seed) return;
-    setCategory(seed.category);
-    setSize(seed.sizeLabel);
-    setFrame(frameKeyOf(seed.option));
+    if (seed) setCategory(seed.category);
   }, [options, category]);
 
-  // Switching Material picks a valid size within the new category (purchasable-first).
+  // Choose a size from the dropdown; carry the matching frame so `selected` resolves. Null → cleared.
+  const chooseSize = (sizeLabel: string | null) => {
+    setSize(sizeLabel);
+    if (!sizeLabel) { setFrame(null); return; }
+    const opt = options.find((o) => categoryOfMaterial(o.material) === category && o.sizeLabel === sizeLabel);
+    setFrame(opt ? frameKeyOf(opt) : null);
+  };
+
+  // Switching Material keeps the size ONLY if it exists in the new material, else resets to "Select a
+  // size" — a variant from the previous material is never silently retained.
   const selectCategory = (cat: PrintCategory) => {
     setCategory(cat);
-    const seed = firstOptionInCategory(options, cat);
-    if (seed) { setSize(seed.sizeLabel); setFrame(frameKeyOf(seed)); }
+    const retained = retainedSizeOnCategoryChange(options, cat, size);
+    setSize(retained);
+    const opt = retained ? options.find((o) => categoryOfMaterial(o.material) === cat && o.sizeLabel === retained) : null;
+    setFrame(opt ? frameKeyOf(opt) : null);
   };
 
   const selected = useMemo(
@@ -240,14 +251,13 @@ export default function PrintDetailPage() {
               ))}
             </Choice>
           )}
+          {/* Size is a single accessible dropdown (never a row of size buttons). Each option reads
+              "{name} ({cm}) — {retail price}"; options are already filtered to the selected material. */}
           {sizes.length > 0 && (
-            <Choice label="Size">
-              {sizes.map((s) => (
-                <Pill key={s.sizeLabel} active={size === s.sizeLabel} onClick={() => setSize(s.sizeLabel)}>
-                  {s.sizeLabel}{s.widthCm && s.heightCm ? ` · ${s.widthCm}×${s.heightCm} cm` : ""}
-                </Pill>
-              ))}
-            </Choice>
+            <div className="mb-6">
+              <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-2">Size</p>
+              <SizeSelect sizes={sizes} value={size} onChange={chooseSize} />
+            </div>
           )}
           {/* Framing is deliberately not offered yet (framed SKUs unverified) — the product info
               states "Unframed". Only show a Frame choice if more than one frame option exists. */}
@@ -260,8 +270,11 @@ export default function PrintDetailPage() {
           )}
 
           <div className="border-t border-stone-300 mt-8 pt-6">
-            {!selected && (
-              <p className="text-stone-600 text-sm">That combination isn’t offered. Please choose another.</p>
+            {!size && (
+              <p className="text-stone-600 text-sm">Select a size to see the price and order.</p>
+            )}
+            {size && !selected && (
+              <p className="text-stone-600 text-sm">That size isn’t available. Please choose another.</p>
             )}
             {selected && selected.state === "purchasable" && selected.priceMinor != null && (
               <PurchasableBlock detail={data} option={selected} navigate={navigate} />

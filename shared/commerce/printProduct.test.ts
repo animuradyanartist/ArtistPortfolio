@@ -85,6 +85,24 @@ describe("publicSelectableVariants — what a NEW public purchase may pick (PDP 
     expect(sel.map((v) => v.id).sort()).toEqual([1, 2]);
     expect(sel.every((v) => assessVariant(v, missingMaster).state === "provisional")).toBe(true);
   });
+
+  it("EDGE: a Photo-Rag-ONLY print is NOT publicly purchasable and has no starting price", () => {
+    // The PDP route computes purchasable + startingPrice from publicSelectableVariants (the same set
+    // the customer can pick). A historical print whose only purchasable variant is Photo Rag therefore
+    // reads as not-purchasable publicly — while the variant itself still fulfils for existing orders.
+    const onlyPhotoRag = [photoRag]; // photoRag is purchasable against a ready master
+    expect(isPubliclyPurchasable(photoRag, readyMaster)).toBe(true); // still buyable as a raw variant
+    const selectable = publicSelectableVariants(onlyPhotoRag, readyMaster);
+    expect(selectable).toEqual([]);
+    expect(selectable.some((v) => isPubliclyPurchasable(v, readyMaster))).toBe(false); // public: not purchasable
+    expect(startingPriceMinor(selectable, readyMaster)).toBeNull();                     // public: no price
+  });
+
+  it("EDGE: with an offered German Etching variant, purchasable + starting price come from the offered set", () => {
+    const selectable = publicSelectableVariants([paper, photoRag], readyMaster);
+    expect(selectable.some((v) => isPubliclyPurchasable(v, readyMaster))).toBe(true);
+    expect(startingPriceMinor(selectable, readyMaster)).toBe(paper.retailMinor); // Photo Rag price never leaks in
+  });
 });
 
 describe("assessVariant — the sale-state gate", () => {
