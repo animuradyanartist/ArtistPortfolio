@@ -59,13 +59,16 @@ function mapVariant(r: any): PrintVariantView {
   };
 }
 
-function mapMaster(r: any): PrintMasterView {
+/** The PRINT-OWNED master, mapped from a `prints` row's master_* columns. Null when the print has no
+ *  master. The asset URL is a stable token-gated marker (the real signed URL is minted at fulfilment). */
+function masterFromRow(r: any): PrintMasterView | null {
+  if (!r || !r.master_asset_key) return null;
   return {
-    status: (r.status as PrintMasterView["status"]) ?? "missing",
-    widthPx: r.width_px ?? null,
-    heightPx: r.height_px ?? null,
-    printReadyAssetUrl: r.print_ready_asset_url ?? null,
-    checksumMd5: r.checksum_md5 ?? null,
+    status: (r.master_status as PrintMasterView["status"]) ?? "missing",
+    widthPx: r.master_width_px ?? null,
+    heightPx: r.master_height_px ?? null,
+    printReadyAssetUrl: `/api/commerce/prints/master-file/${r.id}`,
+    checksumMd5: r.master_checksum_md5 ?? null,
   };
 }
 
@@ -94,11 +97,6 @@ async function variantsFor(printId: number): Promise<PrintVariantView[]> {
   return rows.map(mapVariant);
 }
 
-async function masterFor(artworkId: number | null): Promise<PrintMasterView | null> {
-  if (artworkId == null) return null;
-  const { rows } = await pool.query(`SELECT * FROM print_masters WHERE artwork_id = $1 LIMIT 1`, [artworkId]);
-  return rows[0] ? mapMaster(rows[0]) : null;
-}
 
 /** A single print product with its variants + the master behind it. Null if not found. */
 export async function getPrintDetailBySlug(slug: string): Promise<PrintProductDetail | null> {
@@ -117,7 +115,8 @@ export async function getPrintDetailBySlug(slug: string): Promise<PrintProductDe
   }
   if (!printRow) return null;
   const print = mapPrint(printRow);
-  const [variants, master] = await Promise.all([variantsFor(print.id), masterFor(print.artworkId)]);
+  const variants = await variantsFor(print.id);
+  const master = masterFromRow(printRow);
   return { print, variants, master };
 }
 
@@ -142,7 +141,8 @@ export async function getPurchasablePrintCollection(): Promise<PrintCollectionCa
   const cards: PrintCollectionCard[] = [];
   for (const r of rows) {
     const print = mapPrint(r);
-    const [variants, master] = await Promise.all([variantsFor(print.id), masterFor(print.artworkId)]);
+    const variants = await variantsFor(print.id);
+    const master = masterFromRow(r);
     if (!hasPurchasableVariant(variants, master)) continue;
     const currency = variants.find((v) => isPubliclyPurchasable(v, master))?.currency ?? "EUR";
     cards.push({
@@ -203,7 +203,8 @@ export async function getAdminPrintsOverview(): Promise<AdminPrintOverviewRow[]>
     // whole admin list. A failed row is logged and skipped; every other print still lists.
     try {
       const print = mapPrint(r);
-      const [variants, master] = await Promise.all([variantsFor(print.id), masterFor(print.artworkId)]);
+      const variants = await variantsFor(print.id);
+      const master = masterFromRow(r);
       let artworkTitle: string | null = null;
       if (print.artworkId != null) {
         if (!titleCache.has(print.artworkId)) {
@@ -237,7 +238,8 @@ export async function purchasablePrintSlugForArtwork(artworkId: number): Promise
   const { rows } = await pool.query(`SELECT * FROM prints WHERE status = 'active' AND artwork_id = $1`, [artworkId]);
   for (const r of rows) {
     const print = mapPrint(r);
-    const [variants, master] = await Promise.all([variantsFor(print.id), masterFor(print.artworkId)]);
+    const variants = await variantsFor(print.id);
+    const master = masterFromRow(r);
     if (hasPurchasableVariant(variants, master)) return printSlugOf(print);
   }
   return null;
@@ -252,7 +254,8 @@ export async function getPrintAdminDetail(printId: number): Promise<PrintProduct
   const { rows } = await pool.query(`SELECT * FROM prints WHERE id = $1 LIMIT 1`, [printId]);
   if (!rows[0]) return null;
   const print = mapPrint(rows[0]);
-  const [variants, master] = await Promise.all([variantsFor(print.id), masterFor(print.artworkId)]);
+  const variants = await variantsFor(print.id);
+  const master = masterFromRow(rows[0]);
   return { print, variants, master };
 }
 
@@ -288,7 +291,7 @@ export async function getVariantForCheckout(variantId: number): Promise<Checkout
   );
   if (!printRows[0]) return null;
   const print = mapPrint(printRows[0]);
-  const master = await masterFor(print.artworkId);
+  const master = masterFromRow(printRows[0]);
   return { print, variant, master };
 }
 
@@ -301,20 +304,19 @@ export { assessVariant };
 export async function getPrintFeedInputs(): Promise<FeedVariantInput[]> {
   if (!hasDatabase) return [];
   const { rows } = await pool.query(
-    `SELECT pv.*, p.title AS artwork_title, p.slug AS print_slug, p.artwork_id AS product_artwork_id
+    `SELECT pv.*, p.id AS product_print_id, p.title AS artwork_title, p.slug AS print_slug,
+            p.artwork_id AS product_artwork_id,
+            p.master_asset_key, p.master_status, p.master_width_px, p.master_height_px, p.master_checksum_md5
        FROM print_variants pv
        JOIN prints p ON p.id = pv.print_id AND p.status = 'active'`,
   );
   const inputs: FeedVariantInput[] = [];
-  // Cache masters per artwork so a big catalogue doesn't re-query.
-  const masterCache = new Map<number, PrintMasterView | null>();
   for (const r of rows) {
-    const artworkId = r.product_artwork_id ?? null;
-    let master: PrintMasterView | null = null;
-    if (artworkId != null) {
-      if (!masterCache.has(artworkId)) masterCache.set(artworkId, await masterFor(artworkId));
-      master = masterCache.get(artworkId) ?? null;
-    }
+    // The master is the PRINT's own (from the joined prints row), not the artwork's.
+    const master = masterFromRow({
+      id: r.product_print_id, master_asset_key: r.master_asset_key, master_status: r.master_status,
+      master_width_px: r.master_width_px, master_height_px: r.master_height_px, master_checksum_md5: r.master_checksum_md5,
+    });
     const v = mapVariant(r);
     const assessment = assessVariant(v, master);
     inputs.push({

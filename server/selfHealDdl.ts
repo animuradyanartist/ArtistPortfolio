@@ -184,6 +184,16 @@ export const SELF_HEAL_DDL: readonly string[] = [
   `ALTER TABLE prints ADD COLUMN IF NOT EXISTS position integer DEFAULT 0`,
   `ALTER TABLE prints ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`,
   `ALTER TABLE prints ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()`,
+  // PRODUCTION MASTER now belongs to the PRINT (1:1), not the artwork. Reference + metadata only;
+  // bytes live on the persistent disk at <printId>/master.<ext>. Additive, nullable/defaulted.
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS master_asset_key text`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS master_filename text`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS master_content_type text`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS master_byte_size bigint`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS master_checksum_md5 text`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS master_width_px integer`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS master_height_px integer`,
+  `ALTER TABLE prints ADD COLUMN IF NOT EXISTS master_status text NOT NULL DEFAULT 'missing'`,
   // PRINT VARIANTS — the purchasable material × size × frame configurations of a print. Both
   // eligible (master cleared the resolution engine) AND enabled (an admin turned it on) must be
   // true before a customer can buy it. prodigi_verified records SKU reconciliation state.

@@ -102,6 +102,8 @@ export default function PrintEditorPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingMaster, setUploadingMaster] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // A master chosen BEFORE the print exists — held locally, NOT uploaded until Save (no orphans).
+  const [pendingMaster, setPendingMaster] = useState<{ file: File; widthPx: number; heightPx: number } | null>(null);
   const masterInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -173,8 +175,13 @@ export default function PrintEditorPage() {
         return printId!;
       } else {
         const created = await (await apiRequest("POST", "/api/prints", body)).json();
+        // NOW the print exists → upload the locally-chosen master under it (no orphan was ever created).
+        if (pendingMaster) {
+          await uploadMasterFile(created.id, pendingMaster.file);
+          setPendingMaster(null);
+        }
         qc.invalidateQueries({ queryKey: ["/api/admin/prints/overview"] });
-        toast({ title: "Draft created", description: "Now add a production file and print options." });
+        toast({ title: "Saved", description: "You can now add print options below." });
         setLocation(`/admin/edit-print/${created.id}`); // continue in the SAME editor, now with an id
         return created.id as number;
       }
@@ -200,38 +207,62 @@ export default function PrintEditorPage() {
     }
   };
 
-  // ── Master upload — STREAMED multipart (no base64, no JSON body limit). The server measures the
-  //    pixels, stores the file on the persistent disk, and returns the metadata. ──
+  // Upload a master file to a PRINT (streamed multipart; the server validates + stores on disk).
+  const uploadMasterFile = async (targetPrintId: number, file: File): Promise<boolean> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await fetch(`/api/admin/prints/masters/${targetPrintId}/file`, { method: "POST", credentials: "include", body: fd });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { toast({ title: "Could not upload the master", description: body.message, variant: "destructive" }); return false; }
+    const m = body.master;
+    toast({
+      title: m?.status === "ready" ? "Master uploaded — resolution is eligible" : "Master uploaded",
+      description: m?.status === "ready"
+        ? `${m.widthPx}×${m.heightPx}px · fits ${body.eligibleSizeCount} size${body.eligibleSizeCount === 1 ? "" : "s"}`
+        : `${m?.widthPx}×${m?.heightPx}px · resolution too low to print at the offered sizes`,
+    });
+    return true;
+  };
+
+  // ── Choose a master. In EDIT mode it uploads immediately (the print exists). In CREATE mode it is
+  //    only HELD locally (filename + client-measured dimensions) and uploaded on Save — so leaving the
+  //    page, or switching artwork, never writes an orphan master to disk. ──
   const onPickMaster = async (file?: File) => {
-    if (!file || artworkId == null || !isEdit) return;
+    if (!file) return;
     if (!file.type.startsWith("image/")) { toast({ title: "Please choose an image file", variant: "destructive" }); return; }
-    setUploadingMaster(true);
+    if (isEdit) {
+      setUploadingMaster(true);
+      try {
+        if (await uploadMasterFile(printId!, file)) refetchVariants();
+      } finally {
+        setUploadingMaster(false);
+        if (masterInputRef.current) masterInputRef.current.value = "";
+      }
+      return;
+    }
+    // Create mode: hold locally, measure dimensions for display only (no upload yet).
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const r = await fetch(`/api/admin/prints/masters/${artworkId}/file`, { method: "POST", credentials: "include", body: fd });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) { toast({ title: "Could not upload the master", description: body.message, variant: "destructive" }); return; }
-      refetchVariants();
-      const m = body.master;
-      toast({
-        title: m?.status === "ready" ? "Master uploaded — resolution is eligible" : "Master uploaded",
-        description: m?.status === "ready"
-          ? `${m.widthPx}×${m.heightPx}px · fits ${body.eligibleSizeCount} size${body.eligibleSizeCount === 1 ? "" : "s"}`
-          : `${m?.widthPx}×${m?.heightPx}px · resolution too low to print at the offered sizes`,
+      const url = URL.createObjectURL(file);
+      const dims = await new Promise<{ w: number; h: number }>((res, rej) => {
+        const img = new Image(); img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight }); img.onerror = rej; img.src = url;
       });
-    } catch (e: any) {
-      toast({ title: "Could not upload the master", description: e?.message, variant: "destructive" });
+      URL.revokeObjectURL(url);
+      setPendingMaster({ file, widthPx: dims.w, heightPx: dims.h });
+    } catch {
+      setPendingMaster({ file, widthPx: 0, heightPx: 0 });
     } finally {
-      setUploadingMaster(false);
       if (masterInputRef.current) masterInputRef.current.value = "";
     }
   };
   const removeMaster = async () => {
-    if (artworkId == null) return;
-    await apiRequest("DELETE", `/api/admin/prints/masters/${artworkId}/file`);
+    if (!isEdit) { setPendingMaster(null); return; } // create mode: just drop the local selection
+    const r = await apiRequest("DELETE", `/api/admin/prints/masters/${printId}/file`);
+    const body = await r.json().catch(() => ({}));
+    if (body?.status) setStatus(body.status); // removal fail-closed unpublishes → back to Draft
     refetchVariants();
-    toast({ title: "Master removed" });
+    qc.invalidateQueries({ queryKey: ["/api/admin/prints/overview"] });
+    qc.invalidateQueries({ queryKey: ["/api/commerce/prints"] });
+    toast({ title: "Master removed", description: isPublished ? "The print was unpublished (no master)." : undefined });
   };
 
   // ── Publish / Unpublish ──
@@ -326,20 +357,33 @@ export default function PrintEditorPage() {
             </Field>
           </Section>
 
-          {/* ── SECTION B — production master ── */}
+          {/* ── SECTION B — production master (belongs to THIS print). In create mode a chosen file is
+                held locally and only uploaded on Save; in edit mode it uploads immediately. ── */}
           <Section title="Production file" letter="B">
-            {!isEdit ? (
-              <LockNote>Save the print first, then upload the high-resolution master here.</LockNote>
-            ) : artworkId == null ? (
-              <LockNote>Choose a source artwork above to attach its high-resolution master.</LockNote>
-            ) : (
-              <MasterPanel master={variantData?.master ?? null}
+            {isEdit && variantData?.master?.hasAsset ? (
+              <MasterPanel master={variantData!.master!}
                 uploading={uploadingMaster}
                 onUpload={() => masterInputRef.current?.click()}
                 onRemove={removeMaster} />
+            ) : pendingMaster ? (
+              <PendingMasterPanel
+                name={pendingMaster.file.name}
+                dims={pendingMaster.widthPx ? `${pendingMaster.widthPx}×${pendingMaster.heightPx}px` : ""}
+                sizeMb={humanSize(pendingMaster.file.size)}
+                onReplace={() => masterInputRef.current?.click()}
+                onClear={() => setPendingMaster(null)} />
+            ) : (
+              <button onClick={() => masterInputRef.current?.click()} disabled={uploadingMaster}
+                className="w-full rounded-lg border border-dashed border-slate-300 py-8 grid place-items-center text-slate-500 hover:border-slate-500">
+                {uploadingMaster ? <><Loader2 className="w-5 h-5 animate-spin mb-1" /> Uploading…</>
+                  : <><FileUp className="w-6 h-6 mb-1" /><span className="text-sm">Choose the high-resolution print file</span><span className="text-xs text-slate-400">JPEG, PNG or TIFF · full resolution</span></>}
+              </button>
             )}
-            <input ref={masterInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => onPickMaster(e.target.files?.[0])} />
-            <p className="text-xs text-slate-400 mt-3">The high-resolution file is used only for printing and is never shown on the public print page.</p>
+            <input ref={masterInputRef} type="file" accept="image/jpeg,image/png,image/tiff" className="hidden" onChange={(e) => onPickMaster(e.target.files?.[0])} />
+            <p className="text-xs text-slate-400 mt-3">
+              The high-resolution file is used only for printing and is never shown on the public print page.
+              {!isEdit && " It is saved with the print when you click Save."}
+            </p>
           </Section>
 
           {/* ── SECTION C — options / variants ── */}
@@ -381,7 +425,7 @@ export default function PrintEditorPage() {
           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
             <Button onClick={saveProduct} disabled={savingProduct} variant="outline" className="w-full">
               {savingProduct ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              {isEdit ? "Save changes" : "Save draft"}
+              Save
             </Button>
             {isEdit && !isPublished && (
               <Button onClick={publish} disabled={publishing || !readiness.canPublish} className="w-full bg-deep-blue hover:bg-deep-blue/90"
@@ -438,6 +482,29 @@ function MasterPanel({ master, uploading, onUpload, onRemove }: {
         <div className="flex flex-col gap-1.5 shrink-0">
           <Button size="sm" variant="outline" onClick={onUpload} disabled={uploading}>{uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace"}</Button>
           <Button size="sm" variant="ghost" onClick={onRemove} className="text-red-600"><Trash2 className="w-4 h-4" /></Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Locally-chosen master, not yet uploaded (create mode). Uploaded to disk only when the print is saved. ──
+function PendingMasterPanel({ name, dims, sizeMb, onReplace, onClear }: {
+  name: string; dims: string; sizeMb: string; onReplace: () => void; onClear: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-slate-800 truncate">{name}</p>
+          <p className="text-sm text-slate-500 tabular-nums">{[dims, sizeMb].filter(Boolean).join(" · ")}</p>
+          <div className="mt-2">
+            <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-100">Selected — saves with the print</Badge>
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5 shrink-0">
+          <Button size="sm" variant="outline" onClick={onReplace}>Change</Button>
+          <Button size="sm" variant="ghost" onClick={onClear} className="text-red-600"><Trash2 className="w-4 h-4" /></Button>
         </div>
       </div>
     </div>

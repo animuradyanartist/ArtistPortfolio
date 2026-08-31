@@ -1,20 +1,22 @@
 /**
- * PRINT MASTER STORAGE — the high-resolution production master lives on a PERSISTENT DISK, never in
- * Postgres and never under public/.
+ * PRINT MASTER STORAGE — the high-resolution production master belongs to a PRINT PRODUCT (1:1),
+ * lives on a PERSISTENT DISK, never in Postgres, and never under public/.
  *
- * WHY A DISK, NOT A DB BLOB: a 300-DPI fine-art master is tens to hundreds of MB (a 16-bit TIFF at
- * the largest launch size is ~230 MB). Base64 in Postgres bloats every row and backup and breaks the
- * JSON body limit. So the bytes go to a Render Persistent Disk (mounted at PRINT_MASTERS_DIR, default
- * /var/data/print-masters); Postgres keeps only a reference + metadata.
+ * OWNERSHIP: keyed by printId. Two prints of the same source artwork have INDEPENDENT masters
+ * (`<printId>/master.<ext>`), so replacing one never touches the other.
  *
- * NEVER PUBLIC: the file is not served as a static asset. The only way out is a short-lived,
- * HMAC-signed, per-artwork token URL generated at fulfilment time for the print provider — it expires,
- * is scoped to one master, carries no admin auth, and is never a permanent public link.
+ * WHY A DISK: a 300-DPI fine-art master is tens–hundreds of MB. Postgres keeps only a reference +
+ * metadata; the bytes go to the Render Persistent Disk (PRINT_MASTERS_DIR, default /var/data/print-masters).
  *
- * One master per artwork (print_masters is unique on artwork_id): the key is deterministic
- * (`<artworkId>/master<ext>`), so a re-upload overwrites in place.
+ * NEVER PUBLIC: the file is never a static asset. The only way out is a short-lived, HMAC-signed,
+ * per-PRINT token URL minted at fulfilment time for the print provider — it expires, is scoped to one
+ * print's master, carries no admin auth, and is never a permanent public link.
+ *
+ * ATOMIC REPLACEMENT: a new upload is validated + finalised in a temp file, then atomically renamed
+ * into place; only after that are stale files removed. A failed/invalid upload can NEVER destroy the
+ * previous valid master.
  */
-import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { createReadStream, existsSync } from "fs";
 import { mkdir, stat, rename, unlink, readdir } from "fs/promises";
 import path from "path";
@@ -28,21 +30,24 @@ export const MASTER_DIR =
 
 const STAGING_DIR = path.join(MASTER_DIR, ".staging");
 
-/** Ensure the disk directories exist (called at boot + before writes). Safe to call repeatedly. */
+/** A validation problem the CLIENT caused (bad format / unreadable) → the route returns 4xx, not 500. */
+export class MasterValidationError extends Error {
+  constructor(message: string) { super(message); this.name = "MasterValidationError"; }
+}
+
+/** Sharp's format names we accept — the formats the print provider (Prodigi) actually prints from.
+ *  WebP/GIF/etc. are rejected: Prodigi's print assets are JPEG/PNG/TIFF. */
+const ACCEPTED_FORMATS: Record<string, { ext: string; contentType: string }> = {
+  jpeg: { ext: ".jpg", contentType: "image/jpeg" },
+  png: { ext: ".png", contentType: "image/png" },
+  tiff: { ext: ".tif", contentType: "image/tiff" },
+};
+
 export async function ensureMasterDirs(): Promise<void> {
   await mkdir(STAGING_DIR, { recursive: true });
 }
 export function stagingDir(): string {
   return STAGING_DIR;
-}
-
-const EXT_BY_MIME: Record<string, string> = {
-  "image/jpeg": ".jpg", "image/png": ".png", "image/tiff": ".tif", "image/webp": ".webp",
-};
-
-function extFor(mime: string, originalName: string): string {
-  const fromName = path.extname(originalName || "").toLowerCase();
-  return EXT_BY_MIME[mime] ?? (fromName && /^\.[a-z0-9]{1,5}$/.test(fromName) ? fromName : ".bin");
 }
 
 function md5OfFile(p: string): Promise<string> {
@@ -54,7 +59,7 @@ function md5OfFile(p: string): Promise<string> {
 
 export interface StoredMaster {
   assetKey: string;      // relative path under MASTER_DIR, e.g. "42/master.tif"
-  filename: string;      // original filename
+  filename: string;
   contentType: string;
   widthPx: number;
   heightPx: number;
@@ -62,32 +67,83 @@ export interface StoredMaster {
   checksumMd5: string;
 }
 
+function printDir(printId: number): string {
+  return path.join(MASTER_DIR, String(printId));
+}
+
+/** Delete every master file for a print (used on remove + stale-extension cleanup after replace). */
+export async function removeMasterFiles(printId: number): Promise<void> {
+  try {
+    for (const name of await readdir(printDir(printId))) {
+      if (name.startsWith("master")) await unlink(path.join(printDir(printId), name)).catch(() => {});
+    }
+  } catch {
+    // no directory yet — nothing to remove
+  }
+}
+
 /**
- * Finalise a STAGED upload (already streamed to disk by multer) as the master for an artwork. Reads
- * the pixel dimensions with sharp (header only — no full decode), computes the md5 + size, moves it
- * into place under the artwork's folder, and removes any previous master file for that artwork.
+ * Finalise a STAGED upload as the master for a PRINT, ATOMICALLY and safely:
+ *   1. validate the real bytes (sharp) — accepted format + readable dimensions, or throw (staged file
+ *      stays for the caller to clean, the OLD master is untouched),
+ *   2. compute checksum + size,
+ *   3. move the validated file to a TEMP name in the print's folder, then ATOMICALLY rename it onto
+ *      `master.<ext>` (overwrites the same-extension old master in one syscall — never a partial file),
+ *   4. remove any stale different-extension master files.
+ * A failure at step 1–2 never deletes the previous master; a failure at step 3 leaves the old master
+ * in place (the atomic rename either fully happened or did not).
  */
 export async function storeMasterFromStaging(
-  artworkId: number, stagedPath: string, originalName: string, mime: string,
+  printId: number, stagedPath: string, originalName: string, mime: string,
 ): Promise<StoredMaster> {
   await ensureMasterDirs();
-  // Dimensions from the header; limitInputPixels:false so a huge print master isn't rejected.
-  const meta = await sharp(stagedPath, { limitInputPixels: false }).metadata();
+
+  // 1) Validate ACTUAL contents. sharp throws on non-images; we also require an accepted format.
+  let meta: sharp.Metadata;
+  try {
+    meta = await sharp(stagedPath, { limitInputPixels: false }).metadata();
+  } catch {
+    throw new MasterValidationError("That file is not a readable image.");
+  }
+  const format = meta.format ?? "";
+  const accepted = ACCEPTED_FORMATS[format];
+  if (!accepted) {
+    throw new MasterValidationError(
+      `Unsupported image type "${format || "unknown"}". Please upload a JPEG, PNG or TIFF.`,
+    );
+  }
   const widthPx = meta.width ?? 0;
   const heightPx = meta.height ?? 0;
-  const contentType = meta.format ? `image/${meta.format === "jpeg" ? "jpeg" : meta.format}` : (mime || "application/octet-stream");
+  if (!widthPx || !heightPx) {
+    throw new MasterValidationError("The image dimensions could not be read from that file.");
+  }
+
+  // 2) checksum + size (streamed — never the whole file in memory).
   const checksumMd5 = await md5OfFile(stagedPath);
   const { size: byteSize } = await stat(stagedPath);
 
-  const ext = extFor(contentType, originalName);
-  const dir = path.join(MASTER_DIR, String(artworkId));
+  // 3) atomic swap into <printId>/master.<ext>.
+  const dir = printDir(printId);
   await mkdir(dir, { recursive: true });
-  // Remove any prior master (possibly a different extension) so there is exactly one per artwork.
-  await removeMasterFiles(artworkId);
-  const assetKey = path.posix.join(String(artworkId), `master${ext}`);
-  await rename(stagedPath, path.join(MASTER_DIR, assetKey));
+  const finalName = `master${accepted.ext}`;
+  const finalPath = path.join(dir, finalName);
+  const tmpPath = path.join(dir, `.master-${randomBytes(6).toString("hex")}${accepted.ext}`);
+  await rename(stagedPath, tmpPath);        // move validated file next to the target (same filesystem)
+  await rename(tmpPath, finalPath);         // ATOMIC overwrite of the same-extension master
 
-  return { assetKey, filename: originalName || `master${ext}`, contentType, widthPx, heightPx, byteSize, checksumMd5 };
+  // 4) remove any stale masters with a DIFFERENT extension (only now that the new one is safely in place).
+  try {
+    for (const name of await readdir(dir)) {
+      if (name.startsWith("master") && name !== finalName) await unlink(path.join(dir, name)).catch(() => {});
+    }
+  } catch { /* nothing else to clean */ }
+
+  return {
+    assetKey: path.posix.join(String(printId), finalName),
+    filename: originalName || finalName,
+    contentType: accepted.contentType,
+    widthPx, heightPx, byteSize, checksumMd5,
+  };
 }
 
 function insideMasterDir(p: string): boolean {
@@ -109,33 +165,37 @@ export function readMasterStream(assetKey: string): NodeJS.ReadableStream | null
   return createReadStream(p);
 }
 
-/** Delete every master file for an artwork (used on replace + remove). */
-export async function removeMasterFiles(artworkId: number): Promise<void> {
-  const dir = path.join(MASTER_DIR, String(artworkId));
+/** Best-effort deletion of a single staged temp file (used on every error/abort path). */
+export async function cleanupStaged(p: string | undefined | null): Promise<void> {
+  if (p) await unlink(p).catch(() => {});
+}
+
+/** Backstop: remove staging leftovers older than `maxAgeMs` (aborted/half uploads). Called at boot. */
+export async function sweepStaging(maxAgeMs = 60 * 60 * 1000): Promise<void> {
   try {
-    for (const name of await readdir(dir)) {
-      if (name.startsWith("master")) await unlink(path.join(dir, name)).catch(() => {});
+    const now = Date.now();
+    for (const name of await readdir(STAGING_DIR)) {
+      const p = path.join(STAGING_DIR, name);
+      const s = await stat(p).catch(() => null);
+      if (s && now - s.mtimeMs > maxAgeMs) await unlink(p).catch(() => {});
     }
-  } catch {
-    // no directory yet — nothing to remove
-  }
+  } catch { /* no staging dir yet */ }
 }
 
 /**
- * DEV fallback only: with no database the DB has no asset_key, so resolve the master file for an
- * artwork by scanning its folder. In production the DB record is authoritative and this is unused.
+ * DEV fallback only: with no database the DB has no asset_key, so resolve the master file for a print
+ * by scanning its folder. In production the DB record is authoritative and this is unused.
  */
-export async function findMasterKeyOnDisk(artworkId: number): Promise<string | null> {
-  const dir = path.join(MASTER_DIR, String(artworkId));
+export async function findMasterKeyOnDisk(printId: number): Promise<string | null> {
   try {
-    const name = (await readdir(dir)).find((n) => n.startsWith("master"));
-    return name ? path.posix.join(String(artworkId), name) : null;
+    const name = (await readdir(printDir(printId))).find((n) => n.startsWith("master"));
+    return name ? path.posix.join(String(printId), name) : null;
   } catch {
     return null;
   }
 }
 
-// ── Signed, expiring, per-artwork download tokens (for the fulfilment provider) ──
+// ── Signed, expiring, per-PRINT download tokens (for the fulfilment provider) ──
 function tokenSecret(): string {
   return (
     process.env.MASTER_DOWNLOAD_SECRET?.trim() ||
@@ -144,16 +204,16 @@ function tokenSecret(): string {
   );
 }
 
-/** A cryptographically-signed token that grants time-limited read of ONE artwork's master. */
-export function signMasterToken(artworkId: number, ttlSeconds = 900): string {
+/** A cryptographically-signed token that grants time-limited read of ONE print's master. */
+export function signMasterToken(printId: number, ttlSeconds = 900): string {
   const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
-  const payload = `${artworkId}.${exp}`;
+  const payload = `${printId}.${exp}`;
   const sig = createHmac("sha256", tokenSecret()).update(payload).digest("base64url");
   return `${Buffer.from(payload).toString("base64url")}.${sig}`;
 }
 
-/** True only for an unexpired token whose signature is valid AND that is scoped to this artwork. */
-export function verifyMasterToken(token: string | undefined | null, artworkId: number): boolean {
+/** True only for an unexpired token whose signature is valid AND that is scoped to this print. */
+export function verifyMasterToken(token: string | undefined | null, printId: number): boolean {
   if (!token || typeof token !== "string") return false;
   const dot = token.lastIndexOf(".");
   if (dot <= 0) return false;
@@ -169,14 +229,14 @@ export function verifyMasterToken(token: string | undefined | null, artworkId: n
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
-  const [aid, exp] = payload.split(".");
-  if (Number(aid) !== artworkId) return false;
+  const [pid, exp] = payload.split(".");
+  if (Number(pid) !== printId) return false;
   if (!Number.isFinite(Number(exp)) || Number(exp) < Math.floor(Date.now() / 1000)) return false;
   return true;
 }
 
 /** The absolute, signed URL handed to the fulfilment provider at order time (never stored). */
-export function signedMasterUrl(baseUrl: string, artworkId: number, ttlSeconds = 900): string {
+export function signedMasterUrl(baseUrl: string, printId: number, ttlSeconds = 900): string {
   const base = baseUrl.replace(/\/+$/, "");
-  return `${base}/api/commerce/prints/master-file/${artworkId}?token=${signMasterToken(artworkId, ttlSeconds)}`;
+  return `${base}/api/commerce/prints/master-file/${printId}?token=${signMasterToken(printId, ttlSeconds)}`;
 }
