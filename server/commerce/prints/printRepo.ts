@@ -97,6 +97,29 @@ async function variantsFor(printId: number): Promise<PrintVariantView[]> {
   return rows.map(mapVariant);
 }
 
+/**
+ * Fetch the variants for MANY prints in ONE query and group them by print_id in memory — the
+ * set-based replacement for calling variantsFor() once per print (the N+1 pattern). The ordering
+ * WITHIN each print's group is identical to variantsFor() (width_cm ASC, framed ASC, id ASC), so
+ * callers that pick the "first" matching variant behave exactly as before. Returns an empty map for
+ * an empty id list without touching the database (keeps the caller's total query count bounded).
+ */
+async function variantsByPrintId(printIds: number[]): Promise<Map<number, PrintVariantView[]>> {
+  const grouped = new Map<number, PrintVariantView[]>();
+  if (printIds.length === 0) return grouped;
+  const { rows } = await pool.query(
+    `SELECT * FROM print_variants WHERE print_id = ANY($1::int[]) ORDER BY print_id ASC, width_cm ASC, framed ASC, id ASC`,
+    [printIds],
+  );
+  for (const r of rows) {
+    const v = mapVariant(r);
+    let list = grouped.get(v.printId);
+    if (!list) { list = []; grouped.set(v.printId, list); }
+    list.push(v);
+  }
+  return grouped;
+}
+
 
 /** A single print product with its variants + the master behind it. Null if not found. */
 export async function getPrintDetailBySlug(slug: string): Promise<PrintProductDetail | null> {
@@ -137,20 +160,44 @@ export interface PrintCollectionCard {
  */
 export async function getPurchasablePrintCollection(): Promise<PrintCollectionCard[]> {
   if (!hasDatabase) return [];
-  const { rows } = await pool.query(`SELECT * FROM prints WHERE status = 'active' ORDER BY position ASC, id ASC`);
+  // TWO bounded queries, never N+1: (1) the active prints, (2) ALL their variants in one batch,
+  // grouped by print_id in memory. Every per-print decision below uses the SAME pure gates as before
+  // (hasPurchasableVariant / isPubliclyPurchasable / startingPriceMinor / masterFromRow / currency +
+  // image fallback), so behaviour — including fail-closed eligibility — is unchanged.
+  //
+  // EXPLICIT PROJECTION, never `SELECT *`: the `prints.images` column is a text[] of base64 data URIs
+  // (~57 MB across the 12 active rows), yet the card only needs the FIRST image. Selecting `images[1]`
+  // (Postgres arrays are 1-indexed) transfers just that one element, and we omit every column the card
+  // + gates don't use (description, available_sizes, preferred_material, featured, the master file
+  // metadata master_filename/master_content_type/master_byte_size, timestamps). This is what turned an
+  // ~8.7 s `SELECT *` read into a narrow one. Only the columns below are read downstream:
+  //   card + slug/image/currency → id, title, slug, artwork_id, images[1]
+  //   masterFromRow()            → id, master_asset_key, master_status, master_width_px,
+  //                                master_height_px, master_checksum_md5
+  //   WHERE / ORDER BY           → status, position   (filtered/ordered, not transferred)
+  const { rows } = await pool.query(
+    `SELECT id, title, slug, artwork_id,
+            images[1] AS primary_image,
+            master_asset_key, master_status, master_width_px, master_height_px, master_checksum_md5
+       FROM prints
+      WHERE status = 'active'
+      ORDER BY position ASC, id ASC`,
+  );
+  const variantsByPrint = await variantsByPrintId(rows.map((r) => r.id as number));
   const cards: PrintCollectionCard[] = [];
   for (const r of rows) {
-    const print = mapPrint(r);
-    const variants = await variantsFor(print.id);
+    const variants = variantsByPrint.get(r.id) ?? [];
+    // masterFromRow reads only id + master_* columns (all projected above) — same master, same gating.
     const master = masterFromRow(r);
     if (!hasPurchasableVariant(variants, master)) continue;
     const currency = variants.find((v) => isPubliclyPurchasable(v, master))?.currency ?? "EUR";
     cards.push({
-      id: print.id,
-      title: print.title,
-      slug: printSlugOf(print),
-      image: print.images[0] ?? (variants.find((v) => v.mockups?.length)?.mockups?.[0] ?? null),
-      artworkId: print.artworkId,
+      id: r.id,
+      title: r.title,
+      slug: printSlugOf({ slug: r.slug ?? null, title: r.title }),
+      // Identical to the old `print.images[0]` (images[1] IS the first element) with the same mockup fallback.
+      image: r.primary_image ?? (variants.find((v) => v.mockups?.length)?.mockups?.[0] ?? null),
+      artworkId: r.artwork_id ?? null,
       startingPriceMinor: startingPriceMinor(variants, master),
       currency,
     });
