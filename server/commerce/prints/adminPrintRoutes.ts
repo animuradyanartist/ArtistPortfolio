@@ -30,6 +30,7 @@ import {
 } from "./masterStorage";
 import { MasterStorageError } from "./masterObjectStore";
 import { initUpload, putChunk, reassembleUpload, discardUpload, UPLOAD_CHUNK_BYTES } from "./masterUpload";
+import { quotePrintShipping } from "./printShipping";
 
 /**
  * Finalise a validated staging file as THIS print's master, safely (shared by the single-shot upload and
@@ -501,6 +502,48 @@ export function registerAdminPrintRoutes(app: Express): void {
       return stream.pipe(pipeline).pipe(res);
     } catch {
       return res.status(500).end();
+    }
+  });
+
+  // ── ADMIN cost/margin estimate for a variant to a destination. Uses the SAME Prodigi /quotes call as
+  //    checkout: costSummary.items = the REAL production cost, costSummary.shipping = shipping — both
+  //    destination-dependent. Never fabricated: if Prodigi can't quote, returns available:false. This is
+  //    ADMIN-ONLY (production cost + margin are internal, never on a public route). Gross margin =
+  //    selling price − production cost (BEFORE payment fees, tax and FX — not net profit). ──
+  app.post("/api/admin/prints/variants/:id/cost-estimate", requireAdminAuth, async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      if (!Number.isInteger(id)) return res.status(400).json({ message: "Bad variant id" });
+      const variant = await getVariant(id);
+      if (!variant) return res.status(404).json({ message: "Variant not found" });
+      const country = String((req.body ?? {}).country ?? "").trim().toUpperCase();
+      if (!/^[A-Z]{2}$/.test(country)) return res.status(400).json({ message: "A 2-letter destination country is required." });
+
+      const attributes: Record<string, string> = {};
+      if (variant.framed && variant.frame_colour) attributes.frameColour = variant.frame_colour;
+      const quote = await quotePrintShipping({
+        prodigiSku: variant.prodigi_sku, copies: 1, country, currency: variant.currency,
+        ...(Object.keys(attributes).length ? { attributes } : {}),
+      });
+      res.set("Cache-Control", "no-store");
+      if (!quote.ok) return res.json({ available: false, reason: quote.reason });
+
+      const productionMinor = quote.itemsMinor;             // Prodigi production cost (may be null)
+      const sellingMinor = variant.retail_minor;
+      const grossMarginMinor = sellingMinor != null && productionMinor != null ? sellingMinor - productionMinor : null;
+      return res.json({
+        available: true,
+        country,
+        currency: quote.currency,
+        method: quote.method,
+        productionMinor,
+        shippingMinor: quote.shippingMinor,
+        prodigiTotalMinor: (productionMinor ?? 0) + quote.shippingMinor,
+        sellingMinor,
+        grossMarginMinor,        // gross margin on the product (selling − production), before fees/tax/FX
+      });
+    } catch {
+      return res.status(500).json({ available: false, reason: "error" });
     }
   });
 

@@ -102,6 +102,26 @@ export function selectShipping(
   };
 }
 
+/** The checkout decision from a shipping quote. FAIL CLOSED: a failed quote refuses the checkout with a
+ *  clear message (never free shipping, never a wrong total). A successful quote carries the shipping to
+ *  charge the customer AND Prodigi's own production cost (for order-side accounting; never shown publicly). */
+export type CheckoutShippingOutcome =
+  | { proceed: true; shippingMinor: number; prodigiCostMinor: number | null; method: string }
+  | { proceed: false; reason: "unconfigured" | "no-quote" | "error"; message: string };
+
+export function checkoutShippingOutcome(quote: PrintQuoteResult): CheckoutShippingOutcome {
+  if (!quote.ok) {
+    return {
+      proceed: false,
+      reason: quote.reason,
+      message: quote.reason === "unconfigured"
+        ? "Print ordering is temporarily unavailable. Please try again shortly."
+        : "We couldn't calculate shipping to your destination right now. Please try again in a moment.",
+    };
+  }
+  return { proceed: true, shippingMinor: quote.shippingMinor, prodigiCostMinor: quote.itemsMinor, method: quote.method };
+}
+
 /**
  * Get a REAL shipping quote for a print variant to a destination. Fails closed: with no Prodigi key
  * or on any error/empty response it returns `{ ok: false }` — never a fabricated amount.

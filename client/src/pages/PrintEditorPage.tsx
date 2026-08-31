@@ -36,9 +36,16 @@ import {
 import {
   PRODIGI_LAUNCH_PRODUCTS,
   MATERIAL_LABEL,
+  MATERIAL_INFO,
+  MATERIAL_CATEGORY,
+  CATEGORY_LABEL,
+  ALL_CATEGORIES,
+  materialsForCategory,
+  categoryHasVerifiedProducts,
   productsForMaterial,
   getProdigiProduct,
   type PrintMaterial,
+  type PrintCategory,
 } from "@shared/commerce/prodigiProducts";
 
 // ── snake_case API rows → shared camelCase shapes (for the readiness gate) ──
@@ -581,8 +588,10 @@ function VariantRow({ v, printId, master, masterDims, onChanged }: {
   return (
     <div className="flex items-center gap-3 flex-wrap rounded-lg border border-slate-200 px-3 py-2.5">
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-slate-800">{MATERIAL_LABEL[v.material as PrintMaterial] ?? v.material}</p>
-        <p className="text-xs text-slate-500">{v.sizeLabel}{v.effectiveDpi ? ` · ${v.effectiveDpi} DPI` : ""}</p>
+        <p className="font-medium text-slate-800">{CATEGORY_LABEL[MATERIAL_CATEGORY[v.material as PrintMaterial]] ?? "Fine Art Paper"}</p>
+        <p className="text-xs text-slate-500">
+          {MATERIAL_INFO[v.material as PrintMaterial]?.stockLabel ?? v.material} · {v.sizeLabel}{v.effectiveDpi ? ` · ${v.effectiveDpi} DPI` : ""}
+        </p>
       </div>
       <div className="flex items-center gap-1">
         <span className="text-slate-400 text-sm">$</span>
@@ -634,6 +643,55 @@ function VariantRow({ v, printId, master, masterDims, onChanged }: {
           onSaved={onChanged}
         />
       )}
+      <VariantCostEstimator variantId={v.id} sellingMinor={v.retailMinor} />
+    </div>
+  );
+}
+
+// ── Admin-only production cost + gross margin, from a REAL Prodigi quote to a chosen destination.
+//    Production cost varies by destination, so the admin picks a country; nothing is fabricated. ──
+function VariantCostEstimator({ variantId, sellingMinor }: { variantId: number; sellingMinor: number | null }) {
+  const [country, setCountry] = useState("US");
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [data, setData] = useState<any | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const usd = (m: number | null | undefined) => (m == null ? "—" : `$${(m / 100).toFixed(2)}`);
+
+  const estimate = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch(`/api/admin/prints/variants/${variantId}/cost-estimate`, {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ country }),
+      });
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok || !b.available) { setData(null); setErr(b.reason === "unconfigured" ? "Prodigi is not configured — production cost is unavailable." : "Prodigi could not price this to that destination right now."); return; }
+      setData(b);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="w-full mt-1 border-t border-slate-100 pt-2">
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="text-xs text-slate-500 hover:text-slate-700">▸ Show Prodigi cost &amp; margin</button>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-500">Estimate to</span>
+          <select value={country} onChange={(e) => { setCountry(e.target.value); setData(null); }} className="h-7 border border-slate-200 rounded px-1 text-slate-700">
+            {["US", "GB", "DE", "FR", "AU", "CA"].map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={estimate} disabled={busy}>{busy ? "…" : "Estimate"}</Button>
+          {err && <span className="text-amber-700">{err}</span>}
+          {data && (
+            <span className="tabular-nums text-slate-600">
+              Prodigi production <b>{usd(data.productionMinor)}</b> · shipping <b>{usd(data.shippingMinor)}</b>
+              {" · "}selling {usd(data.sellingMinor)}
+              {data.grossMarginMinor != null && <> · <span className={data.grossMarginMinor >= 0 ? "text-green-700" : "text-red-600"}>gross margin {usd(data.grossMarginMinor)}</span></>}
+              <span className="text-slate-400"> (before fees/tax/FX; customer pays shipping)</span>
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -641,10 +699,12 @@ function VariantRow({ v, printId, master, masterDims, onChanged }: {
 // ── Add a new option (material + size → SKU resolved behind the scenes) ──
 function AddOption({ printId, onAdded }: { printId: number; onAdded: () => void }) {
   const { toast } = useToast();
+  const [category, setCategory] = useState<PrintCategory | "">("");
   const [material, setMaterial] = useState<PrintMaterial | "">("");
   const [sku, setSku] = useState("");
   const [price, setPrice] = useState("");
   const [busy, setBusy] = useState(false);
+  const stocks = category ? materialsForCategory(category) : [];
   const sizes = material ? productsForMaterial(material) : [];
 
   const add = async () => {
@@ -658,7 +718,7 @@ function AddOption({ printId, onAdded }: { printId: number; onAdded: () => void 
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) { toast({ title: body.message ?? "Could not add option", description: body.errors?.sku, variant: "destructive" }); return; }
-      setMaterial(""); setSku(""); setPrice("");
+      setCategory(""); setMaterial(""); setSku(""); setPrice("");
       onAdded();
       toast({ title: "Option added" });
     } finally { setBusy(false); }
@@ -667,16 +727,31 @@ function AddOption({ printId, onAdded }: { printId: number; onAdded: () => void 
   return (
     <div className="rounded-lg border border-dashed border-slate-300 p-3">
       <p className="text-sm font-medium text-slate-700 mb-3">Add an option</p>
-      <div className="grid sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
+      <div className="grid sm:grid-cols-[1fr_1fr_1fr_auto_auto] gap-2 items-end">
+        {/* Primary, understandable choice: the product CATEGORY. Canvas is shown but disabled until a
+            verified Prodigi canvas SKU exists (categoryHasVerifiedProducts). */}
         <LabeledMini label="Material">
-          <Select value={material} onValueChange={(v) => { setMaterial(v as PrintMaterial); setSku(""); }}>
+          <Select value={category} onValueChange={(v) => { setCategory(v as PrintCategory); setMaterial(""); setSku(""); }}>
             <SelectTrigger className="h-9"><SelectValue placeholder="Choose" /></SelectTrigger>
-            <SelectContent>{MATERIALS.map((m) => <SelectItem key={m} value={m}>{MATERIAL_LABEL[m]}</SelectItem>)}</SelectContent>
+            <SelectContent>
+              {ALL_CATEGORIES.map((c) => (
+                <SelectItem key={c} value={c} disabled={!categoryHasVerifiedProducts(c)}>
+                  {CATEGORY_LABEL[c]}{categoryHasVerifiedProducts(c) ? "" : " — coming soon"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </LabeledMini>
+        {/* Secondary: the paper stock. */}
+        <LabeledMini label="Paper">
+          <Select value={material} onValueChange={(v) => { setMaterial(v as PrintMaterial); setSku(""); }} disabled={!category}>
+            <SelectTrigger className="h-9"><SelectValue placeholder={category ? "Choose" : "Pick material first"} /></SelectTrigger>
+            <SelectContent>{stocks.map((m) => <SelectItem key={m} value={m}>{MATERIAL_INFO[m].stockLabel}</SelectItem>)}</SelectContent>
           </Select>
         </LabeledMini>
         <LabeledMini label="Size">
           <Select value={sku} onValueChange={setSku} disabled={!material}>
-            <SelectTrigger className="h-9"><SelectValue placeholder={material ? "Choose" : "Pick material first"} /></SelectTrigger>
+            <SelectTrigger className="h-9"><SelectValue placeholder={material ? "Choose" : "Pick paper first"} /></SelectTrigger>
             <SelectContent>{sizes.map((s) => <SelectItem key={s.sku} value={s.sku}>{s.displayName}</SelectItem>)}</SelectContent>
           </Select>
         </LabeledMini>
@@ -686,7 +761,7 @@ function AddOption({ printId, onAdded }: { printId: number; onAdded: () => void 
         </LabeledMini>
         <Button onClick={add} disabled={busy || !sku} className="h-9 bg-deep-blue hover:bg-deep-blue/90"><Plus className="w-4 h-4 mr-1" /> Add</Button>
       </div>
-      {sku && <p className="text-[11px] text-slate-400 mt-2">Prodigi product: <code>{getProdigiProduct(sku)?.sku}</code> (resolved automatically)</p>}
+      {material && <p className="text-[11px] text-slate-400 mt-2">{MATERIAL_INFO[material].finish}</p>}
     </div>
   );
 }

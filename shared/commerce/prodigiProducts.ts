@@ -90,6 +90,57 @@ export const MATERIAL_LABEL: Record<PrintMaterial, string> = {
   "photo-rag": "Hahnemühle Photo Rag",
 };
 
+// ── CUSTOMER-FACING PRODUCT CATEGORY (the primary, understandable choice) vs the production STOCK ──
+//
+// The primary material choice is a plain-language CATEGORY (Fine Art Paper / Canvas). The Hahnemühle
+// paper stock is SECONDARY information under it, never a top-level category. Canvas is ARCHITECTED here
+// but has NO verified Prodigi SKU yet, so it is never purchasable (see canvas status below).
+
+export type PrintCategory = "fine-art-paper" | "canvas";
+
+export const CATEGORY_LABEL: Record<PrintCategory, string> = {
+  "fine-art-paper": "Fine Art Paper",
+  "canvas": "Canvas",
+};
+
+/** The category each production material belongs to. Both current papers are Fine Art Paper. */
+export const MATERIAL_CATEGORY: Record<PrintMaterial, PrintCategory> = {
+  "german-etching": "fine-art-paper",
+  "photo-rag": "fine-art-paper",
+};
+
+export interface MaterialInfo {
+  material: PrintMaterial;
+  category: PrintCategory;
+  /** The production stock name shown as SECONDARY info, e.g. "Hahnemühle German Etching". */
+  stockLabel: string;
+  /** Short, customer-friendly finish description (no paper-industry jargon needed to understand it). */
+  finish: string;
+}
+
+export const MATERIAL_INFO: Record<PrintMaterial, MaterialInfo> = {
+  "german-etching": { material: "german-etching", category: "fine-art-paper", stockLabel: "Hahnemühle German Etching", finish: "Textured matte fine art paper" },
+  "photo-rag": { material: "photo-rag", category: "fine-art-paper", stockLabel: "Hahnemühle Photo Rag", finish: "Smooth cotton fine art paper" },
+};
+
+/** Every category (whether or not it has verified products yet) — for a complete, stable UI order. */
+export const ALL_CATEGORIES: readonly PrintCategory[] = ["fine-art-paper", "canvas"];
+
+/** Active-launch materials in a category (empty for a category with no verified SKUs, e.g. canvas). */
+export function materialsForCategory(category: PrintCategory): PrintMaterial[] {
+  const set = new Set<PrintMaterial>();
+  for (const p of PRODIGI_LAUNCH_PRODUCTS) {
+    if (p.activeForLaunch && MATERIAL_CATEGORY[p.material] === category) set.add(p.material);
+  }
+  return Array.from(set);
+}
+
+/** True only when a category has at least one VERIFIED, active Prodigi product — the purchasability gate
+ *  for the whole category. Canvas is false until a real Prodigi canvas SKU is added to the registry. */
+export function categoryHasVerifiedProducts(category: PrintCategory): boolean {
+  return materialsForCategory(category).length > 0;
+}
+
 // ── ELIGIBILITY AGAINST REAL PRINT-AREA PIXELS ────────────────────────────────────────────
 
 export interface SkuEligibilityPolicy {

@@ -19,6 +19,7 @@ export interface OrderRow {
   item_type: string; artwork_id: number | null; artwork_snapshot: string | null;
   item_price_minor: number | null; currency: string; shipping_minor: number | null;
   total_minor: number | null; shipping_basis: string | null; shipping_calculation: string | null;
+  prodigi_cost_minor: number | null; prodigi_shipping_minor: number | null;
   stripe_checkout_session_id: string | null; stripe_payment_intent_id: string | null;
   reserved_at: Date | null; reservation_expires_at: Date | null; paid_at: Date | null;
   shipping_carrier: string | null; tracking_number: string | null; tracking_url: string | null;

@@ -127,6 +127,8 @@ export const SELF_HEAL_DDL: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS order_emails_order_idx ON order_emails (order_id)`,
   // ── payment reconciliation (must mirror shared/schema.ts orders + order_audit) ──
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_source text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS prodigi_cost_minor integer`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS prodigi_shipping_minor integer`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_payment_status text`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS last_payment_check_at timestamp`,
   `CREATE TABLE IF NOT EXISTS order_audit (
