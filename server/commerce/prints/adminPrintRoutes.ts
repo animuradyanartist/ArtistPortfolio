@@ -7,7 +7,7 @@
  * variant can only be enabled when it is genuinely sellable.
  */
 
-import type { Express } from "express";
+import express, { type Express, type Response } from "express";
 import multer from "multer";
 import { requireAdminAuth } from "../../auth";
 import { hasDatabase } from "../../db";
@@ -25,6 +25,54 @@ import {
   masterObjectExists, cleanupStaged, MasterValidationError,
 } from "./masterStorage";
 import { MasterStorageError } from "./masterObjectStore";
+import { initUpload, putChunk, reassembleUpload, discardUpload, UPLOAD_CHUNK_BYTES } from "./masterUpload";
+
+/**
+ * Finalise a validated staging file as THIS print's master, safely (shared by the single-shot upload and
+ * the chunked-upload completion). Upload the new object under a FRESH key, then update the DB, then delete
+ * the obsolete old object — so a validation error, storage failure, or DB failure never destroys the
+ * previous valid master. Throws MasterValidationError / MasterStorageError / (DB error) to the caller.
+ */
+async function commitMaster(printId: number, stagedPath: string, originalName: string, mime: string) {
+  const oldKey = (await getPrintMaster(printId))?.assetKey ?? null;
+  const stored = await storeMasterFromStaging(printId, stagedPath, originalName, mime);
+  const eligibleSkus = eligibleSkusForMaster({ widthPx: stored.widthPx, heightPx: stored.heightPx });
+  const status = eligibleSkus.length > 0 ? "ready" : "provisional";
+  try {
+    await upsertPrintMasterFile(printId, {
+      widthPx: stored.widthPx, heightPx: stored.heightPx, assetKey: stored.assetKey,
+      assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
+      checksumMd5: stored.checksumMd5, status,
+    });
+  } catch (dbErr) {
+    // DB failed AFTER the new object was uploaded → roll back the new object; leave DB + old master intact.
+    await removeMasterObject(stored.assetKey).catch(() => {});
+    throw dbErr;
+  }
+  // Committed. NOW it is safe to delete the OBSOLETE previous object (only if the key changed).
+  if (oldKey && oldKey !== stored.assetKey) {
+    await removeMasterObject(oldKey).catch((e) =>
+      console.error(`[master] obsolete object cleanup failed (orphan left in storage): ${oldKey}`, e instanceof Error ? e.message : e),
+    );
+  }
+  // Prefer the persisted row; fall back to the just-stored metadata (local preview has no DB).
+  const master = (await getPrintMaster(printId)) ?? {
+    widthPx: stored.widthPx, heightPx: stored.heightPx, status,
+    printReadyAssetUrl: `/api/commerce/prints/master-file/${printId}`, assetKey: stored.assetKey,
+    assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
+    checksumMd5: stored.checksumMd5, note: null, hasAsset: true,
+  };
+  return { master, eligibleSizeCount: eligibleSkus.length };
+}
+
+/** Map a master-commit failure to a controlled HTTP response (validation → 400, storage → 502, else 500). */
+function masterErrorResponse(res: Response, e: unknown) {
+  if (e instanceof MasterValidationError) return res.status(400).json({ message: e.message });
+  if (e instanceof MasterStorageError) {
+    return res.status(502).json({ message: "The master could not be saved to storage. Your previous master is unchanged. Please try again." });
+  }
+  return res.status(500).json({ message: "Could not save the master file." });
+}
 
 /** Master upload — STREAMED to a LOCAL DISPOSABLE staging file (never buffered in memory, never
  *  base64/JSON), validated, then uploaded to persistent Object Storage. 300-DPI files up to 500 MB are
@@ -112,9 +160,11 @@ export function registerAdminPrintRoutes(app: Express): void {
   //    SAFE REPLACEMENT: the new object is written under a fresh key BEFORE the DB is touched; the OLD
   //    object is deleted ONLY after the DB commits to the new key. A validation error, an upload/storage
   //    error, or a DB write failure all leave the previous valid master completely intact.
+  //    NOTE: this single-request path only works for files small enough to clear the Replit ingress
+  //    proxy's request-body cap. Large masters (100–500 MB) MUST use the CHUNKED routes below, because
+  //    the proxy 413s a big body BEFORE it reaches Express. The admin UI uses the chunked flow.
   app.post("/api/admin/prints/masters/:printId/file", requireAdminAuth, masterUpload.single("file"), async (req, res) => {
     const staged = req.file?.path;
-    let uploadedKey: string | null = null;
     try {
       const printId = Number.parseInt(String(req.params.printId), 10);
       if (!Number.isInteger(printId)) { await cleanupStaged(staged); return res.status(400).json({ message: "Bad print id" }); }
@@ -124,55 +174,91 @@ export function registerAdminPrintRoutes(app: Express): void {
         await cleanupStaged(staged);
         return res.status(404).json({ message: "Save the print first, then upload its master." });
       }
-
-      // The CURRENT master's key (if any), captured BEFORE we upload — deleted only after a clean commit.
-      const oldKey = (await getPrintMaster(printId))?.assetKey ?? null;
-
-      // Validate + upload to a NEW object key. A validation/format error, or a storage failure, throws
-      // here and nothing below runs — the previous master (oldKey) is untouched.
-      const stored = await storeMasterFromStaging(printId, req.file.path, req.file.originalname, req.file.mimetype);
-      uploadedKey = stored.assetKey;
-      // A master is 'ready' only when its resolution clears at least one verified launch size.
-      const eligibleSkus = eligibleSkusForMaster({ widthPx: stored.widthPx, heightPx: stored.heightPx });
-      const status = eligibleSkus.length > 0 ? "ready" : "provisional";
-
-      try {
-        await upsertPrintMasterFile(printId, {
-          widthPx: stored.widthPx, heightPx: stored.heightPx, assetKey: stored.assetKey,
-          assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
-          checksumMd5: stored.checksumMd5, status,
-        });
-      } catch (dbErr) {
-        // DB failed AFTER the new object was uploaded → roll back the new object so no orphan is left,
-        // and leave the DB + previous master exactly as they were.
-        await removeMasterObject(uploadedKey).catch(() => {});
-        throw dbErr;
-      }
-
-      // Committed. NOW it is safe to delete the OBSOLETE previous object (only if the key changed).
-      if (oldKey && oldKey !== stored.assetKey) {
-        await removeMasterObject(oldKey).catch((e) =>
-          console.error(`[master] obsolete object cleanup failed (orphan left in storage): ${oldKey}`, e instanceof Error ? e.message : e),
-        );
-      }
+      const result = await commitMaster(printId, req.file.path, req.file.originalname, req.file.mimetype);
       await cleanupStaged(staged);
-
-      // Prefer the persisted row; fall back to the just-stored metadata (local preview has no DB).
-      const master = (await getPrintMaster(printId)) ?? {
-        widthPx: stored.widthPx, heightPx: stored.heightPx, status,
-        printReadyAssetUrl: `/api/commerce/prints/master-file/${printId}`, assetKey: stored.assetKey,
-        assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
-        checksumMd5: stored.checksumMd5, note: null, hasAsset: true,
-      };
-      return res.json({ ok: true, master, eligibleSizeCount: eligibleSkus.length });
+      return res.json({ ok: true, ...result });
     } catch (e) {
       await cleanupStaged(staged); // failed/aborted upload leaves nothing in staging
-      if (e instanceof MasterValidationError) return res.status(400).json({ message: e.message });
-      // A storage-layer failure is loud (5xx), never a silent success — the previous master is preserved.
-      if (e instanceof MasterStorageError) {
-        return res.status(502).json({ message: "The master could not be saved to storage. Your previous master is unchanged. Please try again." });
+      return masterErrorResponse(res, e);
+    }
+  });
+
+  // ── CHUNKED master upload (per PRINT) — the production path for LARGE masters on Replit Autoscale.
+  //    The browser splits the file into small chunks that each clear the ingress cap; the server stages
+  //    them as Object Storage objects (stateless across Autoscale instances), then reassembles +
+  //    validates + commits on `complete`. Same security + fail-safe semantics as the single-shot route.
+  //
+  //  init → { uploadId, chunkBytes }; then N× chunk (raw octet-stream, ≤ chunkBytes); then complete.
+  app.post("/api/admin/prints/masters/:printId/upload/init", requireAdminAuth, async (req, res) => {
+    try {
+      const printId = Number.parseInt(String(req.params.printId), 10);
+      if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
+      if (hasDatabase && (await getPrintAdminDetail(printId)) == null) {
+        return res.status(404).json({ message: "Save the print first, then upload its master." });
       }
-      return res.status(500).json({ message: "Could not save the master file." });
+      return res.json({ ok: true, ...initUpload() });
+    } catch {
+      return res.status(500).json({ message: "Could not start the upload." });
+    }
+  });
+
+  // One chunk: RAW body (never JSON/base64), capped at the chunk size so a request can never be large.
+  app.post(
+    "/api/admin/prints/masters/:printId/upload/:uploadId/chunk",
+    requireAdminAuth,
+    express.raw({ type: () => true, limit: UPLOAD_CHUNK_BYTES + 1024 * 1024 }),
+    async (req, res) => {
+      try {
+        const printId = Number.parseInt(String(req.params.printId), 10);
+        if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
+        const index = Number(req.query.index);
+        const buf = req.body as Buffer;
+        if (!Buffer.isBuffer(buf) || buf.length === 0) return res.status(400).json({ message: "Empty or missing chunk body." });
+        await putChunk(printId, String(req.params.uploadId), index, buf);
+        return res.json({ ok: true, index });
+      } catch (e) {
+        if (e instanceof MasterValidationError) return res.status(400).json({ message: e.message });
+        if (e instanceof MasterStorageError) return res.status(502).json({ message: "A chunk could not be stored. Please retry the upload." });
+        return res.status(500).json({ message: "Could not store the chunk." });
+      }
+    },
+  );
+
+  // Reassemble + validate + commit. Same fail-safe path as the single-shot upload.
+  app.post("/api/admin/prints/masters/:printId/upload/:uploadId/complete", requireAdminAuth, async (req, res) => {
+    const printId = Number.parseInt(String(req.params.printId), 10);
+    const uploadId = String(req.params.uploadId);
+    let staged: string | undefined;
+    try {
+      if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
+      if (hasDatabase && (await getPrintAdminDetail(printId)) == null) {
+        await discardUpload(printId, uploadId);
+        return res.status(404).json({ message: "Save the print first, then upload its master." });
+      }
+      const b = (req.body ?? {}) as Record<string, unknown>;
+      const originalName = b.originalName ? String(b.originalName) : "master";
+      const totalChunks = b.totalChunks == null ? undefined : Number(b.totalChunks);
+      staged = await reassembleUpload(printId, uploadId, totalChunks);
+      const result = await commitMaster(printId, staged, originalName, "application/octet-stream");
+      await discardUpload(printId, uploadId); // remove the staged chunk objects
+      await cleanupStaged(staged);
+      return res.json({ ok: true, ...result });
+    } catch (e) {
+      await discardUpload(printId, uploadId).catch(() => {});
+      await cleanupStaged(staged);
+      return masterErrorResponse(res, e);
+    }
+  });
+
+  // Abort an in-flight upload — purge its staged chunk objects.
+  app.post("/api/admin/prints/masters/:printId/upload/:uploadId/abort", requireAdminAuth, async (req, res) => {
+    try {
+      const printId = Number.parseInt(String(req.params.printId), 10);
+      if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
+      await discardUpload(printId, String(req.params.uploadId)).catch(() => {});
+      return res.json({ ok: true });
+    } catch {
+      return res.status(500).json({ message: "Could not abort the upload." });
     }
   });
 

@@ -76,9 +76,16 @@ Preferred communication style: Simple, everyday language.
   + metadata; the bytes are never in Postgres and never a public URL. Prodigi downloads via the
   short-lived, HMAC-signed, per-print token route `/api/commerce/prints/master-file/:printId?token=…`,
   which streams the object through the app.
-- **Local upload staging is disposable** (OS temp dir): a master is streamed to a local temp file only
-  to be validated (sharp) and checksummed, then uploaded to Object Storage and the temp file deleted.
-  Permanent bytes never depend on local filesystem persistence.
+- **Large masters upload in CHUNKS** (`server/commerce/prints/masterUpload.ts`). Replit's ingress proxy
+  413s a large request BODY *before* it reaches Express (an upstream, non-configurable cap), so a single
+  multipart POST of a 100–500 MB master fails at the proxy. The admin UI therefore splits the file into
+  small chunks (≤ 8 MB each, `MASTER_UPLOAD_CHUNK_BYTES`) — `POST …/upload/init` → N× `…/upload/:id/chunk`
+  (raw octet-stream) → `…/upload/:id/complete`. Chunks are staged **as Object Storage objects** (so the
+  flow is stateless across Autoscale instances), then reassembled + validated (sharp) + committed exactly
+  like the single-shot path. The small single-shot `…/masters/:printId/file` route remains for small files.
+- **Local upload staging is disposable** (OS temp dir): chunks reassemble into a local temp file only to
+  be validated (sharp) and checksummed, then the final master is uploaded to Object Storage and the temp
+  file + staged chunk objects deleted. Permanent bytes never depend on local filesystem persistence.
 - **Manual setup required (once):** add **Object Storage** to the Repl (Tools → Object Storage → create
   a bucket). That injects the default bucket the SDK uses. Optionally pin a specific bucket with the
   **`PRINT_MASTERS_BUCKET_ID`** Replit Secret. In production a missing/unreachable store fails LOUD at
