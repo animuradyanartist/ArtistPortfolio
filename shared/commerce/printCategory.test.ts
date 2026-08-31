@@ -24,18 +24,20 @@ describe("customer-facing product category (Fine Art Paper / Canvas)", () => {
     expect(MATERIAL_CATEGORY["german-etching"]).toBe("fine-art-paper");
     expect(MATERIAL_CATEGORY["photo-rag"]).toBe("fine-art-paper");
     // The stock name + a plain finish are the secondary detail.
-    expect(MATERIAL_INFO["german-etching"]).toMatchObject({ category: "fine-art-paper", stockLabel: "Hahnemühle German Etching", finish: "Textured matte fine art paper" });
+    expect(MATERIAL_INFO["german-etching"]).toMatchObject({ category: "fine-art-paper", stockLabel: "Hahnemühle German Etching", finish: "310gsm · Textured matte · Giclée" });
     expect(MATERIAL_INFO["photo-rag"]).toMatchObject({ category: "fine-art-paper", stockLabel: "Hahnemühle Photo Rag", finish: "Smooth cotton fine art paper" });
     // "Hahnemühle …" is never a category.
     expect(Object.values(CATEGORY_LABEL)).not.toContain("Hahnemühle German Etching");
   });
 
-  it("(3) Canvas cannot be purchasable without a verified Prodigi canvas SKU", () => {
-    expect(categoryHasVerifiedProducts("canvas")).toBe(false);
-    expect(materialsForCategory("canvas")).toEqual([]);
-    // No canvas product exists in the verified registry.
-    expect(PRODIGI_LAUNCH_PRODUCTS.some((p) => MATERIAL_CATEGORY[p.material] === "canvas")).toBe(false);
-    // Fine Art Paper, by contrast, is verified + purchasable.
+  it("(3) Canvas is now verified + purchasable (five sandbox-verified GLOBAL-CAN SKUs)", () => {
+    expect(categoryHasVerifiedProducts("canvas")).toBe(true);
+    expect(materialsForCategory("canvas")).toEqual(["stretched-canvas"]);
+    // Verified canvas products exist in the registry, all GLOBAL-CAN.
+    const canvas = PRODIGI_LAUNCH_PRODUCTS.filter((p) => MATERIAL_CATEGORY[p.material] === "canvas");
+    expect(canvas).toHaveLength(5);
+    expect(canvas.every((p) => /^GLOBAL-CAN-/.test(p.sku))).toBe(true);
+    // Fine Art Paper is verified + purchasable; both current papers still resolve (photo-rag historical).
     expect(categoryHasVerifiedProducts("fine-art-paper")).toBe(true);
     expect(materialsForCategory("fine-art-paper").sort()).toEqual(["german-etching", "photo-rag"]);
   });

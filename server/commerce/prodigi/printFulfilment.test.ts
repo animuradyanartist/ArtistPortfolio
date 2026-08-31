@@ -48,6 +48,22 @@ describe("buildProdigiOrderRequest", () => {
     expect(req.items[0].assets[0].md5Hash).toBe("abc");
     expect(req.shippingMethod).toBe("Standard");
   });
+
+  it("a PAPER order carries NO canvas attributes", () => {
+    // Default order() is GLOBAL-HGE-A2 (paper) — the registry adds no wrap.
+    expect(buildProdigiOrderRequest(order()).items[0].attributes).toBeUndefined();
+  });
+
+  it("a CANVAS order INJECTS attributes.wrap = MirrorWrap from the SKU registry (canonical serializer)", () => {
+    const req = buildProdigiOrderRequest(order({ variant: { prodigiSku: "GLOBAL-CAN-16X20", printReadyAssetUrl: "https://cdn.example.com/a.jpg" } }));
+    expect(req.items[0].attributes).toEqual({ wrap: "MirrorWrap" });
+    expect(req.items[0].sizing).toBe("fillPrintArea");
+  });
+
+  it("a CANVAS order merges the wrap with an order-specific attribute (frame), registry supplying wrap", () => {
+    const req = buildProdigiOrderRequest(order({ variant: { prodigiSku: "GLOBAL-CAN-16X20", printReadyAssetUrl: "https://cdn.example.com/a.jpg", attributes: { frameColour: "black" } } }));
+    expect(req.items[0].attributes).toEqual({ wrap: "MirrorWrap", frameColour: "black" });
+  });
 });
 
 describe("createPrintFulfilment", () => {

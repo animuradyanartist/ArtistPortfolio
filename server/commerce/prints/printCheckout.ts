@@ -21,6 +21,7 @@ import {
   type PrintMasterView,
   type PrintItemSnapshot,
 } from "@shared/commerce/printProduct";
+import { MATERIAL_INFO, CATEGORY_LABEL, type PrintMaterial } from "@shared/commerce/prodigiProducts";
 import type { InternalPrintOrder } from "../prodigi/printFulfilment";
 import type { OrderRow } from "../orders";
 
@@ -83,13 +84,13 @@ export type PrintCheckoutResult =
   | { ok: false; refusal: PrintCheckoutRefusal };
 
 function variantDescription(v: PrintVariantView): string {
-  const material = v.material === "german-etching"
-    ? "Hahnemühle German Etching"
-    : v.material === "photo-rag"
-      ? "Hahnemühle Photo Rag"
-      : v.material;
-  const frame = v.framed ? `Framed (${v.frameColour ?? "natural"})` : "Unframed";
-  return [`Fine-Art Print`, `${v.widthCm}×${v.heightCm} cm`, material, frame].join(" · ");
+  // Customer-facing wording only: category + size + stock label. No Prodigi/SKU/wrap terminology.
+  const info = MATERIAL_INFO[v.material as PrintMaterial];
+  const category = info ? CATEGORY_LABEL[info.category] : "Fine Art Print";
+  const stock = info?.stockLabel ?? v.material;
+  const parts = [category, `${v.widthCm}×${v.heightCm} cm`, stock];
+  if (v.framed) parts.push(`Framed (${v.frameColour ?? "natural"})`);
+  return parts.join(" · ");
 }
 
 /**
@@ -169,6 +170,9 @@ export function printOrderToInternal(
   if (snap.itemType !== "print" || !snap.prodigiSku || !snap.printReadyAssetUrl) return null;
   if (!order.ship_address1 || !order.ship_city || !order.ship_postal_code || !order.ship_country) return null;
 
+  // Buyer/order-specific attributes only (frame colour from the purchase). The CATALOGUE-required
+  // attributes — canvas `wrap` — are injected canonically by buildProdigiOrderRequest from the SKU
+  // registry, so they reach Prodigi regardless of what this mapper carries. (See printFulfilment.ts.)
   const attributes: Record<string, string> = {};
   if (snap.framed && snap.frameColour) attributes.frameColour = snap.frameColour;
 

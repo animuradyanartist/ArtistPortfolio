@@ -51,6 +51,7 @@ function money(minor: number, currency: string): string {
 function materialLabel(m: string): string {
   if (m === "german-etching") return "Hahnemühle German Etching fine-art paper";
   if (m === "photo-rag") return "Hahnemühle Photo Rag fine-art paper";
+  if (m === "stretched-canvas") return "Artist-grade stretched canvas";
   return m;
 }
 

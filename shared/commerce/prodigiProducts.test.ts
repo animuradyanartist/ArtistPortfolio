@@ -11,11 +11,12 @@ import {
 } from "./prodigiProducts";
 
 describe("the verified launch catalogue", () => {
-  it("contains exactly the 7 sandbox-verified launch SKUs (HGE ×5, HPR ×2)", () => {
+  it("contains exactly the 12 sandbox-verified launch SKUs (HGE ×5, HPR ×2, CAN ×5)", () => {
     expect(activeLaunchSkus().sort()).toEqual(
       [
         "GLOBAL-HGE-12X16", "GLOBAL-HGE-16X20", "GLOBAL-HGE-18X24", "GLOBAL-HGE-A3", "GLOBAL-HGE-A2",
         "GLOBAL-HPR-16X20", "GLOBAL-HPR-A3",
+        "GLOBAL-CAN-A3", "GLOBAL-CAN-12X16", "GLOBAL-CAN-16X20", "GLOBAL-CAN-18X24", "GLOBAL-CAN-24X36",
       ].sort(),
     );
   });
@@ -51,6 +52,18 @@ describe("the verified launch catalogue", () => {
   it("splits materials", () => {
     expect(productsForMaterial("german-etching")).toHaveLength(5);
     expect(productsForMaterial("photo-rag")).toHaveLength(2);
+    expect(productsForMaterial("stretched-canvas")).toHaveLength(5);
+  });
+
+  it("carries the exact sandbox print-area pixels + wrap for the five canvas SKUs", () => {
+    expect(getProdigiProduct("GLOBAL-CAN-A3")).toMatchObject({ printAreaWidthPx: 3561, printAreaHeightPx: 5013, paperType: "CAN", substrateGsm: 400, material: "stretched-canvas" });
+    expect(getProdigiProduct("GLOBAL-CAN-12X16")).toMatchObject({ printAreaWidthPx: 3654, printAreaHeightPx: 4854 });
+    expect(getProdigiProduct("GLOBAL-CAN-16X20")).toMatchObject({ printAreaWidthPx: 4854, printAreaHeightPx: 6054 });
+    expect(getProdigiProduct("GLOBAL-CAN-18X24")).toMatchObject({ printAreaWidthPx: 5454, printAreaHeightPx: 7254 });
+    expect(getProdigiProduct("GLOBAL-CAN-24X36")).toMatchObject({ printAreaWidthPx: 7254, printAreaHeightPx: 10854 });
+    for (const sku of ["GLOBAL-CAN-A3", "GLOBAL-CAN-12X16", "GLOBAL-CAN-16X20", "GLOBAL-CAN-18X24", "GLOBAL-CAN-24X36"]) {
+      expect(getProdigiProduct(sku)?.requiredAttributes?.wrap).toBe("MirrorWrap");
+    }
   });
 });
 

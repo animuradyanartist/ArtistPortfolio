@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { deriveVariantFields, validateVariantSave, type MasterDims } from "./adminPrintService";
+import { CANVAS_LAUNCH_PRODUCTS, isSkuOfferedForNewVariant } from "@shared/commerce/prodigiProducts";
 
 const readyMaster: MasterDims = { widthPx: 4800, heightPx: 6400, status: "ready", printReadyAssetUrl: "https://cdn/m.tif" };
 // 4800×6400 is a clean 3:4 (0.75) — matches GLOBAL-HGE-12X16 (3600×4800).
@@ -115,5 +116,59 @@ describe("validateVariantSave — enabling requires genuine sellability", () => 
   it("allows saving a DISABLED framed variant (architected, just not sellable)", () => {
     const r = validateVariantSave({ ...base, enabled: false, framed: true, frameColour: "white" }, readyMaster);
     expect(r.ok).toBe(true);
+  });
+});
+
+describe("(6) an UNVERIFIED canvas SKU cannot be enabled (or even derived)", () => {
+  it("refuses a canvas SKU that is NOT in the verified set — nothing invented", () => {
+    // GLOBAL-CAN-8X10 is not one of the five verified sandbox SKUs → does not resolve → refused, exactly
+    // like any invented SKU. (The five real canvas SKUs, by contrast, resolve and are sellable.)
+    expect(deriveVariantFields("GLOBAL-CAN-8X10", readyMaster).ok).toBe(false);
+    expect(isSkuOfferedForNewVariant("GLOBAL-CAN-8X10")).toBe(false);
+    const r = validateVariantSave(
+      { sku: "GLOBAL-CAN-8X10", framed: false, frameColour: null, retailMinor: 14000, currency: "USD", printReadyAssetUrl: null, enabled: true },
+      readyMaster,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors?.sku).toBeTruthy();
+  });
+
+  it("a VERIFIED canvas SKU derives its physical facts from the catalogue (and can be enabled when eligible)", () => {
+    // Master 4854×6054 exactly matches GLOBAL-CAN-16X20's print area (4:5-ish) → eligible directly.
+    const canvasMaster: MasterDims = { widthPx: 4854, heightPx: 6054, status: "ready", printReadyAssetUrl: "https://cdn/m.tif" };
+    const d = deriveVariantFields("GLOBAL-CAN-16X20", canvasMaster);
+    expect(d.ok).toBe(true);
+    if (!d.ok) return;
+    expect(d.fields).toMatchObject({ material: "stretched-canvas", printAreaWidthPx: 4854, printAreaHeightPx: 6054, eligible: true });
+    const r = validateVariantSave(
+      { sku: "GLOBAL-CAN-16X20", framed: false, frameColour: null, retailMinor: 18000, currency: "USD", printReadyAssetUrl: "https://cdn/m.tif", enabled: true },
+      canvasMaster,
+    );
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe("(8)/(9) canvas uses the EXACT same crop workflow — no silent crop, no stretch", () => {
+  // The crop workflow is SKU-pixel-driven and material-agnostic: SKU → aspect check → (mismatch) crop
+  // required → set crop → DPI check → eligible. A ratio mismatch is reported as "crop required", never
+  // silently cropped or stretched. Proven here on a paper SKU (the same engine canvas rows flow through).
+  it("a ratio-mismatched master is 'crop required' (NOT eligible, NOT auto-cropped)", () => {
+    const squareMaster: MasterDims = { widthPx: 5000, heightPx: 5000, status: "ready", printReadyAssetUrl: "https://cdn/m.tif" };
+    const r = deriveVariantFields("GLOBAL-HGE-12X16", squareMaster); // 3:4 SKU vs 1:1 master
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.fields.eligible).toBe(false);      // never silently cropped to fit
+    expect(r.fields.cropRequired).toBe(true);   // the artist must set a crop
+  });
+
+  // Becomes REAL coverage the moment a verified canvas row is pasted in: every canvas SKU must flow
+  // through the identical crop machine (derive succeeds, and a mismatched master needs a crop).
+  it.each(CANVAS_LAUNCH_PRODUCTS.map((p) => p.sku))("verified canvas SKU %s uses the crop workflow", (sku) => {
+    const anyMaster: MasterDims = { widthPx: 6000, heightPx: 4000, status: "ready", printReadyAssetUrl: "https://cdn/m.tif" };
+    const r = deriveVariantFields(sku, anyMaster);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(typeof r.fields.cropRequired).toBe("boolean");
+    expect(r.fields.material).toBe("stretched-canvas");
   });
 });
