@@ -203,7 +203,27 @@ app.use((req, res, next) => {
         const { ensureMasterDirs, sweepStaging } = await import("./commerce/prints/masterStorage");
         await ensureMasterDirs();
         await sweepStaging();
-      } catch { /* disk not present yet — nothing to sweep */ }
+      } catch { /* staging temp not present yet — nothing to sweep */ }
+
+      // PRINT-MASTER OBJECT STORAGE — confirm the permanent byte store answers (one cheap metadata
+      // round-trip, no bytes downloaded). Masters now live in Replit Object Storage; in production a
+      // misconfigured/unavailable store is a LOUD boot error (never a silent fall back to a local disk).
+      try {
+        const { assertMasterStorageReady } = await import("./commerce/prints/masterObjectStore");
+        const health = await assertMasterStorageReady();
+        if (health.ok) {
+          console.log(`[master-storage] backend=${health.backend} ready`);
+        } else if (process.env.NODE_ENV === "production") {
+          console.error(
+            `[master-storage][FATAL] backend=${health.backend} is NOT ready — print masters cannot be stored or served. ` +
+            `Configure Replit Object Storage (add a bucket, or set PRINT_MASTERS_BUCKET_ID). ${health.detail ?? ""}`,
+          );
+        } else {
+          console.warn(`[master-storage] backend=${health.backend} not reachable in this environment (${health.detail ?? "dev/local"}).`);
+        }
+      } catch (e) {
+        console.error("[master-storage] readiness probe failed:", e instanceof Error ? e.message : e);
+      }
 
       // EXPIRED CHECKOUT HOLDS — released on boot, then on a timer.
       //

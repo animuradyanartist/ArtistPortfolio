@@ -16,17 +16,19 @@ import { printReadiness } from "@shared/commerce/printProduct";
 import { validateVariantSave, type VariantSaveInput } from "./adminPrintService";
 import {
   getMaster, upsertMaster,
-  getPrintMaster, upsertPrintMasterFile, clearPrintMaster,
+  getPrintMaster, upsertPrintMasterFile, clearPrintMaster, getPrintMasterRef,
   listVariants, getVariant, createVariant, updateVariant, deleteVariant, printArtworkId,
 } from "./adminPrintRepo";
 import { getAdminPrintsOverview, getPrintAdminDetail, setPrintStatus } from "./printRepo";
 import {
-  ensureMasterDirs, stagingDir, storeMasterFromStaging, removeMasterFiles, cleanupStaged,
-  MasterValidationError,
+  ensureMasterDirs, stagingDir, storeMasterFromStaging, removeMasterFiles, removeMasterObject,
+  masterObjectExists, cleanupStaged, MasterValidationError,
 } from "./masterStorage";
+import { MasterStorageError } from "./masterObjectStore";
 
-/** Master upload — STREAMED straight to the persistent-disk staging area (never buffered in memory,
- *  never base64/JSON), so real 300-DPI files up to 500 MB are handled without touching Postgres. */
+/** Master upload — STREAMED to a LOCAL DISPOSABLE staging file (never buffered in memory, never
+ *  base64/JSON), validated, then uploaded to persistent Object Storage. 300-DPI files up to 500 MB are
+ *  handled without touching Postgres, and permanent bytes never depend on local filesystem persistence. */
 const MASTER_MAX_BYTES = 500 * 1024 * 1024;
 const masterUpload = multer({
   storage: multer.diskStorage({
@@ -101,13 +103,18 @@ export function registerAdminPrintRoutes(app: Express): void {
     }
   });
 
-  // ── Master FILE UPLOAD (per PRINT) — MULTIPART, STREAMED to the persistent disk under this print.
-  //    multer streams to staging; the SERVER validates the ACTUAL bytes (sharp: JPEG/PNG/TIFF only),
-  //    reads dimensions, computes checksum + size, ATOMICALLY swaps it into <printId>/master.<ext>,
-  //    and stores ONLY the reference + metadata on the prints row. The master belongs to THIS print,
-  //    so replacing it never touches another print. Bytes never enter the DB and are never public. ──
+  // ── Master FILE UPLOAD (per PRINT) — MULTIPART, streamed to a LOCAL DISPOSABLE staging file, then
+  //    persisted to Object Storage. The SERVER validates the ACTUAL bytes (sharp: JPEG/PNG/TIFF only),
+  //    reads dimensions, computes checksum + size, uploads to a NEW per-PRINT key, and stores ONLY the
+  //    reference + metadata on the prints row. Master belongs to THIS print, so replacing it never
+  //    touches another print. Bytes never enter the DB and are never public. ──
+  //
+  //    SAFE REPLACEMENT: the new object is written under a fresh key BEFORE the DB is touched; the OLD
+  //    object is deleted ONLY after the DB commits to the new key. A validation error, an upload/storage
+  //    error, or a DB write failure all leave the previous valid master completely intact.
   app.post("/api/admin/prints/masters/:printId/file", requireAdminAuth, masterUpload.single("file"), async (req, res) => {
     const staged = req.file?.path;
+    let uploadedKey: string | null = null;
     try {
       const printId = Number.parseInt(String(req.params.printId), 10);
       if (!Number.isInteger(printId)) { await cleanupStaged(staged); return res.status(400).json({ message: "Bad print id" }); }
@@ -118,17 +125,38 @@ export function registerAdminPrintRoutes(app: Express): void {
         return res.status(404).json({ message: "Save the print first, then upload its master." });
       }
 
-      // Validate + atomically store. A validation/format error preserves any previous master.
+      // The CURRENT master's key (if any), captured BEFORE we upload — deleted only after a clean commit.
+      const oldKey = (await getPrintMaster(printId))?.assetKey ?? null;
+
+      // Validate + upload to a NEW object key. A validation/format error, or a storage failure, throws
+      // here and nothing below runs — the previous master (oldKey) is untouched.
       const stored = await storeMasterFromStaging(printId, req.file.path, req.file.originalname, req.file.mimetype);
+      uploadedKey = stored.assetKey;
       // A master is 'ready' only when its resolution clears at least one verified launch size.
       const eligibleSkus = eligibleSkusForMaster({ widthPx: stored.widthPx, heightPx: stored.heightPx });
       const status = eligibleSkus.length > 0 ? "ready" : "provisional";
 
-      await upsertPrintMasterFile(printId, {
-        widthPx: stored.widthPx, heightPx: stored.heightPx, assetKey: stored.assetKey,
-        assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
-        checksumMd5: stored.checksumMd5, status,
-      });
+      try {
+        await upsertPrintMasterFile(printId, {
+          widthPx: stored.widthPx, heightPx: stored.heightPx, assetKey: stored.assetKey,
+          assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
+          checksumMd5: stored.checksumMd5, status,
+        });
+      } catch (dbErr) {
+        // DB failed AFTER the new object was uploaded → roll back the new object so no orphan is left,
+        // and leave the DB + previous master exactly as they were.
+        await removeMasterObject(uploadedKey).catch(() => {});
+        throw dbErr;
+      }
+
+      // Committed. NOW it is safe to delete the OBSOLETE previous object (only if the key changed).
+      if (oldKey && oldKey !== stored.assetKey) {
+        await removeMasterObject(oldKey).catch((e) =>
+          console.error(`[master] obsolete object cleanup failed (orphan left in storage): ${oldKey}`, e instanceof Error ? e.message : e),
+        );
+      }
+      await cleanupStaged(staged);
+
       // Prefer the persisted row; fall back to the just-stored metadata (local preview has no DB).
       const master = (await getPrintMaster(printId)) ?? {
         widthPx: stored.widthPx, heightPx: stored.heightPx, status,
@@ -140,6 +168,10 @@ export function registerAdminPrintRoutes(app: Express): void {
     } catch (e) {
       await cleanupStaged(staged); // failed/aborted upload leaves nothing in staging
       if (e instanceof MasterValidationError) return res.status(400).json({ message: e.message });
+      // A storage-layer failure is loud (5xx), never a silent success — the previous master is preserved.
+      if (e instanceof MasterStorageError) {
+        return res.status(502).json({ message: "The master could not be saved to storage. Your previous master is unchanged. Please try again." });
+      }
       return res.status(500).json({ message: "Could not save the master file." });
     }
   });
@@ -156,17 +188,26 @@ export function registerAdminPrintRoutes(app: Express): void {
     return next(err);
   });
 
-  // Remove a print's master (back to 'missing') — deletes the disk file, clears the reference, AND
-  // fail-closed UNPUBLISHES the print (a published print cannot survive without a valid master).
+  // Remove a print's master (back to 'missing') — deletes the object(s) from storage, clears the
+  // reference, AND fail-closed UNPUBLISHES the print (a published print cannot survive without a valid
+  // master). CONSERVATIVE: if the storage delete fails, we still clear the DB and revert to Draft — the
+  // safe direction (the DB never claims a valid master while the object is known-missing) — and log the
+  // possible orphan rather than leaving a dangling "ready" pointer.
   app.delete("/api/admin/prints/masters/:printId/file", requireAdminAuth, async (req, res) => {
     try {
       const printId = Number.parseInt(String(req.params.printId), 10);
       if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
-      await removeMasterFiles(printId);
+      let storageRemoved = true;
+      try {
+        await removeMasterFiles(printId);
+      } catch (e) {
+        storageRemoved = false;
+        console.error(`[master] object removal failed for print ${printId} (possible orphan in storage):`, e instanceof Error ? e.message : e);
+      }
       await clearPrintMaster(printId);
       // No valid master ⇒ nothing is publishable; revert to Draft so the raw status matches reality.
       await setPrintStatus(printId, "draft");
-      return res.json({ ok: true, master: await getPrintMaster(printId), status: "draft" });
+      return res.json({ ok: true, master: await getPrintMaster(printId), status: "draft", storageRemoved });
     } catch {
       return res.status(500).json({ message: "Could not remove the master file." });
     }
@@ -194,6 +235,19 @@ export function registerAdminPrintRoutes(app: Express): void {
       );
       if (!readiness.canPublish) {
         return res.status(409).json({ code: "not-ready", message: "Cannot publish yet.", missing: readiness.missing });
+      }
+      // FAIL-CLOSED against a missing master OBJECT: never publish a print whose bytes are gone from
+      // storage (readiness only checks the DB record). One cheap metadata round-trip on this rare admin
+      // action — NOT on public page requests. If storage cannot be reached, refuse rather than guess.
+      const ref = await getPrintMasterRef(printId);
+      let present = false;
+      try {
+        present = ref?.assetKey ? await masterObjectExists(ref.assetKey) : false;
+      } catch {
+        return res.status(502).json({ code: "storage-unavailable", message: "Could not verify the master in storage. Please try again." });
+      }
+      if (!present) {
+        return res.status(409).json({ code: "master-missing", message: "The production master file is missing from storage. Re-upload it before publishing." });
       }
       await setPrintStatus(printId, "active");
       return res.json({ ok: true, status: "active" });

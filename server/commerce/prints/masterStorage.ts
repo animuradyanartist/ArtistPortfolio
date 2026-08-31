@@ -1,34 +1,39 @@
 /**
  * PRINT MASTER STORAGE — the high-resolution production master belongs to a PRINT PRODUCT (1:1),
- * lives on a PERSISTENT DISK, never in Postgres, and never under public/.
+ * lives in PERSISTENT OBJECT STORAGE (Replit Object Storage), never in Postgres, and never public.
  *
- * OWNERSHIP: keyed by printId. Two prints of the same source artwork have INDEPENDENT masters
- * (`<printId>/master.<ext>`), so replacing one never touches the other.
+ * OWNERSHIP: keys are PRINT-owned (`prints/<printId>/master-<rand>.<ext>`). Two prints of the same
+ * source artwork have INDEPENDENT masters, so replacing one never touches the other.
  *
- * WHY A DISK: a 300-DPI fine-art master is tens–hundreds of MB. Postgres keeps only a reference +
- * metadata; the bytes go to the Render Persistent Disk (PRINT_MASTERS_DIR, default /var/data/print-masters).
+ * WHY OBJECT STORAGE (not a local disk): production is a Replit Autoscale deployment whose filesystem
+ * is EPHEMERAL — a locally-written master vanishes on the next Publish/redeploy while the DB still says
+ * `ready`, breaking fulfilment for a sold print. The bytes therefore live in Replit Object Storage
+ * (see `masterObjectStore.ts`); Postgres keeps only the reference (`master_asset_key`) + metadata.
  *
- * NEVER PUBLIC: the file is never a static asset. The only way out is a short-lived, HMAC-signed,
- * per-PRINT token URL minted at fulfilment time for the print provider — it expires, is scoped to one
- * print's master, carries no admin auth, and is never a permanent public link.
+ * VERSIONED KEYS FOR SAFE REPLACEMENT: every upload writes a NEW, unique key. The old object is
+ * deleted only AFTER the DB commits to the new key (done by the route). So a failed upload or a failed
+ * DB write can never destroy the previous valid master — nothing overwrites it.
  *
- * ATOMIC REPLACEMENT: a new upload is validated + finalised in a temp file, then atomically renamed
- * into place; only after that are stale files removed. A failed/invalid upload can NEVER destroy the
- * previous valid master.
+ * STAGING IS LOCAL AND DISPOSABLE: an upload streams to a local temp file only long enough to validate
+ * the real bytes (sharp) and compute checksum/size; then it is uploaded to Object Storage and the temp
+ * file is deleted. Permanent bytes NEVER depend on local filesystem persistence.
+ *
+ * NEVER PUBLIC: the only way out is a short-lived, HMAC-signed, per-PRINT token URL minted at fulfilment
+ * time — it expires, is scoped to one print's master, carries no admin auth, and is never a permanent
+ * public link. The app streams the object; Prodigi never receives a bucket URL.
  */
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
-import { createReadStream, existsSync } from "fs";
-import { mkdir, stat, rename, unlink, readdir } from "fs/promises";
+import { createReadStream } from "fs";
+import { mkdir, stat, unlink, readdir } from "fs/promises";
+import os from "os";
 import path from "path";
+import type { Readable } from "stream";
 import sharp from "sharp";
+import { getMasterStore, MasterStorageError } from "./masterObjectStore";
 
-export const MASTER_DIR =
-  process.env.PRINT_MASTERS_DIR?.trim() ||
-  (process.env.NODE_ENV === "production"
-    ? "/var/data/print-masters"
-    : path.join(process.cwd(), ".print-masters"));
-
-const STAGING_DIR = path.join(MASTER_DIR, ".staging");
+/** LOCAL staging only — disposable temp files while an upload is validated. NOT permanent storage.
+ *  Overridable for tests via MASTER_STAGING_DIR; defaults to the OS temp dir (ephemeral by design). */
+const STAGING_DIR = process.env.MASTER_STAGING_DIR?.trim() || path.join(os.tmpdir(), "print-master-staging");
 
 /** A validation problem the CLIENT caused (bad format / unreadable) → the route returns 4xx, not 500. */
 export class MasterValidationError extends Error {
@@ -58,7 +63,7 @@ function md5OfFile(p: string): Promise<string> {
 }
 
 export interface StoredMaster {
-  assetKey: string;      // relative path under MASTER_DIR, e.g. "42/master.tif"
+  assetKey: string;      // Object Storage key, e.g. "prints/42/master-9f3a1c2b4d5e.tif"
   filename: string;
   contentType: string;
   widthPx: number;
@@ -67,37 +72,44 @@ export interface StoredMaster {
   checksumMd5: string;
 }
 
-function printDir(printId: number): string {
-  return path.join(MASTER_DIR, String(printId));
+/** The print-owned key PREFIX under which this print's master object(s) live. */
+function printPrefix(printId: number): string {
+  return `prints/${printId}/`;
 }
 
-/** Delete every master file for a print (used on remove + stale-extension cleanup after replace). */
+/** Remove EVERY master object for a print (used on removal). Throws MasterStorageError if the storage
+ *  delete fails, so the caller can log a possible orphan and still clear the DB reference. */
 export async function removeMasterFiles(printId: number): Promise<void> {
-  try {
-    for (const name of await readdir(printDir(printId))) {
-      if (name.startsWith("master")) await unlink(path.join(printDir(printId), name)).catch(() => {});
-    }
-  } catch {
-    // no directory yet — nothing to remove
-  }
+  await getMasterStore().removeByPrefix(printPrefix(printId));
+}
+
+/** Remove ONE master object by its exact key (used to roll back a just-uploaded object, or to delete
+ *  the obsolete previous master only after the DB has committed to the replacement). Best-effort. */
+export async function removeMasterObject(assetKey: string): Promise<void> {
+  if (!assetKey) return;
+  await getMasterStore().remove(assetKey);
+}
+
+/** Does this master object actually exist in storage? (Used by the Publish gate.) */
+export async function masterObjectExists(assetKey: string): Promise<boolean> {
+  if (!assetKey) return false;
+  return getMasterStore().exists(assetKey);
 }
 
 /**
- * Finalise a STAGED upload as the master for a PRINT, ATOMICALLY and safely:
+ * Finalise a STAGED upload as a master for a PRINT, safely:
  *   1. validate the real bytes (sharp) — accepted format + readable dimensions, or throw (staged file
- *      stays for the caller to clean, the OLD master is untouched),
+ *      stays for the caller to clean; nothing in storage has been touched),
  *   2. compute checksum + size,
- *   3. move the validated file to a TEMP name in the print's folder, then ATOMICALLY rename it onto
- *      `master.<ext>` (overwrites the same-extension old master in one syscall — never a partial file),
- *   4. remove any stale different-extension master files.
- * A failure at step 1–2 never deletes the previous master; a failure at step 3 leaves the old master
- * in place (the atomic rename either fully happened or did not).
+ *   3. upload the validated file to a NEW, unique Object Storage key (never overwrites the old master),
+ *   4. verify the write landed.
+ * Returns the new object's key + metadata. The caller updates the DB, then deletes the OLD object only
+ * after that commit succeeds. A validation error (step 1) or an upload/storage error (step 3–4) leaves
+ * any previous master completely untouched.
  */
 export async function storeMasterFromStaging(
-  printId: number, stagedPath: string, originalName: string, mime: string,
+  printId: number, stagedPath: string, originalName: string, _mime: string,
 ): Promise<StoredMaster> {
-  await ensureMasterDirs();
-
   // 1) Validate ACTUAL contents. sharp throws on non-images; we also require an accepted format.
   let meta: sharp.Metadata;
   try {
@@ -122,50 +134,34 @@ export async function storeMasterFromStaging(
   const checksumMd5 = await md5OfFile(stagedPath);
   const { size: byteSize } = await stat(stagedPath);
 
-  // 3) atomic swap into <printId>/master.<ext>.
-  const dir = printDir(printId);
-  await mkdir(dir, { recursive: true });
-  const finalName = `master${accepted.ext}`;
-  const finalPath = path.join(dir, finalName);
-  const tmpPath = path.join(dir, `.master-${randomBytes(6).toString("hex")}${accepted.ext}`);
-  await rename(stagedPath, tmpPath);        // move validated file next to the target (same filesystem)
-  await rename(tmpPath, finalPath);         // ATOMIC overwrite of the same-extension master
+  // 3) upload to a NEW unique key. The random suffix guarantees we never overwrite the previous master,
+  //    so a later DB failure can be rolled back by deleting exactly this key.
+  const assetKey = `${printPrefix(printId)}master-${randomBytes(8).toString("hex")}${accepted.ext}`;
+  await getMasterStore().put(assetKey, stagedPath, accepted.contentType);
 
-  // 4) remove any stale masters with a DIFFERENT extension (only now that the new one is safely in place).
-  try {
-    for (const name of await readdir(dir)) {
-      if (name.startsWith("master") && name !== finalName) await unlink(path.join(dir, name)).catch(() => {});
-    }
-  } catch { /* nothing else to clean */ }
+  // 4) verify the object is really there before we let the DB point at it.
+  if (!(await getMasterStore().exists(assetKey))) {
+    // Best-effort clean of a half-written object, then fail loud.
+    await getMasterStore().remove(assetKey).catch(() => {});
+    throw new MasterStorageError("The master upload could not be confirmed in storage.");
+  }
 
   return {
-    assetKey: path.posix.join(String(printId), finalName),
-    filename: originalName || finalName,
+    assetKey,
+    filename: originalName || `master${accepted.ext}`,
     contentType: accepted.contentType,
     widthPx, heightPx, byteSize, checksumMd5,
   };
 }
 
-function insideMasterDir(p: string): boolean {
-  const resolved = path.resolve(p);
-  return resolved === path.resolve(MASTER_DIR) || resolved.startsWith(path.resolve(MASTER_DIR) + path.sep);
-}
-
-/** Absolute path for a stored key — guarded so a crafted key can never escape the master directory. */
-export function pathForKey(assetKey: string): string | null {
+/** A readable stream for a stored master, or null if the object is genuinely absent (→ route 410).
+ *  Throws MasterStorageError on a storage failure (→ route 5xx). Reads from Object Storage now, not a disk. */
+export async function readMasterStream(assetKey: string): Promise<Readable | null> {
   if (!assetKey) return null;
-  const p = path.join(MASTER_DIR, assetKey);
-  return insideMasterDir(p) ? p : null;
+  return getMasterStore().readStream(assetKey);
 }
 
-/** A readable stream for a stored master, or null if the file is missing. */
-export function readMasterStream(assetKey: string): NodeJS.ReadableStream | null {
-  const p = pathForKey(assetKey);
-  if (!p || !existsSync(p)) return null;
-  return createReadStream(p);
-}
-
-/** Best-effort deletion of a single staged temp file (used on every error/abort path). */
+/** Best-effort deletion of a single staged temp file (used on every error/abort/success path). */
 export async function cleanupStaged(p: string | undefined | null): Promise<void> {
   if (p) await unlink(p).catch(() => {});
 }
@@ -183,13 +179,13 @@ export async function sweepStaging(maxAgeMs = 60 * 60 * 1000): Promise<void> {
 }
 
 /**
- * DEV fallback only: with no database the DB has no asset_key, so resolve the master file for a print
- * by scanning its folder. In production the DB record is authoritative and this is unused.
+ * DEV fallback only: with no database the DB has no asset_key, so resolve a print's master object by
+ * listing its key prefix. In production the DB record is authoritative and this is unused.
  */
-export async function findMasterKeyOnDisk(printId: number): Promise<string | null> {
+export async function findMasterObjectKey(printId: number): Promise<string | null> {
   try {
-    const name = (await readdir(printDir(printId))).find((n) => n.startsWith("master"));
-    return name ? path.posix.join(String(printId), name) : null;
+    const keys = await getMasterStore().listKeys(printPrefix(printId));
+    return keys.find((k) => /\/master[-.]/.test(k)) ?? keys[0] ?? null;
   } catch {
     return null;
   }

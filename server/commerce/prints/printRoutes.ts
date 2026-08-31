@@ -22,7 +22,7 @@ import { buildFeedTsv } from "@shared/commerce/printFeed";
 import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
 import { quotePrintShipping } from "./printShipping";
 import { getPrintMasterRef } from "./adminPrintRepo";
-import { verifyMasterToken, readMasterStream, findMasterKeyOnDisk } from "./masterStorage";
+import { verifyMasterToken, readMasterStream, findMasterObjectKey } from "./masterStorage";
 
 function baseUrlOf(req: Request): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
@@ -83,9 +83,9 @@ export function registerPrintRoutes(app: Express): void {
 
   // ── The high-resolution MASTER download, for the fulfilment provider ONLY. It is NOT a public
   //    asset: access requires a cryptographically-signed, short-lived, per-PRINT token (minted fresh
-  //    at fulfilment time). No admin auth, no filesystem path exposed, no permanent public URL. The
-  //    bytes are STREAMED from the persistent disk. Registered before :slug so the segment resolves
-  //    here, not as a print slug. The public PDP exposes only a `masterReady` boolean. ──
+  //    at fulfilment time). No admin auth, no object key exposed, no permanent public/bucket URL. The
+  //    bytes are STREAMED from Object Storage through this route. Registered before :slug so the segment
+  //    resolves here, not as a print slug. The public PDP exposes only a `masterReady` boolean. ──
   app.get("/api/commerce/prints/master-file/:printId", async (req, res) => {
     try {
       const printId = Number.parseInt(String(req.params.printId), 10);
@@ -95,10 +95,19 @@ export function registerPrintRoutes(app: Express): void {
         return res.status(403).end();
       }
       const ref = await getPrintMasterRef(printId);
-      const assetKey = ref?.assetKey ?? (await findMasterKeyOnDisk(printId));
+      const assetKey = ref?.assetKey ?? (await findMasterObjectKey(printId));
       if (!assetKey) return res.status(404).end();
-      const stream = readMasterStream(assetKey);
-      if (!stream) return res.status(404).end();
+      // Stream the bytes FROM OBJECT STORAGE (not a local disk). Fail-closed on a missing object: if the
+      // DB references a master that is gone from storage, answer 410 Gone (never a broken/partial file);
+      // a storage error is 502. This is the token-gated fulfilment route (low frequency), so the one
+      // existence check inside readMasterStream is acceptable — public pages never hit this path.
+      let stream;
+      try {
+        stream = await readMasterStream(assetKey);
+      } catch {
+        return res.status(502).end(); // storage unreachable
+      }
+      if (!stream) return res.status(410).end(); // object unexpectedly missing
       res.set("Cache-Control", "no-store");
       res.type(ref?.contentType || "application/octet-stream");
       if (ref?.filename) res.set("Content-Disposition", `attachment; filename="${ref.filename.replace(/[^\w.\-]/g, "_")}"`);
