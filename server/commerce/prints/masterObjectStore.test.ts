@@ -57,6 +57,7 @@ describe("master byte-store backend selection", () => {
     OS.__setMasterStoreForTest({
       backendName: "replit-object-storage",
       put: async () => { throw new OS.MasterStorageError("unreachable"); },
+      putBytes: async () => { throw new OS.MasterStorageError("unreachable"); },
       readStream: async () => null,
       exists: async () => { throw new OS.MasterStorageError("unreachable"); },
       remove: async () => {},

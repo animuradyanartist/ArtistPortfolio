@@ -101,6 +101,7 @@ export default function PrintEditorPage() {
   const [savingProduct, setSavingProduct] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingMaster, setUploadingMaster] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null); // chunked-upload progress 0–100
   const [publishing, setPublishing] = useState(false);
   // A master chosen BEFORE the print exists — held locally, NOT uploaded until Save (no orphans).
   const [pendingMaster, setPendingMaster] = useState<{ file: File; widthPx: number; heightPx: number } | null>(null);
@@ -207,21 +208,62 @@ export default function PrintEditorPage() {
     }
   };
 
-  // Upload a master file to a PRINT (streamed multipart; the server validates + stores on disk).
+  // Upload a master file to a PRINT via the CHUNKED flow. A 300-DPI master is 100s of MB, and Replit's
+  // ingress proxy 413s a large single request BEFORE it reaches our server — so we split the file into
+  // small chunks (each well under the proxy cap), send them one by one, then ask the server to
+  // reassemble + validate + commit. The server stores chunks in Object Storage (Autoscale-instance
+  // independent). setUploadPct drives a progress indicator.
   const uploadMasterFile = async (targetPrintId: number, file: File): Promise<boolean> => {
-    const fd = new FormData();
-    fd.append("file", file);
-    const r = await fetch(`/api/admin/prints/masters/${targetPrintId}/file`, { method: "POST", credentials: "include", body: fd });
-    const body = await r.json().catch(() => ({}));
-    if (!r.ok) { toast({ title: "Could not upload the master", description: body.message, variant: "destructive" }); return false; }
-    const m = body.master;
-    toast({
-      title: m?.status === "ready" ? "Master uploaded — resolution is eligible" : "Master uploaded",
-      description: m?.status === "ready"
-        ? `${m.widthPx}×${m.heightPx}px · fits ${body.eligibleSizeCount} size${body.eligibleSizeCount === 1 ? "" : "s"}`
-        : `${m?.widthPx}×${m?.heightPx}px · resolution too low to print at the offered sizes`,
-    });
-    return true;
+    const base = `/api/admin/prints/masters/${targetPrintId}/upload`;
+    try {
+      const initRes = await fetch(`${base}/init`, { method: "POST", credentials: "include" });
+      const init = await initRes.json().catch(() => ({}));
+      if (!initRes.ok) { toast({ title: "Could not start the upload", description: init.message, variant: "destructive" }); return false; }
+      const chunkBytes: number = init.chunkBytes || 8 * 1024 * 1024;
+      const uploadId: string = init.uploadId;
+      const total = Math.max(1, Math.ceil(file.size / chunkBytes));
+
+      for (let i = 0; i < total; i++) {
+        const slice = file.slice(i * chunkBytes, Math.min(file.size, (i + 1) * chunkBytes));
+        const cr = await fetch(`${base}/${uploadId}/chunk?index=${i}`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: slice,
+        });
+        if (!cr.ok) {
+          const cb = await cr.json().catch(() => ({}));
+          // Best-effort abort so no half-uploaded chunk objects linger.
+          fetch(`${base}/${uploadId}/abort`, { method: "POST", credentials: "include" }).catch(() => {});
+          toast({ title: "Upload failed", description: cb.message || `Chunk ${i + 1} of ${total} failed`, variant: "destructive" });
+          setUploadPct(null);
+          return false;
+        }
+        setUploadPct(Math.round(((i + 1) / total) * 100));
+      }
+
+      const doneRes = await fetch(`${base}/${uploadId}/complete`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ originalName: file.name, totalChunks: total }),
+      });
+      const body = await doneRes.json().catch(() => ({}));
+      setUploadPct(null);
+      if (!doneRes.ok) { toast({ title: "Could not save the master", description: body.message, variant: "destructive" }); return false; }
+      const m = body.master;
+      toast({
+        title: m?.status === "ready" ? "Master uploaded — resolution is eligible" : "Master uploaded",
+        description: m?.status === "ready"
+          ? `${m.widthPx}×${m.heightPx}px · fits ${body.eligibleSizeCount} size${body.eligibleSizeCount === 1 ? "" : "s"}`
+          : `${m?.widthPx}×${m?.heightPx}px · resolution too low to print at the offered sizes`,
+      });
+      return true;
+    } catch (e: any) {
+      setUploadPct(null);
+      toast({ title: "Upload failed", description: e?.message ?? "Please try again", variant: "destructive" });
+      return false;
+    }
   };
 
   // ── Choose a master. In EDIT mode it uploads immediately (the print exists). In CREATE mode it is
@@ -375,7 +417,7 @@ export default function PrintEditorPage() {
             ) : (
               <button onClick={() => masterInputRef.current?.click()} disabled={uploadingMaster}
                 className="w-full rounded-lg border border-dashed border-slate-300 py-8 grid place-items-center text-slate-500 hover:border-slate-500">
-                {uploadingMaster ? <><Loader2 className="w-5 h-5 animate-spin mb-1" /> Uploading…</>
+                {uploadingMaster ? <><Loader2 className="w-5 h-5 animate-spin mb-1" /> {uploadPct != null ? `Uploading… ${uploadPct}%` : "Uploading…"}</>
                   : <><FileUp className="w-6 h-6 mb-1" /><span className="text-sm">Choose the high-resolution print file</span><span className="text-xs text-slate-400">JPEG, PNG or TIFF · full resolution</span></>}
               </button>
             )}
@@ -425,7 +467,7 @@ export default function PrintEditorPage() {
           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
             <Button onClick={saveProduct} disabled={savingProduct} variant="outline" className="w-full">
               {savingProduct ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Save
+              {savingProduct && uploadPct != null ? `Uploading master… ${uploadPct}%` : "Save"}
             </Button>
             {isEdit && !isPublished && (
               <Button onClick={publish} disabled={publishing || !readiness.canPublish} className="w-full bg-deep-blue hover:bg-deep-blue/90"
