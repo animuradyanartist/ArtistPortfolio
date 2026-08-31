@@ -97,6 +97,29 @@ async function variantsFor(printId: number): Promise<PrintVariantView[]> {
   return rows.map(mapVariant);
 }
 
+/**
+ * Fetch the variants for MANY prints in ONE query and group them by print_id in memory — the
+ * set-based replacement for calling variantsFor() once per print (the N+1 pattern). The ordering
+ * WITHIN each print's group is identical to variantsFor() (width_cm ASC, framed ASC, id ASC), so
+ * callers that pick the "first" matching variant behave exactly as before. Returns an empty map for
+ * an empty id list without touching the database (keeps the caller's total query count bounded).
+ */
+async function variantsByPrintId(printIds: number[]): Promise<Map<number, PrintVariantView[]>> {
+  const grouped = new Map<number, PrintVariantView[]>();
+  if (printIds.length === 0) return grouped;
+  const { rows } = await pool.query(
+    `SELECT * FROM print_variants WHERE print_id = ANY($1::int[]) ORDER BY print_id ASC, width_cm ASC, framed ASC, id ASC`,
+    [printIds],
+  );
+  for (const r of rows) {
+    const v = mapVariant(r);
+    let list = grouped.get(v.printId);
+    if (!list) { list = []; grouped.set(v.printId, list); }
+    list.push(v);
+  }
+  return grouped;
+}
+
 
 /** A single print product with its variants + the master behind it. Null if not found. */
 export async function getPrintDetailBySlug(slug: string): Promise<PrintProductDetail | null> {
@@ -137,11 +160,16 @@ export interface PrintCollectionCard {
  */
 export async function getPurchasablePrintCollection(): Promise<PrintCollectionCard[]> {
   if (!hasDatabase) return [];
+  // TWO bounded queries, never N+1: (1) the active prints, (2) ALL their variants in one batch,
+  // grouped by print_id in memory. Every per-print decision below uses the SAME pure gates as before
+  // (hasPurchasableVariant / isPubliclyPurchasable / startingPriceMinor / masterFromRow / currency +
+  // image fallback), so behaviour — including fail-closed eligibility — is unchanged.
   const { rows } = await pool.query(`SELECT * FROM prints WHERE status = 'active' ORDER BY position ASC, id ASC`);
+  const variantsByPrint = await variantsByPrintId(rows.map((r) => r.id as number));
   const cards: PrintCollectionCard[] = [];
   for (const r of rows) {
     const print = mapPrint(r);
-    const variants = await variantsFor(print.id);
+    const variants = variantsByPrint.get(print.id) ?? [];
     const master = masterFromRow(r);
     if (!hasPurchasableVariant(variants, master)) continue;
     const currency = variants.find((v) => isPubliclyPurchasable(v, master))?.currency ?? "EUR";
