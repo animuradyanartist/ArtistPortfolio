@@ -18,7 +18,7 @@
  *                               production: production NEVER silently falls back to a local disk.
  */
 import { createReadStream, existsSync } from "fs";
-import { mkdir, copyFile, unlink, readdir } from "fs/promises";
+import { mkdir, copyFile, unlink, readdir, writeFile } from "fs/promises";
 import os from "os";
 import path from "path";
 import type { Readable } from "stream";
@@ -40,6 +40,8 @@ export interface MasterStore {
   /** Upload the validated staged file to `key`. Throws MasterStorageError on failure (old master, if
    *  any under a different key, is untouched — this writes a NEW key). */
   put(key: string, srcFilename: string, contentType: string): Promise<void>;
+  /** Upload an in-memory buffer to `key` (used for small upload chunks). Throws on failure. */
+  putBytes(key: string, contents: Buffer, contentType: string): Promise<void>;
   /** A readable stream for the object, or `null` if it is genuinely absent (→ route 410). Throws on a
    *  storage error (→ route 5xx). */
   readStream(key: string): Promise<Readable | null>;
@@ -71,6 +73,12 @@ class ReplitObjectStore implements MasterStore {
     try { r = await this.client().uploadFromFilename(key, srcFilename, { compress: false }); }
     catch (e) { throw new MasterStorageError(`Object Storage upload failed: ${msg(e)}`); }
     if (!r.ok) throw new MasterStorageError(`Object Storage upload failed: ${r.error.message}`);
+  }
+  async putBytes(key: string, contents: Buffer, _contentType: string): Promise<void> {
+    let r;
+    try { r = await this.client().uploadFromBytes(key, contents, { compress: false }); }
+    catch (e) { throw new MasterStorageError(`Object Storage chunk upload failed: ${msg(e)}`); }
+    if (!r.ok) throw new MasterStorageError(`Object Storage chunk upload failed: ${r.error.message}`);
   }
   async readStream(key: string): Promise<Readable | null> {
     // Existence first so a missing object is a clean 410 rather than a stream that errors mid-flight.
@@ -122,6 +130,12 @@ class LocalMasterStore implements MasterStore {
     if (!dest) throw new MasterStorageError(`Unsafe object key: ${key}`);
     await mkdir(path.dirname(dest), { recursive: true });
     await copyFile(srcFilename, dest);
+  }
+  async putBytes(key: string, contents: Buffer, _contentType: string): Promise<void> {
+    const dest = this.pathFor(key);
+    if (!dest) throw new MasterStorageError(`Unsafe object key: ${key}`);
+    await mkdir(path.dirname(dest), { recursive: true });
+    await writeFile(dest, contents);
   }
   async readStream(key: string): Promise<Readable | null> {
     const p = this.pathFor(key);
