@@ -6,6 +6,7 @@
  */
 
 import { pool, hasDatabase } from "../../db";
+import { deriveVariantFields } from "./adminPrintService";
 import type { DerivedVariantFields, VariantSaveInput, MasterDims } from "./adminPrintService";
 
 export interface AdminVariantRow {
@@ -248,6 +249,37 @@ export async function updateVariant(id: number, row: PersistRow): Promise<AdminV
 export async function deleteVariant(id: number): Promise<boolean> {
   const { rowCount } = await pool.query(`DELETE FROM print_variants WHERE id = $1`, [id]);
   return (rowCount ?? 0) > 0;
+}
+
+/** Does this print already have a variant for this SKU? (Prevents duplicate material+size options —
+ *  a print SKU is 1:1 with a physical product, so two rows for the same SKU are always a mistake.) */
+export async function printHasVariantForSku(printId: number, sku: string): Promise<boolean> {
+  if (!hasDatabase) return false;
+  const { rows } = await pool.query(
+    `SELECT 1 FROM print_variants WHERE print_id = $1 AND upper(prodigi_sku) = upper($2) LIMIT 1`,
+    [printId, sku],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * RE-DERIVE + PERSIST every variant's eligibility against the CURRENT master. Eligibility was cached
+ * at variant-save time, so a later master upload/replace/removal would otherwise leave stale `eligible`
+ * / `effective_dpi` on the rows — which both the admin editor and the fail-closed publish/storefront
+ * gates trust. Called whenever the master changes. Additive UPDATEs only (never touches `enabled`); a
+ * variant that becomes ineligible stays enabled but is unpurchasable (fail-closed), and the admin sees
+ * the live "Not eligible". The SKU is left untouched. */
+export async function reassessVariantsForMaster(printId: number, master: MasterDims | null): Promise<void> {
+  if (!hasDatabase) return;
+  const variants = await listVariants(printId);
+  for (const v of variants) {
+    const d = deriveVariantFields(v.prodigi_sku, master);
+    if (!d.ok) continue; // an unverified SKU can't be recomputed — leave the row as-is
+    await pool.query(
+      `UPDATE print_variants SET eligible = $2, effective_dpi = $3, updated_at = now() WHERE id = $1`,
+      [v.id, d.fields.eligible, d.fields.effectiveDpi],
+    );
+  }
 }
 
 /** The print product's artwork id, so variant validation can find the master behind it. */

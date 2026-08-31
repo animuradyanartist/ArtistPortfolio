@@ -26,26 +26,50 @@ describe("deriveVariantFields — the admin cannot invent physical facts", () =>
     expect(deriveVariantFields("GLOBAL-FAP-16X24", readyMaster).ok).toBe(false); // real but not launch
   });
 
-  it("is NOT eligible without master dimensions (web images / no master)", () => {
+  it("is NOT eligible without master dimensions (web images / no master) — reasonCode 'no-master'", () => {
     const r = deriveVariantFields("GLOBAL-HGE-12X16", { widthPx: null, heightPx: null, status: "missing" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.fields.eligible).toBe(false);
     expect(r.fields.effectiveDpi).toBeNull();
+    expect(r.fields.reasonCode).toBe("no-master");
   });
 
-  it("is NOT eligible when the master exists but isn't marked print-ready", () => {
+  it("is NOT eligible when the master exists but isn't marked print-ready — reasonCode 'not-ready'", () => {
     const r = deriveVariantFields("GLOBAL-HGE-12X16", { ...readyMaster, status: "provisional" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.fields.eligible).toBe(false);
     expect(r.fields.reason).toMatch(/not marked print-ready/);
+    expect(r.fields.reasonCode).toBe("not-ready");
   });
 
-  it("is NOT eligible when the master ratio doesn't match the SKU (no crop)", () => {
+  it("is NOT eligible when the master ratio doesn't match the SKU (no crop) — reasonCode 'aspect-ratio'", () => {
     const square: MasterDims = { widthPx: 6000, heightPx: 6000, status: "ready" };
     const r = deriveVariantFields("GLOBAL-HGE-12X16", square);
-    expect(r.ok && r.fields.eligible).toBe(false);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.fields.eligible).toBe(false);
+    expect(r.fields.reasonCode).toBe("aspect-ratio");
+  });
+
+  it("a high-DPI but WRONG-RATIO master is ineligible on aspect ratio, not resolution (the reported case)", () => {
+    // √2 master, huge (12×16 would show ~620 DPI) — but 12×16 is 4:3, so it fails on ratio.
+    const sqrt2 = { widthPx: 9920, heightPx: 7015, status: "ready" as const };
+    const r = deriveVariantFields("GLOBAL-HGE-12X16", sqrt2);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.fields.effectiveDpi).toBe(620); // resolution is fine
+    expect(r.fields.eligible).toBe(false);
+    expect(r.fields.reasonCode).toBe("aspect-ratio"); // …ratio is the blocker
+    // …and the SAME master IS eligible at the matching German Etching size.
+    expect(deriveVariantFields("GLOBAL-HGE-A2", sqrt2).ok && deriveVariantFields("GLOBAL-HGE-A2", sqrt2)).toMatchObject({ fields: { eligible: true, reasonCode: null } });
+  });
+
+  it("eligible variant reports reasonCode null", () => {
+    const r = deriveVariantFields("GLOBAL-HGE-12X16", readyMaster);
+    expect(r.ok && r.fields.eligible).toBe(true);
+    expect(r.ok && r.fields.reasonCode).toBeNull();
   });
 });
 

@@ -16,6 +16,15 @@ import {
   type SkuEligibilityPolicy,
 } from "../prodigi/prodigiProducts";
 
+/** Why a variant is not eligible, as a stable code the admin UI maps to a short label. Null = eligible. */
+export type VariantReasonCode =
+  | "aspect-ratio"       // master ratio ≠ this size's — would crop/stretch
+  | "resolution"         // below the DPI floor (no upscaling)
+  | "no-master"          // master has no pixel dimensions yet
+  | "not-ready"          // master exists but is not marked print-ready
+  | "unverified-sku"     // SKU is not a verified Prodigi launch product
+  | null;
+
 export interface MasterDims {
   widthPx: number | null;
   heightPx: number | null;
@@ -35,6 +44,8 @@ export interface DerivedVariantFields {
   /** eligible = a ready master, matching ratio, clearing the DPI floor. False if any is missing. */
   eligible: boolean;
   reason: string | null;
+  /** Stable code for the reason (for the admin UI). Null when eligible. */
+  reasonCode: VariantReasonCode;
 }
 
 export type DeriveResult =
@@ -66,10 +77,11 @@ export function deriveVariantFields(
     effectiveDpi: null,
     eligible: false,
     reason: null,
+    reasonCode: null,
   };
 
   if (!master || master.widthPx == null || master.heightPx == null) {
-    return { ok: true, fields: { ...base, reason: "No master dimensions yet — awaiting a print-ready master." } };
+    return { ok: true, fields: { ...base, reason: "No master dimensions yet — awaiting a print-ready master.", reasonCode: "no-master" } };
   }
 
   const e = assessMasterForSku({ widthPx: master.widthPx, heightPx: master.heightPx }, sku, policy);
@@ -82,10 +94,11 @@ export function deriveVariantFields(
   const reason = !masterReady
     ? "Master is not marked print-ready yet."
     : e.reason; // ratio/resolution reason, or null when eligible
+  const reasonCode: VariantReasonCode = eligible ? null : (!masterReady ? "not-ready" : e.reasonCode);
 
   return {
     ok: true,
-    fields: { ...base, effectiveDpi: e.effectiveDpi, eligible, reason },
+    fields: { ...base, effectiveDpi: e.effectiveDpi, eligible, reason, reasonCode },
   };
 }
 

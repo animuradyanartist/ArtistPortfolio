@@ -18,7 +18,9 @@ import {
   getMaster, upsertMaster,
   getPrintMaster, upsertPrintMasterFile, clearPrintMaster, getPrintMasterRef,
   listVariants, getVariant, createVariant, updateVariant, deleteVariant, printArtworkId,
+  printHasVariantForSku, reassessVariantsForMaster,
 } from "./adminPrintRepo";
+import { deriveVariantFields } from "./adminPrintService";
 import { getAdminPrintsOverview, getPrintAdminDetail, setPrintStatus } from "./printRepo";
 import {
   ensureMasterDirs, stagingDir, storeMasterFromStaging, removeMasterFiles, removeMasterObject,
@@ -62,6 +64,11 @@ async function commitMaster(printId: number, stagedPath: string, originalName: s
     assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
     checksumMd5: stored.checksumMd5, note: null, hasAsset: true,
   };
+  // The master just changed → re-derive every variant's cached eligibility against it (best-effort;
+  // never fail the upload over this). Keeps the fail-closed publish/storefront gates in sync too.
+  await reassessVariantsForMaster(printId, master).catch((e) =>
+    console.error(`[master] variant reassessment failed for print ${printId}:`, e instanceof Error ? e.message : e),
+  );
   return { master, eligibleSizeCount: eligibleSkus.length };
 }
 
@@ -293,6 +300,10 @@ export function registerAdminPrintRoutes(app: Express): void {
       await clearPrintMaster(printId);
       // No valid master ⇒ nothing is publishable; revert to Draft so the raw status matches reality.
       await setPrintStatus(printId, "draft");
+      // Master gone → every variant is now ineligible; re-derive the cached flags to match (fail-closed).
+      await reassessVariantsForMaster(printId, null).catch((e) =>
+        console.error(`[master] variant reassessment failed for print ${printId}:`, e instanceof Error ? e.message : e),
+      );
       return res.json({ ok: true, master: await getPrintMaster(printId), status: "draft", storageRemoved });
     } catch {
       return res.status(500).json({ message: "Could not remove the master file." });
@@ -362,7 +373,16 @@ export function registerAdminPrintRoutes(app: Express): void {
       // The master now belongs to the PRINT, not the artwork.
       const master = await getPrintMaster(printId);
       const artworkId = await printArtworkId(printId);
-      return res.json({ variants: await listVariants(printId), master, artworkId });
+      // RECOMPUTE eligibility LIVE against the CURRENT master. `eligible`/`effective_dpi` are cached on
+      // the row at save time; a later master upload/replace would leave them stale (and wrongly disable
+      // Enable). Deriving here from the current master keeps the editor honest and lets us return the
+      // EXACT reason a size is ineligible (aspect-ratio / resolution / …) instead of a bare "Not eligible".
+      const variants = (await listVariants(printId)).map((v) => {
+        const d = deriveVariantFields(v.prodigi_sku, master);
+        if (!d.ok) return { ...v, eligible: false, reason: d.error, reason_code: "unverified-sku" as const };
+        return { ...v, eligible: d.fields.eligible, effective_dpi: d.fields.effectiveDpi, reason: d.fields.reason, reason_code: d.fields.reasonCode };
+      });
+      return res.json({ variants, master, artworkId });
     } catch {
       return res.status(500).json({ message: "Could not load variants." });
     }
@@ -374,7 +394,13 @@ export function registerAdminPrintRoutes(app: Express): void {
       if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
       // Eligibility is derived from THIS PRINT's own master.
       const master = await getPrintMaster(printId);
-      const validated = validateVariantSave(readVariantInput(req.body), master);
+      const input = readVariantInput(req.body);
+      // One SKU per print — reject a duplicate material+size option (a print SKU is 1:1 with a physical
+      // Prodigi product, so a second row for the same SKU is always a mistake). Existing rows untouched.
+      if (input.sku && (await printHasVariantForSku(printId, input.sku))) {
+        return res.status(409).json({ message: "This size is already an option for this print.", errors: { sku: "This size is already added — edit the existing option instead of adding a duplicate." } });
+      }
+      const validated = validateVariantSave(input, master);
       if (!validated.ok) return res.status(400).json({ message: "Please check the variant", errors: validated.errors });
       const created = await createVariant(printId, validated.row!);
       return res.status(201).json({ variant: created });

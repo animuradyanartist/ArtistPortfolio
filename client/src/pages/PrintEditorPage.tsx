@@ -46,7 +46,18 @@ interface VariantApiRow {
   framed: boolean; frame_colour: string | null; retail_minor: number | null; currency: string;
   print_ready_asset_url: string | null; effective_dpi: number | null; min_dpi: number | null;
   eligible: boolean; enabled: boolean; prodigi_verified: boolean;
+  reason?: string | null; reason_code?: string | null;
 }
+
+/** Short, human labels for why a size is ineligible — shown next to "Not eligible" so the admin knows
+ *  exactly what to change (a very high-DPI option can still be ineligible on aspect ratio). */
+const REASON_LABEL: Record<string, string> = {
+  "aspect-ratio": "Aspect ratio mismatch",
+  "resolution": "Resolution too low",
+  "unverified-sku": "Unverified Prodigi SKU",
+  "no-master": "Awaiting master",
+  "not-ready": "Master not ready",
+};
 interface MasterApi {
   widthPx: number | null; heightPx: number | null; status: string;
   printReadyAssetUrl: string | null; note?: string | null;
@@ -133,7 +144,7 @@ export default function PrintEditorPage() {
   }, [print]);
 
   const variants = useMemo(
-    () => (variantData?.variants ?? []).map((v) => toVariantView(v, printId ?? 0)),
+    () => (variantData?.variants ?? []).map((v) => ({ ...toVariantView(v, printId ?? 0), reason: v.reason ?? null, reasonCode: v.reason_code ?? null })),
     [variantData, printId],
   );
   const master = useMemo(() => toMasterView(variantData?.master ?? null), [variantData]);
@@ -525,7 +536,7 @@ function PendingMasterPanel({ name, dims, sizeMb, onReplace, onClear }: {
 
 // ── One existing variant row ──
 function VariantRow({ v, printId, master, onChanged }: {
-  v: PrintVariantView; printId: number; master: PrintMasterView | null; onChanged: () => void;
+  v: PrintVariantView & { reason?: string | null; reasonCode?: string | null }; printId: number; master: PrintMasterView | null; onChanged: () => void;
 }) {
   const { toast } = useToast();
   const [price, setPrice] = useState(centsToUsd(v.retailMinor));
@@ -560,13 +571,15 @@ function VariantRow({ v, printId, master, onChanged }: {
           inputMode="decimal" className="w-20 h-8" placeholder="120" />
       </div>
       <label className={`flex items-center gap-1.5 text-sm ${canEnable ? "text-slate-700" : "text-slate-400"}`}
-        title={canEnable ? "" : "Needs a ready master, a price and an eligible size"}>
+        title={canEnable ? "" : (v.reason || "Needs a ready master, a price and an eligible size")}>
         <input type="checkbox" checked={v.enabled} disabled={busy || (!v.enabled && !canEnable)} onChange={(e) => save({ enabled: e.target.checked })} />
         {v.enabled ? "Enabled" : "Enable"}
       </label>
       {v.eligible
         ? <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100">Eligible</Badge>
-        : <Badge variant="secondary" className="bg-slate-100 text-slate-500 hover:bg-slate-100">Not eligible</Badge>}
+        : <Badge variant="secondary" className="bg-slate-100 text-slate-500 hover:bg-slate-100" title={v.reason || undefined}>
+            Not eligible{v.reasonCode && REASON_LABEL[v.reasonCode] ? ` · ${REASON_LABEL[v.reasonCode]}` : ""}
+          </Badge>}
       <button onClick={del} className="text-red-600 hover:text-red-700" aria-label="Delete option"><Trash2 className="w-4 h-4" /></button>
     </div>
   );
