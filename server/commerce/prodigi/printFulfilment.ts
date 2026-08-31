@@ -17,6 +17,7 @@
  */
 
 import { prodigi as realProdigi, prodigiConfigured } from "./prodigiClient";
+import { requiredAttributesForSku } from "@shared/commerce/prodigiProducts";
 import type {
   ProdigiOrderRequest,
   ProdigiOrderResponse,
@@ -74,8 +75,16 @@ export interface FulfilmentOutcome {
   error: string | null;
 }
 
-/** Build the Prodigi order body from an internal paid order. Pure; unit-tested. */
+/**
+ * Build the Prodigi order body from an internal paid order. Pure; unit-tested.
+ *
+ * CANONICAL ATTRIBUTE SOURCE (mirrors the quote builder): the SKU registry supplies REQUIRED catalogue
+ * attributes (canvas `wrap`), merged with the order's own attributes (e.g. a frame colour). This is the
+ * single serialization boundary for a fulfilment item, so a canvas order ALWAYS carries its wrap in the
+ * body Prodigi receives — regardless of what the upstream snapshot/mapper carried. Paper adds nothing.
+ */
 export function buildProdigiOrderRequest(o: InternalPrintOrder): ProdigiOrderRequest {
+  const attributes = { ...requiredAttributesForSku(o.variant.prodigiSku), ...(o.variant.attributes ?? {}) };
   return {
     shippingMethod: o.shippingMethod ?? "Standard",
     idempotencyKey: o.idempotencyKey,
@@ -101,7 +110,7 @@ export function buildProdigiOrderRequest(o: InternalPrintOrder): ProdigiOrderReq
         // fine art is centre-cropped to fill; never stretched. (Our masters already match ratio,
         // so fill == fit here — but fill is the safe default if a size is ever slightly off.)
         sizing: "fillPrintArea",
-        ...(o.variant.attributes ? { attributes: o.variant.attributes } : {}),
+        ...(Object.keys(attributes).length ? { attributes } : {}),
         assets: [
           {
             printArea: "default",

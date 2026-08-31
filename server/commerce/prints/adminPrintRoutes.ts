@@ -11,7 +11,7 @@ import express, { type Express, type Response } from "express";
 import multer from "multer";
 import { requireAdminAuth } from "../../auth";
 import { hasDatabase } from "../../db";
-import { PRODIGI_LAUNCH_PRODUCTS, eligibleSkusForMaster, getProdigiProduct, isSkuOfferedForNewVariant, requiredAttributesForSku } from "../prodigi/prodigiProducts";
+import { PRODIGI_LAUNCH_PRODUCTS, eligibleSkusForMaster, getProdigiProduct, isSkuOfferedForNewVariant } from "../prodigi/prodigiProducts";
 import { printReadiness } from "@shared/commerce/printProduct";
 import { isValidCropShape, cropFitsSku, type NormalizedCrop } from "@shared/commerce/printCrop";
 import { validateVariantSave, type VariantSaveInput } from "./adminPrintService";
@@ -526,9 +526,10 @@ export function registerAdminPrintRoutes(app: Express): void {
       const country = String((req.body ?? {}).country ?? "").trim().toUpperCase();
       if (!/^[A-Z]{2}$/.test(country)) return res.status(400).json({ message: "A 2-letter destination country is required." });
 
-      // Catalogue-required attributes (canvas wrap) + any frame — same attributes checkout/fulfilment use,
-      // so the admin quote reflects the REAL orderable product (canvas without its wrap would misquote).
-      const attributes: Record<string, string> = { ...requiredAttributesForSku(variant.prodigi_sku) };
+      // Only the frame attribute is order-specific; the catalogue-required canvas `wrap` is injected
+      // canonically by buildPrintQuoteRequest from the SKU registry, so the admin quote reflects the REAL
+      // orderable product (a canvas SKU is quoted WITH its wrap; without it Prodigi 400s the quote).
+      const attributes: Record<string, string> = {};
       if (variant.framed && variant.frame_colour) attributes.frameColour = variant.frame_colour;
       const quote = await quotePrintShipping({
         prodigiSku: variant.prodigi_sku, copies: 1, country, currency: variant.currency,

@@ -4,6 +4,7 @@ import {
   planPrintCheckout,
   printOrderToInternal,
 } from "./printCheckout";
+import { buildProdigiOrderRequest } from "../prodigi/printFulfilment";
 import { paidActionFor } from "./printFulfilmentService";
 import type { PrintVariantView, PrintMasterView } from "@shared/commerce/printProduct";
 import type { OrderRow } from "../orders";
@@ -142,7 +143,7 @@ describe("printOrderToInternal — paid order → provider request", () => {
     expect(printOrderToInternal(order({ artwork_snapshot: JSON.stringify({ itemType: "artwork" }) }), { idempotencyKey: "k" })).toBeNull();
   });
 
-  it("(7) a CANVAS order carries the wrap attribute in the provider request (not just frame)", () => {
+  it("(7) a CANVAS order → the PROVIDER REQUEST BODY carries wrap MirrorWrap (injected by the serializer)", () => {
     const canvasOrder = order({
       artwork_snapshot: JSON.stringify({
         itemType: "print", printId: 10, printVariantId: 8, artworkId: 42, title: "Blue Hour",
@@ -153,13 +154,17 @@ describe("printOrderToInternal — paid order → provider request", () => {
     });
     const internal = printOrderToInternal(canvasOrder, { idempotencyKey: "am-print-canvas" });
     expect(internal).not.toBeNull();
-    // The catalogue wrap is included so Prodigi stretches + wraps the canvas correctly.
-    expect(internal!.variant.attributes).toEqual({ wrap: "MirrorWrap" });
+    // The mapper itself carries only order-specific attributes (none here); the CATALOGUE wrap is injected
+    // by the canonical Prodigi serializer, so the ACTUAL order body Prodigi receives contains it.
+    const req = buildProdigiOrderRequest(internal!);
+    expect(req.items[0].attributes).toEqual({ wrap: "MirrorWrap" });
   });
 
-  it("(7) a paper order still carries ONLY frame (no spurious wrap)", () => {
+  it("(7) a paper order request carries ONLY frame (no spurious wrap)", () => {
     const internal = printOrderToInternal(order(), { idempotencyKey: "k" });
     expect(internal!.variant.attributes).toEqual({ frameColour: "black" });
+    // And the serialized paper order body keeps just the frame — no canvas wrap.
+    expect(buildProdigiOrderRequest(internal!).items[0].attributes).toEqual({ frameColour: "black" });
   });
 });
 

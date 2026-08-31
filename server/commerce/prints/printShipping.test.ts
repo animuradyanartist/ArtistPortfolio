@@ -41,6 +41,25 @@ describe("buildPrintQuoteRequest", () => {
     expect(req.items[0].copies).toBe(1);
     expect(req.items[0].attributes).toEqual({ frameColour: "black" });
   });
+
+  it("INJECTS the canvas wrap from the SKU registry — every caller sends it, none has to remember", () => {
+    // The bug: a caller that passed no attributes produced a canvas item with NO attributes, and Prodigi
+    // rejected it (MissingRequiredAttributes). The builder now sources the required wrap from the registry.
+    const req = buildPrintQuoteRequest({ prodigiSku: "GLOBAL-CAN-A3", copies: 1, country: "DE", currency: "EUR" });
+    expect(req.items[0].attributes).toEqual({ wrap: "MirrorWrap" });
+    expect(req.items).toEqual([{ sku: "GLOBAL-CAN-A3", copies: 1, attributes: { wrap: "MirrorWrap" }, assets: [{ printArea: "default" }] }]);
+  });
+
+  it("a PAPER SKU gets NO canvas attributes (wrap is canvas-only)", () => {
+    const req = buildPrintQuoteRequest({ prodigiSku: "GLOBAL-HGE-A3", copies: 1, country: "DE", currency: "EUR" });
+    expect(req.items[0].attributes).toBeUndefined();
+  });
+
+  it("all five verified canvas SKUs carry attributes.wrap = MirrorWrap", () => {
+    for (const sku of ["GLOBAL-CAN-A3", "GLOBAL-CAN-12X16", "GLOBAL-CAN-16X20", "GLOBAL-CAN-18X24", "GLOBAL-CAN-24X36"]) {
+      expect(buildPrintQuoteRequest({ prodigiSku: sku, copies: 1, country: "DE", currency: "EUR" }).items[0].attributes).toEqual({ wrap: "MirrorWrap" });
+    }
+  });
 });
 
 describe("costToMinor", () => {

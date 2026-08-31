@@ -37,12 +37,13 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  // Catalogue-required attributes come from the SKU (canvas → { wrap: "MirrorWrap" }); paper → none.
-  // This is the SAME merge the admin estimator + checkout use, so the probe quotes the REAL product.
-  const attributes = requiredAttributesForSku(sku);
-  const quoteInput = { prodigiSku: sku, copies, country, currency, ...(Object.keys(attributes).length ? { attributes } : {}) };
-  line(`request: sku=${sku} · destination=${country} · currency=${currency} · copies=${copies} · attributes=${JSON.stringify(attributes)}`);
-  // Show the exact request body the client will send (proves destinationCountryCode / assets / copies / wrap).
+  // The probe passes NO attributes: buildPrintQuoteRequest injects the SKU's REQUIRED catalogue
+  // attributes (canvas → { wrap: "MirrorWrap" }) from the registry itself. We print what the registry
+  // says for transparency, then print the ACTUAL serialized body the client will POST — the body is the
+  // proof, not this line.
+  const quoteInput = { prodigiSku: sku, copies, country, currency };
+  line(`request: sku=${sku} · destination=${country} · currency=${currency} · copies=${copies} · registry requiredAttributes=${JSON.stringify(requiredAttributesForSku(sku))}`);
+  // The EXACT request body the client will send (canvas rows carry attributes.wrap; paper does not).
   line(`body:    ${JSON.stringify(buildPrintQuoteRequest(quoteInput))}`);
   line("");
 

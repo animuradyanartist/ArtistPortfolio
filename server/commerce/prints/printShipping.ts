@@ -13,6 +13,7 @@
  */
 
 import { prodigi as realProdigi, prodigiConfigured, ProdigiApiError } from "../prodigi/prodigiClient";
+import { requiredAttributesForSku } from "@shared/commerce/prodigiProducts";
 import type {
   ProdigiQuoteRequest,
   ProdigiQuoteResponse,
@@ -73,8 +74,17 @@ function prodigiIssueSummary(body: unknown): string {
   return "";
 }
 
-/** Build the Prodigi quote request for one print variant to a destination. Pure; unit-tested. */
+/**
+ * Build the Prodigi quote request for one print variant to a destination. Pure; unit-tested.
+ *
+ * CANONICAL ATTRIBUTE SOURCE: the SKU registry supplies the REQUIRED catalogue attributes (canvas
+ * `wrap`), merged here with any caller-provided attributes (e.g. a frame colour). This is the SINGLE
+ * serialization boundary for a quote item, so EVERY caller (CLI probe, admin estimator, checkout) sends
+ * a canvas SKU its required wrap without having to remember to pass it — the class of bug that made
+ * Prodigi reject canvas quotes with `MissingRequiredAttributes`. Paper SKUs contribute nothing.
+ */
 export function buildPrintQuoteRequest(input: PrintQuoteInput): ProdigiQuoteRequest {
+  const attributes = { ...requiredAttributesForSku(input.prodigiSku), ...(input.attributes ?? {}) };
   return {
     destinationCountryCode: input.country.trim().toUpperCase(),
     currencyCode: input.currency.trim().toUpperCase(),
@@ -83,7 +93,7 @@ export function buildPrintQuoteRequest(input: PrintQuoteInput): ProdigiQuoteRequ
       {
         sku: input.prodigiSku,
         copies: Math.max(1, Math.floor(input.copies)),
-        ...(input.attributes && Object.keys(input.attributes).length ? { attributes: input.attributes } : {}),
+        ...(Object.keys(attributes).length ? { attributes } : {}),
         // A quote item only needs the print area, not the asset URL (no order is created).
         assets: [{ printArea: "default" }],
       },

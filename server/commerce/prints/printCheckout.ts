@@ -21,7 +21,7 @@ import {
   type PrintMasterView,
   type PrintItemSnapshot,
 } from "@shared/commerce/printProduct";
-import { MATERIAL_INFO, CATEGORY_LABEL, requiredAttributesForSku, defaultAttributesForMaterial, type PrintMaterial } from "@shared/commerce/prodigiProducts";
+import { MATERIAL_INFO, CATEGORY_LABEL, type PrintMaterial } from "@shared/commerce/prodigiProducts";
 import type { InternalPrintOrder } from "../prodigi/printFulfilment";
 import type { OrderRow } from "../orders";
 
@@ -170,14 +170,10 @@ export function printOrderToInternal(
   if (snap.itemType !== "print" || !snap.prodigiSku || !snap.printReadyAssetUrl) return null;
   if (!order.ship_address1 || !order.ship_city || !order.ship_postal_code || !order.ship_country) return null;
 
-  // Catalogue-required attributes (canvas WRAP) come from the SERVER, never the buyer. The material's
-  // default (canvas → wrap) is the base; a SKU-specific requiredAttributes wins if the verified row sets
-  // one. Both are server-derived (snapshot.material was resolved from the verified SKU at checkout), so a
-  // canvas order always carries its wrap even though paper carries none. Frame is layered on last.
-  const attributes: Record<string, string> = {
-    ...defaultAttributesForMaterial(snap.material as PrintMaterial),
-    ...requiredAttributesForSku(snap.prodigiSku),
-  };
+  // Buyer/order-specific attributes only (frame colour from the purchase). The CATALOGUE-required
+  // attributes — canvas `wrap` — are injected canonically by buildProdigiOrderRequest from the SKU
+  // registry, so they reach Prodigi regardless of what this mapper carries. (See printFulfilment.ts.)
+  const attributes: Record<string, string> = {};
   if (snap.framed && snap.frameColour) attributes.frameColour = snap.frameColour;
 
   return {
