@@ -16,13 +16,13 @@ import { emailConfigured, sendEmail } from "./provider";
 import { claimOrderEmail, finishOrderEmail, releaseOrderEmailClaim, logOrderEmail } from "./emailLog";
 import {
   toModel, buildConfirmationEmail, buildShippedEmail, buildDeliveredEmail,
-  buildPreparingEmail, buildUpdateEmail, type EmailContent,
+  buildPreparingEmail, buildPackedEmail, buildInTransitEmail, buildUpdateEmail, type EmailContent,
 } from "./render";
 
 export { listOrderEmails } from "./emailLog";
 export { emailConfigured } from "./provider";
 
-export type EmailKind = "order_confirmation" | "shipped" | "delivered" | "preparing" | "delay" | "manual";
+export type EmailKind = "order_confirmation" | "shipped" | "delivered" | "preparing" | "packed" | "in_transit" | "delay" | "manual";
 export interface EmailDispatchResult { status: "sent" | "failed" | "skipped"; reason?: string; id?: string }
 
 export function emailBaseUrl(): string {
@@ -85,6 +85,14 @@ export function sendOrderConfirmation(order: OrderRow): Promise<EmailDispatchRes
 export function resendConfirmation(order: OrderRow): Promise<EmailDispatchResult> {
   return dispatch(order, "order_confirmation", buildConfirmationEmail, { once: false });
 }
+/** Preparing — AUTO on the transition to 'preparing'. Once per order (a re-set sends nothing). */
+export function sendPreparingStatusEmail(order: OrderRow): Promise<EmailDispatchResult> {
+  return dispatch(order, "preparing", buildPreparingEmail, { once: true });
+}
+/** Packed — AUTO on the transition to 'packed'. Once per order. */
+export function sendPackedEmail(order: OrderRow): Promise<EmailDispatchResult> {
+  return dispatch(order, "packed", buildPackedEmail, { once: true });
+}
 /** C. Shipped — once per order, auto on the transition to shipped. */
 export function sendShippedEmail(order: OrderRow): Promise<EmailDispatchResult> {
   return dispatch(order, "shipped", buildShippedEmail, { once: true });
@@ -93,7 +101,12 @@ export function sendShippedEmail(order: OrderRow): Promise<EmailDispatchResult> 
 export function sendDeliveredEmail(order: OrderRow): Promise<EmailDispatchResult> {
   return dispatch(order, "delivered", buildDeliveredEmail, { once: true });
 }
-/** B. Preparing — optional, admin-initiated (not automatic), so repeatable. */
+/** In transit — a "on the way" nudge. There is NO in-transit status (it is the derived period after
+ *  shipped), so this is an ADMIN-INITIATED, repeatable email — not an automatic transition. */
+export function sendInTransitEmail(order: OrderRow): Promise<EmailDispatchResult> {
+  return dispatch(order, "in_transit", buildInTransitEmail, { once: false });
+}
+/** B. Preparing — admin-initiated resend (repeatable), distinct from the once-only auto version above. */
 export function sendPreparingEmail(order: OrderRow): Promise<EmailDispatchResult> {
   return dispatch(order, "preparing", buildPreparingEmail, { once: false });
 }

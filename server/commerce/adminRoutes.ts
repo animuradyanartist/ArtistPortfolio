@@ -21,6 +21,7 @@ import { fulfilPrintOrder, canRetryPrintFulfilment } from "./prints/printFulfilm
 import { stripeMode, stripeClient } from "./stripeClient";
 import {
   sendOrderConfirmation, sendShippedEmail, sendDeliveredEmail, sendPreparingEmail, sendManualUpdate,
+  sendPreparingStatusEmail, sendPackedEmail, sendInTransitEmail,
   resendConfirmation, listOrderEmails, emailConfigured,
 } from "../email";
 import { ADMIN_SETTABLE, nextStatuses, isExceptionState, type OrderStatus, type ExceptionState } from "@shared/commerce/orderStatus";
@@ -118,13 +119,15 @@ export function registerAdminCommerceRoutes(app: Express): void {
       const r = await setOrderStatus(id, to);
       if (!r.ok) return res.status(409).json({ message: r.reason ?? "Not allowed" });
 
-      // LIFECYCLE EMAILS — only on a genuine transition into shipped/delivered (not on an
-      // idempotent re-save), and only for a paid order. Each is once-only per order anyway, and
-      // the send never throws, so a mail problem cannot fail this action.
+      // LIFECYCLE EMAILS — automatic on a GENUINE transition (not an idempotent re-save), and only for
+      // a paid order. Each is once-only per order (dedupe-guarded), so setting the same status again
+      // sends nothing; the send never throws, so a mail problem cannot fail this action.
       let email: { status: string; reason?: string } | null = null;
       if (to !== before.status && before.payment_status === "paid") {
         const fresh = await getOrder(id);
-        if (fresh && to === "shipped") email = await sendShippedEmail(fresh);
+        if (fresh && to === "preparing") email = await sendPreparingStatusEmail(fresh);
+        else if (fresh && to === "packed") email = await sendPackedEmail(fresh);
+        else if (fresh && to === "shipped") email = await sendShippedEmail(fresh);
         else if (fresh && to === "delivered") email = await sendDeliveredEmail(fresh);
       }
       res.json({ ok: true, email });
@@ -207,6 +210,7 @@ export function registerAdminCommerceRoutes(app: Express): void {
       switch (kind) {
         case "resend_confirmation": result = await resendConfirmation(order); break;
         case "preparing":           result = await sendPreparingEmail(order); break;
+        case "in_transit":          result = await sendInTransitEmail(order); break;
         case "delay":
         case "manual": {
           if (!message) return res.status(400).json({ message: "A message is required." });

@@ -14,6 +14,7 @@
 import type { OrderRow } from "../commerce/orders";
 import { formatMoney, type Currency } from "@shared/commerce/money";
 import { ORDER_STATUS_LABEL, type OrderStatus } from "@shared/commerce/orderStatus";
+import { MATERIAL_CATEGORY, CATEGORY_LABEL, type PrintMaterial } from "@shared/commerce/prodigiProducts";
 
 // ── brand ──
 const CREAM = "#f5f1ea";
@@ -49,6 +50,16 @@ interface Model {
   artworkTitle: string | null;
   artworkMeta: string | null;
   artworkImage: string | null;
+  /** true for a fine-art PRINT order, false for an ORIGINAL artwork order. */
+  isPrint: boolean;
+  /** "Original artwork" | "Fine Art Print" — the plain-language item label. */
+  itemKindLabel: string;
+  /** Print only: "Fine Art Paper" | "Canvas" (the customer-facing material). Null for originals. */
+  materialCategoryLabel: string | null;
+  /** Print only: the selected size label (e.g. "16×20 in (40×50 cm)"). Null for originals. */
+  sizeLabel: string | null;
+  /** Print quantity (>=1); always 1 for an original. */
+  quantity: number;
   currency: Currency;
   itemPrice: string | null;
   shipping: string | null;
@@ -71,18 +82,35 @@ function firstNameOf(name: string | null): string {
   return token || "there";
 }
 
-function absoluteImage(image: string | null | undefined, baseUrl: string): string | null {
-  if (!image) return null;
-  if (/^https?:\/\//i.test(image)) return image;
-  const path = image.startsWith("/") ? image : `/${image}`;
-  return `${baseUrl}${path}${path.includes("?") ? "" : "?w=800"}`;
+/**
+ * The image URL to use IN EMAIL — always a compact, absolute, publicly-reachable HTTPS URL.
+ *
+ * THE BUG THIS FIXES: print orders snapshot the storefront image, which is a base64 `data:` URI (the
+ * public print image is base64-inlined). Embedding a multi-MB base64 string in an <img src> makes the
+ * email enormous; Gmail then CLIPS it mid-tag, so the raw `<img src="…` renders as visible text. We
+ * therefore NEVER embed base64/data (or any over-long value) — we fall back to the artwork's public
+ * server-served image (`/img/artwork/{id}/0`), the same compact URL the site and OG tags use. An
+ * already-absolute https URL (e.g. a Prodigi mockup) is used as-is; a relative path is made absolute.
+ */
+function emailImageUrl(raw: string | null | undefined, artworkId: number | null, baseUrl: string): string | null {
+  const fallback = artworkId != null ? `${baseUrl}/img/artwork/${artworkId}/0` : null;
+  if (!raw) return fallback;
+  const v = String(raw);
+  if (/^data:/i.test(v) || v.length > 512) return fallback;  // base64/data or anything suspiciously long → public URL
+  if (/^https?:\/\//i.test(v)) return v;                     // already public (a Prodigi mockup, a CDN url)
+  const path = v.startsWith("/") ? v : `/${v}`;
+  return `${baseUrl}${path}`;
 }
 
 export function toModel(order: OrderRow, baseUrl: string, trackUrl: string): Model {
   const currency = ((order.currency as Currency) || "EUR");
   const snap = order.artwork_snapshot ? safeParse(order.artwork_snapshot) : null;
-  const s = (snap ?? {}) as { title?: string; dimensions?: string; medium?: string; year?: number; image?: string };
+  const s = (snap ?? {}) as { title?: string; dimensions?: string; medium?: string; year?: number; image?: string; material?: string; sizeLabel?: string; quantity?: number };
+  const isPrint = order.item_type === "print";
   const metaBits = [s.dimensions, s.medium, s.year ? String(s.year) : null].filter(Boolean) as string[];
+  const materialCategoryLabel = isPrint && s.material
+    ? (CATEGORY_LABEL[MATERIAL_CATEGORY[s.material as PrintMaterial]] ?? null)
+    : null;
   const city = order.ship_city?.trim();
   const country = order.ship_country?.trim();
   return {
@@ -90,7 +118,12 @@ export function toModel(order: OrderRow, baseUrl: string, trackUrl: string): Mod
     firstName: firstNameOf(order.buyer_name),
     artworkTitle: s.title ?? null,
     artworkMeta: metaBits.length ? metaBits.join(" · ") : null,
-    artworkImage: absoluteImage(s.image, baseUrl),
+    artworkImage: emailImageUrl(s.image, order.artwork_id ?? null, baseUrl),
+    isPrint,
+    itemKindLabel: isPrint ? "Fine Art Print" : "Original artwork",
+    materialCategoryLabel,
+    sizeLabel: isPrint ? (s.sizeLabel ?? null) : null,
+    quantity: isPrint ? (Number(s.quantity) > 0 ? Number(s.quantity) : 1) : 1,
     currency,
     itemPrice: order.item_price_minor != null ? formatMoney(order.item_price_minor, currency) : null,
     shipping: order.shipping_minor != null ? formatMoney(order.shipping_minor, currency) : null,
@@ -225,12 +258,68 @@ function textFooter(): string {
 // TEMPLATES
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** A. Payment confirmed / order confirmation. */
+/** The title used in a subject line — the artwork title when known, else the order reference. */
+function subjectTitle(m: Model): string {
+  return m.artworkTitle ? m.artworkTitle : `order ${m.reference}`;
+}
+
+/** A. Payment confirmed / order confirmation — different for a PRINT vs an ORIGINAL. */
 export function buildConfirmationEmail(m: Model): EmailContent {
+  return m.isPrint ? printConfirmation(m) : originalConfirmation(m);
+}
+
+/** A print order: produced to order by the fulfilment partner — never "crated in the Yerevan studio". */
+function printConfirmation(m: Model): EmailContent {
   const rows = [
     summaryRow("Order", esc(m.reference)),
-    m.itemPrice ? summaryRow("Artwork", esc(m.itemPrice)) : "",
-    m.hasShipping && m.shipping ? summaryRow("Shipping", esc(m.shipping)) : summaryRow("Shipping", "Included"),
+    summaryRow("Item", "Fine Art Print"),
+    m.materialCategoryLabel ? summaryRow("Material", esc(m.materialCategoryLabel)) : "",
+    m.sizeLabel ? summaryRow("Size", esc(m.sizeLabel)) : "",
+    m.quantity > 1 ? summaryRow("Quantity", String(m.quantity)) : "",
+    m.total ? summaryRow("Total paid", esc(m.total), { strong: true }) : "",
+    summaryRow("Payment", "Confirmed"),
+    m.destination ? summaryRow("Shipping to", esc(m.destination)) : "",
+  ].filter(Boolean);
+
+  const inner = [
+    eyebrow("Print order confirmed"),
+    heading(`Thank you, ${m.firstName}.`),
+    para(`Your fine art print has been received and is now being prepared for production. I'll keep you updated as it is produced and shipped.`),
+    artworkBlock(m),
+    summaryTable(rows),
+    `<div style="font-family:${SANS};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:${STONE_500};padding:18px 0 8px">What happens next</div>`,
+    infoNote(`Your print is made to order on archival materials and dispatched once it's ready. You'll get an email with tracking the moment it ships.`),
+    para(`You can follow your order at any time using the button below.`),
+    button("Track your order", m.trackUrl),
+    rule(),
+    para(`With warmth,<br><span style="font-family:${SERIF};font-style:italic;font-size:17px;color:${STONE_900}">Ani</span>`),
+  ].join("");
+
+  const text =
+`Thank you, ${m.firstName}.
+
+Your fine art print has been received and is now being prepared for production. I'll keep you updated as it is produced and shipped.
+
+Order: ${m.reference}
+Item: Fine Art Print
+${m.materialCategoryLabel ? `Material: ${m.materialCategoryLabel}\n` : ""}${m.sizeLabel ? `Size: ${m.sizeLabel}\n` : ""}${m.quantity > 1 ? `Quantity: ${m.quantity}\n` : ""}${m.total ? `Total paid: ${m.total}\n` : ""}Payment: Confirmed
+${m.destination ? `Shipping to: ${m.destination}\n` : ""}
+Your print is made to order and dispatched once ready. You'll get an email with tracking the moment it ships.
+
+Track your order: ${m.trackUrl}
+
+With warmth,
+Ani${textFooter()}`;
+
+  return { subject: `Print order confirmed — ${subjectTitle(m)}`, html: layout(`Your fine art print order ${m.reference} is confirmed. Thank you.`, inner), text };
+}
+
+/** An original artwork: a unique work, prepared and shipped by Ani herself. */
+function originalConfirmation(m: Model): EmailContent {
+  const rows = [
+    summaryRow("Order", esc(m.reference)),
+    summaryRow("Item", "Original artwork"),
+    m.artworkMeta ? summaryRow("Details", esc(m.artworkMeta)) : "",
     m.total ? summaryRow("Total paid", esc(m.total), { strong: true }) : "",
     summaryRow("Payment", "Confirmed"),
     m.destination ? summaryRow("Shipping to", esc(m.destination)) : "",
@@ -241,9 +330,9 @@ export function buildConfirmationEmail(m: Model): EmailContent {
     : infoNote(`Each painting is prepared and crated by hand, so dispatch usually takes a few days. I'll email you with tracking the moment it's on its way — no delivery date is promised until the courier gives me one.`);
 
   const inner = [
-    eyebrow("Payment confirmed"),
+    eyebrow("Order confirmed"),
     heading(`Thank you, ${m.firstName}.`),
-    para(`Your painting is now yours. I'll prepare it with care here in my Yerevan studio, and keep you updated at every step from here to your door.`),
+    para(`Thank you for your purchase. Your original artwork is now reserved for you. I'll prepare it carefully in my Yerevan studio and keep you updated as it moves through packing and shipping.`),
     artworkBlock(m),
     summaryTable(rows),
     `<div style="font-family:${SANS};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:${STONE_500};padding:18px 0 8px">What happens next</div>`,
@@ -257,11 +346,11 @@ export function buildConfirmationEmail(m: Model): EmailContent {
   const text =
 `Thank you, ${m.firstName}.
 
-Your painting is now yours. I'll prepare it with care here in my Yerevan studio and keep you updated at every step.
+Thank you for your purchase. Your original artwork is now reserved for you. I'll prepare it carefully in my Yerevan studio and keep you updated as it moves through packing and shipping.
 
 Order: ${m.reference}
-${m.itemPrice ? `Artwork: ${m.itemPrice}\n` : ""}Shipping: ${m.hasShipping && m.shipping ? m.shipping : "Included"}
-${m.total ? `Total paid: ${m.total}\n` : ""}Payment: Confirmed
+Item: Original artwork
+${m.artworkMeta ? `Details: ${m.artworkMeta}\n` : ""}${m.total ? `Total paid: ${m.total}\n` : ""}Payment: Confirmed
 ${m.destination ? `Shipping to: ${m.destination}\n` : ""}
 ${m.expectedDispatch ? `Expected dispatch: around ${m.expectedDispatch}.` : "Each painting is crated by hand; dispatch usually takes a few days. I'll email tracking the moment it's on its way."}
 
@@ -270,7 +359,12 @@ Track your order: ${m.trackUrl}
 With warmth,
 Ani${textFooter()}`;
 
-  return { subject: `Thank you for your purchase — order ${m.reference}`, html: layout(`Payment confirmed for order ${m.reference}. Thank you.`, inner), text };
+  return { subject: `Order confirmed — ${subjectTitle(m)}`, html: layout(`Your order ${m.reference} is confirmed. Thank you.`, inner), text };
+}
+
+/** The noun for the purchased item in prose ("fine art print" / "painting"). */
+function itemNoun(m: Model): string {
+  return m.isPrint ? "fine art print" : "painting";
 }
 
 /** C. Shipped. */
@@ -287,40 +381,116 @@ export function buildShippedEmail(m: Model): EmailContent {
     ? para(`You can <a href="${esc(m.trackingUrl)}" target="_blank" style="color:${INK}">track it directly with ${esc(m.carrier ?? "the carrier")}</a>, or use your order page below.`)
     : para(`Follow its journey on your order page below.`);
 
+  const movedHtml = m.isPrint
+    ? `has been produced and is now on its way to you.`
+    : `has left the studio and is now with the courier.`;
+
   const inner = [
     eyebrow("On its way"),
     heading(`It's on its way, ${m.firstName}.`),
     para(m.artworkTitle
-      ? `<span style="font-family:${SERIF};font-style:italic">${esc(m.artworkTitle)}</span> has left the studio and is now with the courier.`
-      : `Your painting has left the studio and is now with the courier.`),
+      ? `Your ${itemNoun(m)} — <span style="font-family:${SERIF};font-style:italic">${esc(m.artworkTitle)}</span> — ${movedHtml}`
+      : `Your ${itemNoun(m)} ${movedHtml}`),
     artworkBlock(m),
     summaryTable(rows),
     carrierLink,
-    m.estimatedDelivery ? "" : infoNote(`Delivery times vary by destination and customs. I'll let you know if anything changes — and any import duties are payable to the courier on delivery.`),
+    m.estimatedDelivery ? "" : infoNote(`Delivery times vary by destination and customs. I'll let you know if anything changes${m.isPrint ? "" : " — and any import duties are payable to the courier on delivery"}.`),
     button("Track your order", m.trackUrl),
   ].join("");
 
   const text =
 `It's on its way, ${m.firstName}.
 
-${m.artworkTitle ? `"${m.artworkTitle}" has ` : "Your painting has "}left the studio and is now with the courier.
+Your ${itemNoun(m)}${m.artworkTitle ? ` "${m.artworkTitle}"` : ""} ${m.isPrint ? "has been produced and is on its way to you." : "has left the studio and is now with the courier."}
 
 Order: ${m.reference}
 ${m.carrier ? `Carrier: ${m.carrier}\n` : ""}${m.trackingNumber ? `Tracking: ${m.trackingNumber}\n` : ""}${m.shippedDate ? `Shipped: ${m.shippedDate}\n` : ""}${m.estimatedDelivery ? `Estimated delivery: ${m.estimatedDelivery}\n` : ""}
 Track your order: ${m.trackUrl}${m.trackingUrl ? `\nCarrier tracking: ${m.trackingUrl}` : ""}${textFooter()}`;
 
-  return { subject: `Your artwork is on its way — order ${m.reference}`, html: layout(`Your artwork has shipped — order ${m.reference}.`, inner), text };
+  return { subject: `Your order has shipped — ${subjectTitle(m)}`, html: layout(`Your order ${m.reference} has shipped.`, inner), text };
+}
+
+/** C2. Packed — crated/packed and ready for the courier. Auto on the transition to 'packed'. */
+export function buildPackedEmail(m: Model): EmailContent {
+  const rows = [
+    summaryRow("Order", esc(m.reference)),
+    summaryRow("Item", m.itemKindLabel),
+    m.destination ? summaryRow("Shipping to", esc(m.destination)) : "",
+  ].filter(Boolean);
+
+  const body = m.isPrint
+    ? `Your fine art print has been packed and is being prepared for shipment. You'll get tracking the moment it's handed to the courier.`
+    : `Your painting has been carefully packed and crated, and is being prepared for shipment. You'll get tracking the moment it's handed to the courier.`;
+
+  const inner = [
+    eyebrow("Packed"),
+    heading(`Your order is packed, ${m.firstName}.`),
+    para(body),
+    artworkBlock(m),
+    summaryTable(rows),
+    button("Track your order", m.trackUrl),
+  ].join("");
+
+  const text =
+`Your order is packed, ${m.firstName}.
+
+${body}
+
+Order: ${m.reference}
+Item: ${m.itemKindLabel}
+${m.destination ? `Shipping to: ${m.destination}\n` : ""}
+Track your order: ${m.trackUrl}${textFooter()}`;
+
+  return { subject: `Your order is packed`, html: layout(`Your order ${m.reference} is packed.`, inner), text };
+}
+
+/** C3. In transit — a "on the way" nudge with the tracking link (no status change; admin-initiated). */
+export function buildInTransitEmail(m: Model): EmailContent {
+  const rows = [
+    summaryRow("Order", esc(m.reference)),
+    m.carrier ? summaryRow("Carrier", esc(m.carrier)) : "",
+    m.trackingNumber ? summaryRow("Tracking", esc(m.trackingNumber)) : "",
+    m.estimatedDelivery ? summaryRow("Estimated delivery", esc(m.estimatedDelivery)) : "",
+  ].filter(Boolean);
+
+  const carrierLink = m.trackingUrl
+    ? para(`You can <a href="${esc(m.trackingUrl)}" target="_blank" style="color:${INK}">follow it directly with ${esc(m.carrier ?? "the carrier")}</a>, or use your order page below.`)
+    : para(`Follow its journey on your order page below.`);
+
+  const inner = [
+    eyebrow("On the way"),
+    heading(`Your order is on the way.`),
+    para(`${m.firstName}, your ${itemNoun(m)}${m.artworkTitle ? ` — <span style="font-family:${SERIF};font-style:italic">${esc(m.artworkTitle)}</span> —` : ""} is in transit and moving toward you.`),
+    artworkBlock(m),
+    summaryTable(rows),
+    carrierLink,
+    button("Track your order", m.trackUrl),
+  ].join("");
+
+  const text =
+`Your order is on the way.
+
+${m.firstName}, your ${itemNoun(m)}${m.artworkTitle ? ` "${m.artworkTitle}"` : ""} is in transit and moving toward you.
+
+Order: ${m.reference}
+${m.carrier ? `Carrier: ${m.carrier}\n` : ""}${m.trackingNumber ? `Tracking: ${m.trackingNumber}\n` : ""}${m.estimatedDelivery ? `Estimated delivery: ${m.estimatedDelivery}\n` : ""}
+Track your order: ${m.trackUrl}${m.trackingUrl ? `\nCarrier tracking: ${m.trackingUrl}` : ""}${textFooter()}`;
+
+  return { subject: `Your order is on the way`, html: layout(`Your order ${m.reference} is on the way.`, inner), text };
 }
 
 /** D. Delivery confirmation. */
 export function buildDeliveredEmail(m: Model): EmailContent {
+  const thanks = m.isPrint
+    ? `Thank you for bringing one of my pieces into your space as a print. It genuinely means a great deal.`
+    : `Thank you for giving one of my paintings a home. It genuinely means a great deal.`;
   const inner = [
     eyebrow("Delivered"),
     heading(`It has arrived.`),
-    para(`${m.firstName}, your painting${m.artworkTitle ? ` — <span style="font-family:${SERIF};font-style:italic">${esc(m.artworkTitle)}</span> —` : ""} has been delivered. I hope it feels right the moment you unwrap it.`),
+    para(`${m.firstName}, your ${itemNoun(m)}${m.artworkTitle ? ` — <span style="font-family:${SERIF};font-style:italic">${esc(m.artworkTitle)}</span> —` : ""} has been delivered. I hope it feels right the moment you unwrap it.`),
     artworkBlock(m),
     para(`If anything at all is not as it should be — the piece, the packaging, anything — please just reply to this email and I'll make it right, personally.`),
-    para(`Thank you for giving one of my paintings a home. It genuinely means a great deal.`),
+    para(thanks),
     button("View your order", m.trackUrl),
     rule(),
     para(`With gratitude,<br><span style="font-family:${SERIF};font-style:italic;font-size:17px;color:${STONE_900}">Ani</span>`),
@@ -329,18 +499,18 @@ export function buildDeliveredEmail(m: Model): EmailContent {
   const text =
 `It has arrived.
 
-${m.firstName}, your painting${m.artworkTitle ? ` — "${m.artworkTitle}" —` : ""} has been delivered. I hope it feels right the moment you unwrap it.
+${m.firstName}, your ${itemNoun(m)}${m.artworkTitle ? ` — "${m.artworkTitle}" —` : ""} has been delivered. I hope it feels right the moment you unwrap it.
 
 If anything is not as it should be, just reply to this email and I'll make it right, personally.
 
-Thank you for giving one of my paintings a home.
+${thanks}
 
 View your order: ${m.trackUrl}
 
 With gratitude,
 Ani${textFooter()}`;
 
-  return { subject: `Your painting has arrived — order ${m.reference}`, html: layout(`Your painting has been delivered.`, inner), text };
+  return { subject: `Your order has been delivered`, html: layout(`Your order ${m.reference} has been delivered.`, inner), text };
 }
 
 /**
@@ -375,14 +545,22 @@ Ani${textFooter()}`;
   return { subject: opts.subject, html: layout(opts.subject, inner), text };
 }
 
-/** B. Preparing / in-the-studio update (optional; only meaningful when there's something to say). */
+/** B. Preparing — preparation has started. Auto on the transition to 'preparing'. Print/original aware. */
 export function buildPreparingEmail(m: Model): EmailContent {
+  if (m.isPrint) {
+    return buildUpdateEmail(m, {
+      subject: `We're preparing your order`,
+      eyebrow: "Preparing your order",
+      heading: `Your print is being prepared`,
+      message: `Just a quick note to say your fine art print has moved into production. It's being made to order on archival materials, and you'll get an email with tracking the moment it ships.`,
+    });
+  }
   return buildUpdateEmail(m, {
-    subject: `An update on your order ${m.reference}`,
+    subject: `We're preparing your order`,
     eyebrow: "In the studio",
     heading: `Your painting is being prepared`,
     message: m.expectedDispatch
-      ? `Just a quick note to say your painting is being crated with care. I expect to dispatch it around ${m.expectedDispatch}, and you'll get tracking the moment it's on its way.`
-      : `Just a quick note to say your painting is being crated with care in the studio. You'll get an email with tracking the moment it's on its way.`,
+      ? `Just a quick note to say your painting is being crated with care in my Yerevan studio. I expect to dispatch it around ${m.expectedDispatch}, and you'll get tracking the moment it's on its way.`
+      : `Just a quick note to say your painting is being crated with care in my Yerevan studio. You'll get an email with tracking the moment it's on its way.`,
   });
 }

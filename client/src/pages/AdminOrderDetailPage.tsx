@@ -360,7 +360,12 @@ export default function AdminOrderDetailPage() {
             className="border border-stone-800 px-4 py-2 text-[11px] tracking-[0.16em] uppercase hover:bg-stone-900 hover:text-white transition-colors disabled:opacity-50">Resend confirmation</button>
           <button onClick={() => sendEmail.mutate({ kind: "preparing" })} disabled={sendEmail.isPending}
             className="border border-stone-800 px-4 py-2 text-[11px] tracking-[0.16em] uppercase hover:bg-stone-900 hover:text-white transition-colors disabled:opacity-50">Send preparing update</button>
+          <button onClick={() => sendEmail.mutate({ kind: "in_transit" })} disabled={sendEmail.isPending}
+            className="border border-stone-800 px-4 py-2 text-[11px] tracking-[0.16em] uppercase hover:bg-stone-900 hover:text-white transition-colors disabled:opacity-50">Send “on the way” update</button>
         </div>
+        <p className="text-xs text-stone-500 -mt-2 mb-4 max-w-2xl">
+          Preparing, Packed, Shipped and Delivered emails are sent <strong>automatically</strong> when you change the status above. The buttons here are for optional extra updates (a preparing note, an “on the way / in transit” nudge, or a resent confirmation).
+        </p>
         <div className="border border-stone-200 rounded p-4 mb-6">
           <div className="flex gap-3 mb-3">
             <select value={emailKind} onChange={(e) => setEmailKind(e.target.value as "manual" | "delay")} className={`${inputCls} max-w-[180px]`}>
