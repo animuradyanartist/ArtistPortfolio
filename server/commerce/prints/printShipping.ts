@@ -12,7 +12,7 @@
  * are unit-tested; the network call is behind a small port so the decision logic needs no live key.
  */
 
-import { prodigi as realProdigi, prodigiConfigured } from "../prodigi/prodigiClient";
+import { prodigi as realProdigi, prodigiConfigured, ProdigiApiError } from "../prodigi/prodigiClient";
 import type {
   ProdigiQuoteRequest,
   ProdigiQuoteResponse,
@@ -36,9 +36,42 @@ export interface PrintQuoteInput {
   shippingMethod?: ProdigiQuoteShippingMethod;
 }
 
+export type PrintQuoteFailReason = "unconfigured" | "no-quote" | "error";
+
 export type PrintQuoteResult =
   | { ok: true; shippingMinor: number; itemsMinor: number | null; currency: string; method: string }
-  | { ok: false; reason: "unconfigured" | "no-quote" | "error" };
+  // On failure we carry OPTIONAL diagnostics for ADMIN-ONLY surfacing (never used by public checkout):
+  //   `status`  — the Prodigi HTTP status when the call errored (e.g. 404 invalid SKU, 401 bad key)
+  //   `outcome` — Prodigi's own `outcome` string when the response parsed but carried no usable quote
+  //   `detail`  — a short, key-free human summary (HTTP status text / Prodigi issues)
+  | { ok: false; reason: PrintQuoteFailReason; status?: number; outcome?: string; detail?: string };
+
+/**
+ * The v4.0 `/quotes` endpoint returns `outcome: "Created"` on success — NOT "Ok" (that was an
+ * unverified assumption that made every real quote fail-closed to "no-quote"). We accept the known
+ * success values case-insensitively; `"ok"` is kept as a defensive alias. Anything else (e.g.
+ * `NotEnoughInformation`, a country/product problem) is treated as no usable quote.
+ */
+const QUOTE_OK_OUTCOMES = new Set(["created", "ok"]);
+export function isQuoteOkOutcome(outcome: unknown): boolean {
+  return QUOTE_OK_OUTCOMES.has(String(outcome ?? "").trim().toLowerCase());
+}
+
+/** A short, KEY-FREE summary of a Prodigi error body (its `issues`/message), bounded in length. */
+function prodigiIssueSummary(body: unknown): string {
+  try {
+    const b = body as { message?: unknown; issues?: Array<{ errorCode?: unknown; description?: unknown }> } | null;
+    if (b && Array.isArray(b.issues) && b.issues.length) {
+      const first = b.issues[0];
+      const parts = [first?.errorCode, first?.description].filter(Boolean).map(String);
+      if (parts.length) return ` :: ${parts.join(" — ")}`.slice(0, 200);
+    }
+    if (b && typeof b.message === "string" && b.message) return ` :: ${b.message}`.slice(0, 200);
+  } catch {
+    /* ignore — diagnostics must never throw */
+  }
+  return "";
+}
 
 /** Build the Prodigi quote request for one print variant to a destination. Pure; unit-tested. */
 export function buildPrintQuoteRequest(input: PrintQuoteInput): ProdigiQuoteRequest {
@@ -72,13 +105,13 @@ export function costToMinor(amount: string | null | undefined): number | null {
 /**
  * Pick the shipping figure from a quote response. Prefers a quote whose `shipmentMethod` matches the
  * requested method (case-insensitive); otherwise the cheapest shipping. Returns null when the outcome
- * is not "Ok" or no quote carries a usable shipping cost — the fail-closed path.
+ * is not a success ("Created"/"Ok") or no quote carries a usable shipping cost — the fail-closed path.
  */
 export function selectShipping(
   resp: ProdigiQuoteResponse,
   preferredMethod?: string,
 ): { shippingMinor: number; itemsMinor: number | null; currency: string; method: string } | null {
-  if (!resp || String(resp.outcome).toLowerCase() !== "ok" || !Array.isArray(resp.quotes) || resp.quotes.length === 0) {
+  if (!resp || !isQuoteOkOutcome(resp.outcome) || !Array.isArray(resp.quotes) || resp.quotes.length === 0) {
     return null;
   }
   const priced = resp.quotes
@@ -109,6 +142,40 @@ export type CheckoutShippingOutcome =
   | { proceed: true; shippingMinor: number; prodigiCostMinor: number | null; method: string }
   | { proceed: false; reason: "unconfigured" | "no-quote" | "error"; message: string };
 
+/**
+ * ADMIN-ONLY diagnostic for a FAILED quote — lets the admin UI tell the causes apart instead of one
+ * flat "unavailable". NEVER used on any public route; the strings are key-free (built only from HTTP
+ * status + Prodigi's own outcome/issues). `code` is a stable machine value; `message` is admin text.
+ */
+export type AdminQuoteDiagnosticCode =
+  | "not-configured" | "invalid-sku" | "destination-unsupported"
+  | "quote-unavailable" | "prodigi-auth" | "prodigi-api-error";
+
+export function adminQuoteDiagnostic(
+  quote: Extract<PrintQuoteResult, { ok: false }>,
+): { code: AdminQuoteDiagnosticCode; message: string } {
+  if (quote.reason === "unconfigured") {
+    return { code: "not-configured", message: "No Prodigi API key is configured on the server, so production cost cannot be quoted." };
+  }
+  if (quote.reason === "error") {
+    const detail = quote.detail ? ` (${quote.detail})` : "";
+    if (quote.status === 401 || quote.status === 403) {
+      return { code: "prodigi-auth", message: `Prodigi rejected the API key for this environment${detail}. Check the sandbox vs live key.` };
+    }
+    if (quote.status === 404) {
+      return { code: "invalid-sku", message: `Prodigi does not recognise this SKU in the current environment${detail}. Confirm the SKU exists in this sandbox/live account.` };
+    }
+    return { code: "prodigi-api-error", message: `Prodigi API error while quoting${detail}.` };
+  }
+  // no-quote: the call succeeded but no priced quote came back — most often an unsupported destination
+  // for this product, otherwise a transient no-quote.
+  const outcome = quote.outcome ? ` (outcome: ${quote.outcome})` : "";
+  if (quote.outcome && /country|destination|ship/i.test(quote.outcome)) {
+    return { code: "destination-unsupported", message: `Prodigi returned no quote for this destination${outcome}. This product may not ship there.` };
+  }
+  return { code: "quote-unavailable", message: `Prodigi returned no priced quote${outcome}. The destination may be unsupported for this product, or quoting is temporarily unavailable.` };
+}
+
 export function checkoutShippingOutcome(quote: PrintQuoteResult): CheckoutShippingOutcome {
   if (!quote.ok) {
     return {
@@ -136,7 +203,12 @@ export async function quotePrintShipping(
   try {
     const resp = await client.getQuote(buildPrintQuoteRequest(input));
     const picked = selectShipping(resp, input.shippingMethod ?? "standard");
-    if (!picked) return { ok: false, reason: "no-quote" };
+    if (!picked) {
+      // Parsed OK but nothing usable — surface Prodigi's own `outcome` so an admin can tell a genuinely
+      // unquotable destination apart from a parse/shape problem.
+      const outcome = resp?.outcome != null ? String(resp.outcome) : undefined;
+      return { ok: false, reason: "no-quote", ...(outcome ? { outcome } : {}) };
+    }
     return {
       ok: true,
       shippingMinor: picked.shippingMinor,
@@ -144,7 +216,12 @@ export async function quotePrintShipping(
       currency: (picked.currency || input.currency).toUpperCase(),
       method: picked.method,
     };
-  } catch {
+  } catch (e) {
+    // A Prodigi HTTP error (bad key, invalid SKU, unsupported destination) carries a status + issues
+    // but NEVER the key — capture them for the admin diagnostic. Non-Prodigi errors stay opaque.
+    if (e instanceof ProdigiApiError) {
+      return { ok: false, reason: "error", status: e.statusCode, detail: `HTTP ${e.statusCode} ${e.statusText}${prodigiIssueSummary(e.body)}` };
+    }
     return { ok: false, reason: "error" };
   }
 }

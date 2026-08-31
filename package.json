@@ -10,6 +10,7 @@
     "check": "tsc",
     "test": "vitest run",
     "db:push": "drizzle-kit push",
+    "prodigi:quote": "tsx scripts/prodigi-quote.ts",
     "prepare": "git config pull.rebase true 2>/dev/null; git config rerere.enabled true 2>/dev/null; exit 0",
     "db:sync": "node scripts/sync-dev-schema.mjs"
   },
