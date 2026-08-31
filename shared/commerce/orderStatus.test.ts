@@ -1,8 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
   canTransition, ADMIN_SETTABLE, ORDER_STATUSES, BUYER_TIMELINE_STEPS,
-  timelineReachedIndex, isExceptionState,
+  timelineReachedIndex, isExceptionState, adminMayManageStatus,
 } from "./orderStatus";
+
+describe("adminMayManageStatus — manual lifecycle is originals-only", () => {
+  it("an ORIGINAL order's status is admin-settable", () => {
+    expect(adminMayManageStatus("artwork")).toBe(true);
+    expect(adminMayManageStatus(null)).toBe(true);
+  });
+  it("a PRINT order's status is NOT admin-settable (Prodigi-driven)", () => {
+    expect(adminMayManageStatus("print")).toBe(false);
+  });
+});
 
 describe("order status machine — packed", () => {
   it("includes packed as a real status", () => {

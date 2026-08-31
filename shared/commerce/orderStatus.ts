@@ -63,6 +63,16 @@ export function isTerminal(s: OrderStatus): boolean {
   return (TRANSITIONS[s] ?? []).length === 0;
 }
 
+/**
+ * Whether Ani may set an order's fulfilment status BY HAND in Admin. Only ORIGINAL orders have a
+ * manual lifecycle; a PRINT order is driven by Prodigi (its callback advances the status + emails),
+ * so its status is read-only in Admin — she can never accidentally mark a print shipped while Prodigi
+ * still says it is in production.
+ */
+export function adminMayManageStatus(itemType: string | null | undefined): boolean {
+  return itemType !== "print";
+}
+
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   pending: "Pending",
   checkout_created: "Checkout started",

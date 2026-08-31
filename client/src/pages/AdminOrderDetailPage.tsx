@@ -298,29 +298,48 @@ export default function AdminOrderDetailPage() {
         </Panel>
       )}
 
-      {/* Fulfilment */}
+      {/* Fulfilment — MANUAL lifecycle for ORIGINALS; read-only + Prodigi-driven for PRINTS. */}
       <Panel title="Fulfilment">
-        <div className="flex flex-wrap gap-3 mb-6">
-          {available.length
-            ? available.map((s) => (
-                <button key={s} onClick={() => setStatus.mutate(s)} disabled={busy}
-                  className="border border-stone-800 px-5 py-2 text-[11px] tracking-[0.18em] uppercase hover:bg-stone-900 hover:text-white transition-colors disabled:opacity-50">
-                  Mark {ORDER_STATUS_LABEL[s]}
-                </button>
-              ))
-            : <p className="text-sm text-stone-500">No status actions from here{o.payment_status !== "paid" ? " until payment is confirmed" : ""}.</p>}
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Carrier"><input className={inputCls} value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder="FedEx" /></Field>
-          <Field label="Tracking number"><input className={inputCls} value={tracking} onChange={(e) => setTracking(e.target.value)} /></Field>
-          <Field label="Tracking URL (clickable link)"><input className={inputCls} value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="https://…" /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Expected dispatch"><input type="date" className={inputCls} value={expDispatch} onChange={(e) => setExpDispatch(e.target.value)} /></Field>
-            <Field label="Estimated delivery"><input type="date" className={inputCls} value={estDelivery} onChange={(e) => setEstDelivery(e.target.value)} /></Field>
+        {o.isPrint ? (
+          <div>
+            <div className="mb-5 border border-indigo-300 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+              <strong className="uppercase tracking-wide text-[11px]">Managed by Prodigi.</strong>{" "}
+              This print's status, carrier and tracking update <strong>automatically</strong> as Prodigi reports production and shipping, and the matching customer email is sent once. Manual status changes are disabled so a print is never marked shipped before Prodigi ships it. If fulfilment is stuck, use <em>Retry fulfilment</em> in the Print fulfilment panel above.
+            </div>
+            <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
+              <PayRow k="Customer status" v={ORDER_STATUS_LABEL[o.status as OrderStatus] ?? o.status} />
+              <PayRow k="Prodigi fulfilment status" v={o.fulfilmentStatus ?? "—"} />
+              <PayRow k="Carrier" v={o.shipping_carrier ?? <span className="text-stone-400">—</span>} />
+              <PayRow k="Tracking number" v={o.tracking_number ?? <span className="text-stone-400">—</span>} />
+              <PayRow k="Tracking link" v={o.tracking_url ? <a href={o.tracking_url} target="_blank" rel="noreferrer" className="border-b border-stone-400 hover:text-stone-900">Open tracking</a> : <span className="text-stone-400">—</span>} />
+              <PayRow k="Shipped at" v={o.shipped_at ? new Date(o.shipped_at).toLocaleString("en-GB") : <span className="text-stone-400">—</span>} />
+            </div>
           </div>
-        </div>
-        <button onClick={() => saveFulfil.mutate()} disabled={saveFulfil.isPending}
-          className="mt-5 bg-stone-900 text-white px-5 py-2 text-[11px] tracking-[0.18em] uppercase disabled:opacity-50">Save fulfilment</button>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-3 mb-6">
+              {available.length
+                ? available.map((s) => (
+                    <button key={s} onClick={() => setStatus.mutate(s)} disabled={busy}
+                      className="border border-stone-800 px-5 py-2 text-[11px] tracking-[0.18em] uppercase hover:bg-stone-900 hover:text-white transition-colors disabled:opacity-50">
+                      Mark {ORDER_STATUS_LABEL[s]}
+                    </button>
+                  ))
+                : <p className="text-sm text-stone-500">No status actions from here{o.payment_status !== "paid" ? " until payment is confirmed" : ""}.</p>}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Carrier"><input className={inputCls} value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder="FedEx" /></Field>
+              <Field label="Tracking number"><input className={inputCls} value={tracking} onChange={(e) => setTracking(e.target.value)} /></Field>
+              <Field label="Tracking URL (clickable link)"><input className={inputCls} value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="https://…" /></Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Expected dispatch"><input type="date" className={inputCls} value={expDispatch} onChange={(e) => setExpDispatch(e.target.value)} /></Field>
+                <Field label="Estimated delivery"><input type="date" className={inputCls} value={estDelivery} onChange={(e) => setEstDelivery(e.target.value)} /></Field>
+              </div>
+            </div>
+            <button onClick={() => saveFulfil.mutate()} disabled={saveFulfil.isPending}
+              className="mt-5 bg-stone-900 text-white px-5 py-2 text-[11px] tracking-[0.18em] uppercase disabled:opacity-50">Save fulfilment</button>
+          </>
+        )}
       </Panel>
 
       {/* Exceptions */}
@@ -364,7 +383,7 @@ export default function AdminOrderDetailPage() {
             className="border border-stone-800 px-4 py-2 text-[11px] tracking-[0.16em] uppercase hover:bg-stone-900 hover:text-white transition-colors disabled:opacity-50">Send “on the way” update</button>
         </div>
         <p className="text-xs text-stone-500 -mt-2 mb-4 max-w-2xl">
-          Preparing, Packed, Shipped and Delivered emails are sent <strong>automatically</strong> when you change the status above. The buttons here are for optional extra updates (a preparing note, an “on the way / in transit” nudge, or a resent confirmation).
+          Lifecycle emails are sent <strong>automatically</strong>: for an <strong>original</strong>, when you change the status above (Preparing / Packed / Shipped / Delivered); for a <strong>print</strong>, when Prodigi reports production (Preparing) and shipping (Shipped). The buttons here are optional extra updates (a preparing note, an “on the way / in transit” nudge, or a resent confirmation).
         </p>
         <div className="border border-stone-200 rounded p-4 mb-6">
           <div className="flex gap-3 mb-3">

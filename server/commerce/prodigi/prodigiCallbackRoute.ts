@@ -12,14 +12,18 @@
  */
 
 import type { Express } from "express";
-import { verifyCallbackToken, parseCallbackOrderId, applyRefetchedOrder } from "./prodigiCallback";
+import { verifyCallbackToken, parseCallbackOrderId, applyRefetchedOrder, customerLifecycleForFulfilment } from "./prodigiCallback";
 import { prodigi, prodigiConfigured } from "./prodigiClient";
-import { getOrderByProdigiOrderId, setPrintFulfilment } from "../orders";
+import { getOrderByProdigiOrderId, setPrintFulfilment, setOrderStatus, getOrder } from "../orders";
+import { sendPreparingStatusEmail, sendShippedEmail } from "../../email";
 import type { ProdigiOrderResponse } from "./prodigiTypes";
+import type { OrderStatus } from "@shared/commerce/orderStatus";
 
 export interface CallbackOrder {
   id: number;
   fulfilment_status: string | null;
+  /** The customer-facing lifecycle status (paid → preparing → shipped …). Drives the lifecycle move. */
+  status?: string | null;
 }
 
 export interface CallbackDeps {
@@ -31,6 +35,15 @@ export interface CallbackDeps {
     orderId: number,
     update: { fulfilmentStatus: string; carrier: string | null; trackingNumber: string | null; trackingUrl: string | null },
   ) => Promise<void>;
+  /**
+   * PRINT LIFECYCLE: advance the customer-facing status to `target` and send the matching once-only
+   * email. Idempotent (setOrderStatus is canTransition-guarded; the email is dedupe-guarded), so a
+   * duplicate callback that somehow reaches here still sends nothing. Optional so a caller that only
+   * cares about fulfilment status can omit it.
+   */
+  advanceLifecycle?: (
+    orderId: number, target: OrderStatus, email: "preparing" | "shipped",
+  ) => Promise<{ statusChanged: boolean; email: string | null }>;
 }
 
 export interface CallbackResult {
@@ -71,21 +84,42 @@ export async function processProdigiCallback(
 
   const refetched = await deps.getProdigiOrder(prodigiOrderId);
   const decision = applyRefetchedOrder(order.fulfilment_status, refetched);
-  if (decision.apply) {
-    await deps.persist(order.id, {
-      fulfilmentStatus: decision.fulfilmentStatus,
-      carrier: decision.tracking?.carrier ?? null,
-      trackingNumber: decision.tracking?.number ?? null,
-      trackingUrl: decision.tracking?.url ?? null,
-    });
+  if (!decision.apply) {
+    // No forward fulfilment change (duplicate / out-of-order) → persist nothing, send nothing.
+    return { status: 200, body: { received: true, applied: false, fulfilmentStatus: decision.fulfilmentStatus } };
   }
-  return { status: 200, body: { received: true, applied: decision.apply, fulfilmentStatus: decision.fulfilmentStatus } };
+
+  // 1) Persist Prodigi's fulfilment status + real tracking (carrier / number / url).
+  await deps.persist(order.id, {
+    fulfilmentStatus: decision.fulfilmentStatus,
+    carrier: decision.tracking?.carrier ?? null,
+    trackingNumber: decision.tracking?.number ?? null,
+    trackingUrl: decision.tracking?.url ?? null,
+  });
+
+  // 2) PRINT customer lifecycle — Prodigi drives it. Advance the customer status + send the matching
+  //    once-only email ONLY on a genuine forward customer transition (created adds nothing; a repeat
+  //    or out-of-order state yields no move here because decision.apply already gated it forward).
+  const lc = customerLifecycleForFulfilment(order.status, decision.fulfilmentStatus);
+  let lifecycle: { advancedTo: string | null; email: string | null } | undefined;
+  if (lc.status && lc.email && deps.advanceLifecycle) {
+    const res = await deps.advanceLifecycle(order.id, lc.status, lc.email);
+    lifecycle = { advancedTo: res.statusChanged ? lc.status : null, email: res.email };
+  }
+
+  return {
+    status: 200,
+    body: { received: true, applied: true, fulfilmentStatus: decision.fulfilmentStatus, ...(lifecycle ? { lifecycle } : {}) },
+  };
 }
 
 /** The production dependency wiring — real token, real DB, real Prodigi client. */
 export const productionCallbackDeps: CallbackDeps = {
   verifyToken: verifyCallbackToken,
-  getOrderByProdigiId: (id) => getOrderByProdigiOrderId(id),
+  getOrderByProdigiId: async (id) => {
+    const o = await getOrderByProdigiOrderId(id);
+    return o ? { id: o.id, fulfilment_status: o.fulfilment_status, status: o.status } : null;
+  },
   configured: prodigiConfigured,
   getProdigiOrder: (id) => prodigi.getOrder(id),
   persist: (orderId, update) =>
@@ -95,6 +129,16 @@ export const productionCallbackDeps: CallbackDeps = {
       trackingNumber: update.trackingNumber,
       trackingUrl: update.trackingUrl,
     }),
+  advanceLifecycle: async (orderId, target, emailKind) => {
+    // Advance the customer status (canTransition-guarded; stamps shipped_at). Tracking was already
+    // persisted above, so the shipped email carries Prodigi's real carrier/number/url.
+    const moved = await setOrderStatus(orderId, target);
+    if (!moved.ok) return { statusChanged: false, email: null };
+    const fresh = await getOrder(orderId);
+    if (!fresh || fresh.payment_status !== "paid") return { statusChanged: true, email: null };
+    const res = emailKind === "preparing" ? await sendPreparingStatusEmail(fresh) : await sendShippedEmail(fresh);
+    return { statusChanged: true, email: res.status };
+  },
 };
 
 export function registerProdigiCallbackRoute(app: Express, deps: CallbackDeps = productionCallbackDeps): void {

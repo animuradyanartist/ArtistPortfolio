@@ -10,6 +10,7 @@ import {
   parseCallbackOrderId,
   shouldApplyStatus,
   applyRefetchedOrder,
+  customerLifecycleForFulfilment,
 } from "./prodigiCallback";
 import type { ProdigiOrderResponse } from "./prodigiTypes";
 
@@ -82,5 +83,31 @@ describe("applyRefetchedOrder", () => {
     // a duplicate of the same shipped state must not re-apply
     const b = applyRefetchedOrder("shipped", refetched);
     expect(b.apply).toBe(false);
+  });
+});
+
+describe("customerLifecycleForFulfilment — Prodigi drives a print's customer status + email", () => {
+  it("created adds no customer change (the order was already confirmed on payment)", () => {
+    expect(customerLifecycleForFulfilment("paid", "created")).toEqual({ status: null, email: null });
+  });
+  it("inproduction → Preparing + preparing email", () => {
+    expect(customerLifecycleForFulfilment("paid", "inproduction")).toEqual({ status: "preparing", email: "preparing" });
+  });
+  it("shipped → Shipped + shipped email", () => {
+    expect(customerLifecycleForFulfilment("preparing", "shipped")).toEqual({ status: "shipped", email: "shipped" });
+    expect(customerLifecycleForFulfilment("paid", "shipped")).toEqual({ status: "shipped", email: "shipped" });
+  });
+  it("complete → Shipped (Prodigi complete = dispatched/closed, NEVER 'delivered')", () => {
+    expect(customerLifecycleForFulfilment("preparing", "complete")).toEqual({ status: "shipped", email: "shipped" });
+  });
+  it("no move when already at/after the target (idempotent) or on a backward map", () => {
+    expect(customerLifecycleForFulfilment("shipped", "shipped")).toEqual({ status: null, email: null });   // same
+    expect(customerLifecycleForFulfilment("shipped", "complete")).toEqual({ status: null, email: null });  // already shipped
+    expect(customerLifecycleForFulfilment("shipped", "inproduction")).toEqual({ status: null, email: null }); // out-of-order, no regress
+  });
+  it("cancelled / failed / pending → no automatic customer move", () => {
+    for (const s of ["cancelled", "failed", "pending"]) {
+      expect(customerLifecycleForFulfilment("paid", s)).toEqual({ status: null, email: null });
+    }
   });
 });
