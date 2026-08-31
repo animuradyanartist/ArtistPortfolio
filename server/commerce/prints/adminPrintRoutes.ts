@@ -30,7 +30,8 @@ import {
 } from "./masterStorage";
 import { MasterStorageError } from "./masterObjectStore";
 import { initUpload, putChunk, reassembleUpload, discardUpload, UPLOAD_CHUNK_BYTES } from "./masterUpload";
-import { quotePrintShipping } from "./printShipping";
+import { quotePrintShipping, adminQuoteDiagnostic } from "./printShipping";
+import { prodigiMode } from "../prodigi/prodigiClient";
 
 /**
  * Finalise a validated staging file as THIS print's master, safely (shared by the single-shot upload and
@@ -526,7 +527,13 @@ export function registerAdminPrintRoutes(app: Express): void {
         ...(Object.keys(attributes).length ? { attributes } : {}),
       });
       res.set("Cache-Control", "no-store");
-      if (!quote.ok) return res.json({ available: false, reason: quote.reason });
+      // ADMIN-ONLY diagnostics: distinguish not-configured / invalid-SKU / destination-unsupported /
+      // quote-unavailable / auth / api-error, and report which Prodigi environment answered. This route
+      // is behind requireAdminAuth and never leaks the key (the diagnostic strings are key-free).
+      if (!quote.ok) {
+        const diag = adminQuoteDiagnostic(quote);
+        return res.json({ available: false, reason: quote.reason, code: diag.code, detail: diag.message, mode: prodigiMode() });
+      }
 
       const productionMinor = quote.itemsMinor;             // Prodigi production cost (may be null)
       const sellingMinor = variant.retail_minor;
@@ -534,6 +541,7 @@ export function registerAdminPrintRoutes(app: Express): void {
       return res.json({
         available: true,
         country,
+        mode: prodigiMode(),
         currency: quote.currency,
         method: quote.method,
         productionMinor,

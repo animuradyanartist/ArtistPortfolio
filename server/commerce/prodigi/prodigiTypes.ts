@@ -56,6 +56,8 @@ export interface ProdigiCost {
 }
 
 export interface ProdigiQuoteResponse {
+  /** Per the v4.0 reference, a SUCCESSFUL quote returns `outcome: "Created"` (NOT "Ok"). The parser
+   *  in printShipping (`isQuoteOkOutcome`) accepts "created"/"ok" case-insensitively. */
   outcome: string;
   quotes: Array<{
     shipmentMethod: string;

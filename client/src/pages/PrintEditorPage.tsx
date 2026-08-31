@@ -665,7 +665,18 @@ function VariantCostEstimator({ variantId, sellingMinor }: { variantId: number; 
         method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ country }),
       });
       const b = await r.json().catch(() => ({}));
-      if (!r.ok || !b.available) { setData(null); setErr(b.reason === "unconfigured" ? "Prodigi is not configured — production cost is unavailable." : "Prodigi could not price this to that destination right now."); return; }
+      if (!r.ok || !b.available) {
+        setData(null);
+        // Prefer the server's admin-only diagnostic (distinguishes not-configured / invalid-SKU /
+        // destination-unsupported / quote-unavailable / api-error), with the Prodigi env when known.
+        const base = b.detail
+          ? b.detail
+          : b.reason === "unconfigured"
+            ? "Prodigi is not configured — production cost is unavailable."
+            : "Prodigi could not price this to that destination right now.";
+        setErr(b.mode && b.mode !== "unconfigured" ? `${base} [${b.mode}]` : base);
+        return;
+      }
       setData(b);
     } finally { setBusy(false); }
   };
@@ -687,7 +698,7 @@ function VariantCostEstimator({ variantId, sellingMinor }: { variantId: number; 
               Prodigi production <b>{usd(data.productionMinor)}</b> · shipping <b>{usd(data.shippingMinor)}</b>
               {" · "}selling {usd(data.sellingMinor)}
               {data.grossMarginMinor != null && <> · <span className={data.grossMarginMinor >= 0 ? "text-green-700" : "text-red-600"}>gross margin {usd(data.grossMarginMinor)}</span></>}
-              <span className="text-slate-400"> (before fees/tax/FX; customer pays shipping)</span>
+              <span className="text-slate-400"> (before fees/tax/FX; customer pays shipping{data.mode && data.mode !== "unconfigured" ? ` · ${data.mode}` : ""})</span>
             </span>
           )}
         </div>
