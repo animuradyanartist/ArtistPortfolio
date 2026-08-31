@@ -8,18 +8,22 @@
  */
 
 import type { Express } from "express";
-import { unlink } from "fs/promises";
 import multer from "multer";
 import { requireAdminAuth } from "../../auth";
+import { hasDatabase } from "../../db";
 import { PRODIGI_LAUNCH_PRODUCTS, eligibleSkusForMaster } from "../prodigi/prodigiProducts";
 import { printReadiness } from "@shared/commerce/printProduct";
 import { validateVariantSave, type VariantSaveInput } from "./adminPrintService";
 import {
-  getMaster, upsertMaster, upsertMasterFile, clearMaster,
+  getMaster, upsertMaster,
+  getPrintMaster, upsertPrintMasterFile, clearPrintMaster,
   listVariants, getVariant, createVariant, updateVariant, deleteVariant, printArtworkId,
 } from "./adminPrintRepo";
 import { getAdminPrintsOverview, getPrintAdminDetail, setPrintStatus } from "./printRepo";
-import { ensureMasterDirs, stagingDir, storeMasterFromStaging, removeMasterFiles } from "./masterStorage";
+import {
+  ensureMasterDirs, stagingDir, storeMasterFromStaging, removeMasterFiles, cleanupStaged,
+  MasterValidationError,
+} from "./masterStorage";
 
 /** Master upload — STREAMED straight to the persistent-disk staging area (never buffered in memory,
  *  never base64/JSON), so real 300-DPI files up to 500 MB are handled without touching Postgres. */
@@ -97,69 +101,72 @@ export function registerAdminPrintRoutes(app: Express): void {
     }
   });
 
-  // ── Master FILE UPLOAD (per artwork) — MULTIPART, STREAMED to the persistent disk. multer writes
-  //    the file straight to disk (no base64, no 100 MB JSON limit), then the SERVER reads its pixel
-  //    dimensions (sharp, header only), computes the checksum + size, stores ONLY the reference +
-  //    metadata in Postgres, and derives readiness (clears ≥1 launch size → 'ready', else
-  //    'provisional'). The bytes never touch the DB and are never a public URL. ──
-  app.post("/api/admin/prints/masters/:artworkId/file", requireAdminAuth, masterUpload.single("file"), async (req, res) => {
+  // ── Master FILE UPLOAD (per PRINT) — MULTIPART, STREAMED to the persistent disk under this print.
+  //    multer streams to staging; the SERVER validates the ACTUAL bytes (sharp: JPEG/PNG/TIFF only),
+  //    reads dimensions, computes checksum + size, ATOMICALLY swaps it into <printId>/master.<ext>,
+  //    and stores ONLY the reference + metadata on the prints row. The master belongs to THIS print,
+  //    so replacing it never touches another print. Bytes never enter the DB and are never public. ──
+  app.post("/api/admin/prints/masters/:printId/file", requireAdminAuth, masterUpload.single("file"), async (req, res) => {
     const staged = req.file?.path;
     try {
-      const artworkId = Number.parseInt(String(req.params.artworkId), 10);
-      if (!Number.isInteger(artworkId)) { if (staged) await unlink(staged).catch(() => {}); return res.status(400).json({ message: "Bad artwork id" }); }
+      const printId = Number.parseInt(String(req.params.printId), 10);
+      if (!Number.isInteger(printId)) { await cleanupStaged(staged); return res.status(400).json({ message: "Bad print id" }); }
       if (!req.file) return res.status(400).json({ message: "Please choose a high-resolution image file." });
-
-      const stored = await storeMasterFromStaging(artworkId, req.file.path, req.file.originalname, req.file.mimetype);
-      if (!stored.widthPx || !stored.heightPx) {
-        await removeMasterFiles(artworkId);
-        return res.status(400).json({ message: "The image dimensions could not be read from that file." });
+      // The print must exist before a master can belong to it (no orphan masters).
+      if (hasDatabase && (await getPrintAdminDetail(printId)) == null) {
+        await cleanupStaged(staged);
+        return res.status(404).json({ message: "Save the print first, then upload its master." });
       }
-      // A master is 'ready' only when its resolution clears at least one verified launch size; a file
-      // too small to print at any size is stored but stays 'provisional' (never yields an eligible sale).
+
+      // Validate + atomically store. A validation/format error preserves any previous master.
+      const stored = await storeMasterFromStaging(printId, req.file.path, req.file.originalname, req.file.mimetype);
+      // A master is 'ready' only when its resolution clears at least one verified launch size.
       const eligibleSkus = eligibleSkusForMaster({ widthPx: stored.widthPx, heightPx: stored.heightPx });
       const status = eligibleSkus.length > 0 ? "ready" : "provisional";
-      // A stable, TOKEN-GATED relative marker (not a working URL) so the purchasability gate sees an
-      // asset. The real signed download URL is generated fresh at fulfilment time, never stored.
-      const markerUrl = `/api/commerce/prints/master-file/${artworkId}`;
 
-      await upsertMasterFile(artworkId, {
+      await upsertPrintMasterFile(printId, {
         widthPx: stored.widthPx, heightPx: stored.heightPx, assetKey: stored.assetKey,
         assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
-        checksumMd5: stored.checksumMd5, status, markerUrl,
+        checksumMd5: stored.checksumMd5, status,
       });
       // Prefer the persisted row; fall back to the just-stored metadata (local preview has no DB).
-      const master = (await getMaster(artworkId)) ?? {
+      const master = (await getPrintMaster(printId)) ?? {
         widthPx: stored.widthPx, heightPx: stored.heightPx, status,
-        printReadyAssetUrl: markerUrl, assetKey: stored.assetKey, assetFilename: stored.filename,
-        contentType: stored.contentType, byteSize: stored.byteSize, checksumMd5: stored.checksumMd5,
-        note: null, hasAsset: true,
+        printReadyAssetUrl: `/api/commerce/prints/master-file/${printId}`, assetKey: stored.assetKey,
+        assetFilename: stored.filename, contentType: stored.contentType, byteSize: stored.byteSize,
+        checksumMd5: stored.checksumMd5, note: null, hasAsset: true,
       };
       return res.json({ ok: true, master, eligibleSizeCount: eligibleSkus.length });
     } catch (e) {
-      if (staged) await unlink(staged).catch(() => {});
-      const tooBig = e instanceof Error && /file too large|LIMIT_FILE_SIZE/i.test(e.message);
-      return res.status(tooBig ? 413 : 500).json({
-        message: tooBig ? "That file is larger than the 500 MB limit." : "Could not save the master file.",
-      });
+      await cleanupStaged(staged); // failed/aborted upload leaves nothing in staging
+      if (e instanceof MasterValidationError) return res.status(400).json({ message: e.message });
+      return res.status(500).json({ message: "Could not save the master file." });
     }
   });
 
-  // multer errors (e.g. file-too-large) surface as an error passed to the route; translate to 413.
-  app.use("/api/admin/prints/masters/:artworkId/file", (err: any, _req: any, res: any, next: any) => {
-    if (err && (err.code === "LIMIT_FILE_SIZE" || /file too large/i.test(err.message ?? ""))) {
-      return res.status(413).json({ message: "That file is larger than the 500 MB limit." });
+  // multer errors (file-too-large / aborted) → clean staging + a clear 4xx, never an orphan.
+  app.use("/api/admin/prints/masters/:printId/file", async (err: any, req: any, res: any, next: any) => {
+    if (err) {
+      await cleanupStaged(req.file?.path);
+      if (err.code === "LIMIT_FILE_SIZE" || /file too large/i.test(err.message ?? "")) {
+        return res.status(413).json({ message: "That file is larger than the 500 MB limit." });
+      }
+      return res.status(400).json({ message: "The upload could not be processed." });
     }
     return next(err);
   });
 
-  // Remove a master (back to 'missing') — deletes the disk file AND clears the DB reference.
-  app.delete("/api/admin/prints/masters/:artworkId/file", requireAdminAuth, async (req, res) => {
+  // Remove a print's master (back to 'missing') — deletes the disk file, clears the reference, AND
+  // fail-closed UNPUBLISHES the print (a published print cannot survive without a valid master).
+  app.delete("/api/admin/prints/masters/:printId/file", requireAdminAuth, async (req, res) => {
     try {
-      const artworkId = Number.parseInt(String(req.params.artworkId), 10);
-      if (!Number.isInteger(artworkId)) return res.status(400).json({ message: "Bad artwork id" });
-      await removeMasterFiles(artworkId);
-      await clearMaster(artworkId);
-      return res.json({ ok: true, master: await getMaster(artworkId) });
+      const printId = Number.parseInt(String(req.params.printId), 10);
+      if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
+      await removeMasterFiles(printId);
+      await clearPrintMaster(printId);
+      // No valid master ⇒ nothing is publishable; revert to Draft so the raw status matches reality.
+      await setPrintStatus(printId, "draft");
+      return res.json({ ok: true, master: await getPrintMaster(printId), status: "draft" });
     } catch {
       return res.status(500).json({ message: "Could not remove the master file." });
     }
@@ -212,8 +219,9 @@ export function registerAdminPrintRoutes(app: Express): void {
     try {
       const printId = Number.parseInt(String(req.params.printId), 10);
       if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
+      // The master now belongs to the PRINT, not the artwork.
+      const master = await getPrintMaster(printId);
       const artworkId = await printArtworkId(printId);
-      const master = artworkId != null ? await getMaster(artworkId) : null;
       return res.json({ variants: await listVariants(printId), master, artworkId });
     } catch {
       return res.status(500).json({ message: "Could not load variants." });
@@ -224,8 +232,8 @@ export function registerAdminPrintRoutes(app: Express): void {
     try {
       const printId = Number.parseInt(String(req.params.printId), 10);
       if (!Number.isInteger(printId)) return res.status(400).json({ message: "Bad print id" });
-      const artworkId = await printArtworkId(printId);
-      const master = artworkId != null ? await getMaster(artworkId) : null;
+      // Eligibility is derived from THIS PRINT's own master.
+      const master = await getPrintMaster(printId);
       const validated = validateVariantSave(readVariantInput(req.body), master);
       if (!validated.ok) return res.status(400).json({ message: "Please check the variant", errors: validated.errors });
       const created = await createVariant(printId, validated.row!);
@@ -240,8 +248,7 @@ export function registerAdminPrintRoutes(app: Express): void {
       const id = Number.parseInt(String(req.params.id), 10);
       const existing = await getVariant(id);
       if (!existing) return res.status(404).json({ message: "Variant not found" });
-      const artworkId = await printArtworkId(existing.print_id);
-      const master = artworkId != null ? await getMaster(artworkId) : null;
+      const master = await getPrintMaster(existing.print_id);
       const validated = validateVariantSave(readVariantInput(req.body), master);
       if (!validated.ok) return res.status(400).json({ message: "Please check the variant", errors: validated.errors });
       const updated = await updateVariant(id, validated.row!);

@@ -178,6 +178,32 @@ app.use((req, res, next) => {
       for (const statement of SELF_HEAL_DDL) {
         await pool.query(statement);
       }
+      // Idempotent one-time DATA migration (NOT in SELF_HEAL_DDL, which is additive-DDL-only): move
+      // production-master ownership from the ARTWORK (legacy print_masters, keyed on artwork_id) to the
+      // PRINT (prints.master_*). Backfills a print's master ONLY when the mapping is unambiguous —
+      // exactly one print references that artwork, the print has no master yet, and the legacy master
+      // is genuinely ready. Ambiguous cases (several prints sharing one artwork master) are left
+      // untouched (they must re-upload); nothing is destroyed. Metadata only. Safe on every boot.
+      try {
+        await pool.query(`
+          UPDATE prints p SET
+              master_asset_key = pm.asset_key, master_filename = pm.asset_filename,
+              master_content_type = pm.content_type, master_byte_size = pm.byte_size,
+              master_checksum_md5 = pm.checksum_md5, master_width_px = pm.width_px,
+              master_height_px = pm.height_px, master_status = pm.status, updated_at = now()
+            FROM print_masters pm
+            WHERE p.master_asset_key IS NULL AND pm.artwork_id = p.artwork_id
+              AND pm.asset_key IS NOT NULL AND pm.status = 'ready'
+              AND (SELECT count(*) FROM prints p2 WHERE p2.artwork_id = p.artwork_id) = 1`);
+      } catch (e) {
+        console.error("[migration] print-master backfill skipped:", e instanceof Error ? e.message : e);
+      }
+      // Backstop: clear any master-upload staging leftovers (aborted uploads) from a previous run.
+      try {
+        const { ensureMasterDirs, sweepStaging } = await import("./commerce/prints/masterStorage");
+        await ensureMasterDirs();
+        await sweepStaging();
+      } catch { /* disk not present yet — nothing to sweep */ }
 
       // EXPIRED CHECKOUT HOLDS — released on boot, then on a timer.
       //

@@ -21,7 +21,7 @@ import { assessVariant, isPubliclyPurchasable, startingPriceMinor, resolveVarian
 import { buildFeedTsv } from "@shared/commerce/printFeed";
 import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
 import { quotePrintShipping } from "./printShipping";
-import { getMasterRef } from "./adminPrintRepo";
+import { getPrintMasterRef } from "./adminPrintRepo";
 import { verifyMasterToken, readMasterStream, findMasterKeyOnDisk } from "./masterStorage";
 
 function baseUrlOf(req: Request): string {
@@ -82,20 +82,20 @@ export function registerPrintRoutes(app: Express): void {
   });
 
   // ── The high-resolution MASTER download, for the fulfilment provider ONLY. It is NOT a public
-  //    asset: access requires a cryptographically-signed, short-lived, per-artwork token (generated
-  //    fresh at fulfilment time). No admin auth, no filesystem path exposed, no permanent public URL.
-  //    The bytes are STREAMED from the persistent disk. Registered before :slug so the segment
-  //    resolves here, not as a print slug. The public PDP exposes only a `masterReady` boolean. ──
-  app.get("/api/commerce/prints/master-file/:artworkId", async (req, res) => {
+  //    asset: access requires a cryptographically-signed, short-lived, per-PRINT token (minted fresh
+  //    at fulfilment time). No admin auth, no filesystem path exposed, no permanent public URL. The
+  //    bytes are STREAMED from the persistent disk. Registered before :slug so the segment resolves
+  //    here, not as a print slug. The public PDP exposes only a `masterReady` boolean. ──
+  app.get("/api/commerce/prints/master-file/:printId", async (req, res) => {
     try {
-      const artworkId = Number.parseInt(String(req.params.artworkId), 10);
-      if (!Number.isInteger(artworkId)) return res.status(400).end();
-      // Fail closed: a missing, malformed, expired, or wrong-artwork token gets 403 — never the file.
-      if (!verifyMasterToken(typeof req.query.token === "string" ? req.query.token : null, artworkId)) {
+      const printId = Number.parseInt(String(req.params.printId), 10);
+      if (!Number.isInteger(printId)) return res.status(400).end();
+      // Fail closed: a missing, malformed, expired, or wrong-PRINT token gets 403 — never the file.
+      if (!verifyMasterToken(typeof req.query.token === "string" ? req.query.token : null, printId)) {
         return res.status(403).end();
       }
-      const ref = await getMasterRef(artworkId);
-      const assetKey = ref?.assetKey ?? (await findMasterKeyOnDisk(artworkId));
+      const ref = await getPrintMasterRef(printId);
+      const assetKey = ref?.assetKey ?? (await findMasterKeyOnDisk(printId));
       if (!assetKey) return res.status(404).end();
       const stream = readMasterStream(assetKey);
       if (!stream) return res.status(404).end();

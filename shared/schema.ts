@@ -157,6 +157,18 @@ export const prints = pgTable("prints", {
   status: text("status").notNull().default("active"),
   featured: boolean("featured").default(false),
   position: integer("position").default(0),
+  // ── PRODUCTION MASTER, OWNED BY THIS PRINT (1:1). The high-resolution file lives on the persistent
+  //    disk at <printId>/master.<ext>; these columns hold only the reference + metadata. Two prints of
+  //    the same source artwork therefore have INDEPENDENT masters — replacing one never touches the
+  //    other. (Supersedes the artwork-keyed `print_masters` table, kept for compatibility.) ──
+  masterAssetKey: text("master_asset_key"),      // disk key, e.g. "42/master.tif"
+  masterFilename: text("master_filename"),
+  masterContentType: text("master_content_type"),
+  masterByteSize: integer("master_byte_size"),
+  masterChecksumMd5: text("master_checksum_md5"),
+  masterWidthPx: integer("master_width_px"),
+  masterHeightPx: integer("master_height_px"),
+  masterStatus: text("master_status").notNull().default("missing"), // 'missing' | 'provisional' | 'ready'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

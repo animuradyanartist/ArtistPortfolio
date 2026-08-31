@@ -102,6 +102,75 @@ export async function clearMaster(artworkId: number): Promise<void> {
   );
 }
 
+// ── PRINT-OWNED master (the ACTIVE model): the master lives on the `prints` row (master_* columns),
+//    keyed by printId. Two prints of the same artwork have independent masters. ──
+
+/** The print's own master, or null. Reads reference + metadata from the prints row (never bytes). */
+export async function getPrintMaster(printId: number): Promise<MasterMeta | null> {
+  if (!hasDatabase) return null;
+  const { rows } = await pool.query(
+    `SELECT master_width_px, master_height_px, master_status, master_asset_key,
+            master_filename, master_content_type, master_byte_size, master_checksum_md5
+       FROM prints WHERE id = $1 LIMIT 1`,
+    [printId],
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    widthPx: r.master_width_px ?? null,
+    heightPx: r.master_height_px ?? null,
+    status: r.master_status ?? "missing",
+    // A stable, token-gated relative marker so the purchasability gate sees an asset when one exists;
+    // the real signed URL is minted fresh at fulfilment. Null when there is no master.
+    printReadyAssetUrl: r.master_asset_key ? `/api/commerce/prints/master-file/${printId}` : null,
+    note: null,
+    assetKey: r.master_asset_key ?? null,
+    assetFilename: r.master_filename ?? null,
+    contentType: r.master_content_type ?? null,
+    byteSize: r.master_byte_size != null ? Number(r.master_byte_size) : null,
+    checksumMd5: r.master_checksum_md5 ?? null,
+    hasAsset: Boolean(r.master_asset_key),
+  };
+}
+
+/** Store the reference + metadata of a master whose bytes were just written to disk under this print. */
+export async function upsertPrintMasterFile(
+  printId: number,
+  m: { widthPx: number; heightPx: number; assetKey: string; assetFilename: string;
+       contentType: string; byteSize: number; checksumMd5: string; status: string },
+): Promise<void> {
+  if (!hasDatabase) return;
+  await pool.query(
+    `UPDATE prints SET
+       master_width_px = $2, master_height_px = $3, master_asset_key = $4, master_filename = $5,
+       master_content_type = $6, master_byte_size = $7, master_checksum_md5 = $8, master_status = $9,
+       updated_at = now()
+     WHERE id = $1`,
+    [printId, m.widthPx, m.heightPx, m.assetKey, m.assetFilename, m.contentType, m.byteSize, m.checksumMd5, m.status],
+  );
+}
+
+/** Clear the print's master back to 'missing' (file deletion is done by the route). */
+export async function clearPrintMaster(printId: number): Promise<void> {
+  if (!hasDatabase) return;
+  await pool.query(
+    `UPDATE prints SET master_width_px = NULL, master_height_px = NULL, master_asset_key = NULL,
+       master_filename = NULL, master_content_type = NULL, master_byte_size = NULL,
+       master_checksum_md5 = NULL, master_status = 'missing', updated_at = now()
+     WHERE id = $1`,
+    [printId],
+  );
+}
+
+/** The print's disk reference (key + metadata) for the fulfilment-facing download route. No bytes. */
+export async function getPrintMasterRef(printId: number): Promise<{ assetKey: string; filename: string | null; contentType: string | null } | null> {
+  if (!hasDatabase) return null;
+  const { rows } = await pool.query(`SELECT master_asset_key, master_filename, master_content_type FROM prints WHERE id = $1 LIMIT 1`, [printId]);
+  const r = rows[0];
+  if (!r || !r.master_asset_key) return null;
+  return { assetKey: r.master_asset_key as string, filename: r.master_filename ?? null, contentType: r.master_content_type ?? null };
+}
+
 /** The disk REFERENCE (key + metadata) for the fulfilment-facing download route. No bytes. */
 export async function getMasterRef(artworkId: number): Promise<{ assetKey: string; filename: string | null; contentType: string | null } | null> {
   if (!hasDatabase) return null;

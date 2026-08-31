@@ -12,7 +12,7 @@
 import { ensureFulfilmentIdempotencyKey, setPrintFulfilment, type OrderRow } from "../orders";
 import { printOrderToInternal } from "./printCheckout";
 import { createPrintFulfilment } from "../prodigi/printFulfilment";
-import { getMaster } from "./adminPrintRepo";
+import { getPrintMaster } from "./adminPrintRepo";
 import { signedMasterUrl } from "./masterStorage";
 
 // How long the fulfilment provider's signed master URL stays valid — long enough to cover order
@@ -38,13 +38,19 @@ export async function fulfilPrintOrder(order: OrderRow, baseUrl: string): Promis
       return;
     }
 
-    // THE MASTER URL IS GENERATED HERE, FRESH, AND NEVER STORED. The order snapshot carries only a
-    // marker; at fulfilment we mint a short-lived, signed, per-artwork download URL for the provider,
-    // from the master that lives on the persistent disk. A permanent public master URL never exists.
-    if (order.artwork_id != null) {
-      const master = await getMaster(order.artwork_id);
+    // THE MASTER URL IS GENERATED HERE, FRESH, AND NEVER STORED. The master belongs to the PURCHASED
+    // PRINT (its printId comes from the order's stored snapshot), so we mint a short-lived, signed,
+    // per-PRINT download URL for the provider. A permanent public master URL never exists, and Print
+    // A's token can never fetch Print B's file.
+    let printId: number | null = null;
+    try {
+      const snap = JSON.parse(order.artwork_snapshot ?? "{}");
+      if (typeof snap.printId === "number") printId = snap.printId;
+    } catch { /* no/invalid snapshot — handled below as "no master" */ }
+    if (printId != null) {
+      const master = await getPrintMaster(printId);
       if (master?.assetKey) {
-        internal.variant.printReadyAssetUrl = signedMasterUrl(baseUrl, order.artwork_id, FULFILMENT_TOKEN_TTL);
+        internal.variant.printReadyAssetUrl = signedMasterUrl(baseUrl, printId, FULFILMENT_TOKEN_TTL);
         if (master.checksumMd5) internal.variant.md5Hash = master.checksumMd5;
       }
     }
