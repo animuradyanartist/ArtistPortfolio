@@ -164,25 +164,54 @@ export async function getPurchasablePrintCollection(): Promise<PrintCollectionCa
   // grouped by print_id in memory. Every per-print decision below uses the SAME pure gates as before
   // (hasPurchasableVariant / isPubliclyPurchasable / startingPriceMinor / masterFromRow / currency +
   // image fallback), so behaviour — including fail-closed eligibility — is unchanged.
+
+  // ─── [PERF-DIAG] TEMPORARY timing instrumentation — remove after diagnosis (grep "PERF-DIAG"). ───
+  // No behaviour change: values below are hoisted into locals only so each pure helper can be timed;
+  // the object built for `cards` is identical. Delete every [PERF-DIAG] line to restore the original.
+  const __t0 = performance.now();
   const { rows } = await pool.query(`SELECT * FROM prints WHERE status = 'active' ORDER BY position ASC, id ASC`);
+  const __tAfterPrints = performance.now();                                                  // [PERF-DIAG]
   const variantsByPrint = await variantsByPrintId(rows.map((r) => r.id as number));
+  const __tAfterVariants = performance.now();                                                // [PERF-DIAG]
+  const __acc = { mapPrint: 0, master: 0, gate: 0, currency: 0, image: 0, price: 0, slug: 0 }; // [PERF-DIAG]
   const cards: PrintCollectionCard[] = [];
   for (const r of rows) {
+    const __p0 = performance.now();                                                          // [PERF-DIAG]
     const print = mapPrint(r);
+    const __p1 = performance.now();                                                          // [PERF-DIAG]
     const variants = variantsByPrint.get(print.id) ?? [];
     const master = masterFromRow(r);
-    if (!hasPurchasableVariant(variants, master)) continue;
+    const __p2 = performance.now();                                                          // [PERF-DIAG]
+    const purchasable = hasPurchasableVariant(variants, master);
+    const __p3 = performance.now();                                                          // [PERF-DIAG]
+    __acc.mapPrint += __p1 - __p0; __acc.master += __p2 - __p1; __acc.gate += __p3 - __p2;    // [PERF-DIAG]
+    if (!purchasable) {                                                                       // [PERF-DIAG]
+      console.log(`[PERF-DIAG] print id=${print.id} SKIP not-purchasable · variants=${variants.length} · mapPrint=${(__p1 - __p0).toFixed(3)} master=${(__p2 - __p1).toFixed(3)} gate=${(__p3 - __p2).toFixed(3)}ms`); // [PERF-DIAG]
+      continue;
+    }
     const currency = variants.find((v) => isPubliclyPurchasable(v, master))?.currency ?? "EUR";
+    const __p4 = performance.now();                                                          // [PERF-DIAG]
+    const image = print.images[0] ?? (variants.find((v) => v.mockups?.length)?.mockups?.[0] ?? null);
+    const __p5 = performance.now();                                                          // [PERF-DIAG]
+    const price = startingPriceMinor(variants, master);
+    const __p6 = performance.now();                                                          // [PERF-DIAG]
+    const slug = printSlugOf(print);
+    const __p7 = performance.now();                                                          // [PERF-DIAG]
+    __acc.currency += __p4 - __p3; __acc.image += __p5 - __p4; __acc.price += __p6 - __p5; __acc.slug += __p7 - __p6; // [PERF-DIAG]
+    console.log(`[PERF-DIAG] print id=${print.id} variants=${variants.length} · total=${(__p7 - __p0).toFixed(3)}ms · mapPrint=${(__p1 - __p0).toFixed(3)} master=${(__p2 - __p1).toFixed(3)} gate=${(__p3 - __p2).toFixed(3)} currency=${(__p4 - __p3).toFixed(3)} image=${(__p5 - __p4).toFixed(3)} price=${(__p6 - __p5).toFixed(3)} slug=${(__p7 - __p6).toFixed(3)}ms`); // [PERF-DIAG]
     cards.push({
       id: print.id,
       title: print.title,
-      slug: printSlugOf(print),
-      image: print.images[0] ?? (variants.find((v) => v.mockups?.length)?.mockups?.[0] ?? null),
+      slug,
+      image,
       artworkId: print.artworkId,
-      startingPriceMinor: startingPriceMinor(variants, master),
+      startingPriceMinor: price,
       currency,
     });
   }
+  const __tEnd = performance.now();                                                           // [PERF-DIAG]
+  console.log(`[PERF-DIAG] getPurchasablePrintCollection TOTAL=${(__tEnd - __t0).toFixed(3)}ms · printsQuery=${(__tAfterPrints - __t0).toFixed(3)}ms · variantsQuery+group=${(__tAfterVariants - __tAfterPrints).toFixed(3)}ms · loop=${(__tEnd - __tAfterVariants).toFixed(3)}ms · prints=${rows.length} cards=${cards.length} · loopAcc(ms): mapPrint=${__acc.mapPrint.toFixed(3)} master=${__acc.master.toFixed(3)} gate=${__acc.gate.toFixed(3)} currency=${__acc.currency.toFixed(3)} image=${__acc.image.toFixed(3)} price=${__acc.price.toFixed(3)} slug=${__acc.slug.toFixed(3)}`); // [PERF-DIAG]
+  // ─── [PERF-DIAG] end temporary instrumentation ───
   return cards;
 }
 
