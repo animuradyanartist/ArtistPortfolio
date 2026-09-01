@@ -16,7 +16,7 @@
  * a mock now — real Prodigi behaviour is verified against the sandbox only once a key exists.
  */
 
-import { prodigi as realProdigi, prodigiConfigured } from "./prodigiClient";
+import { prodigi as realProdigi, prodigiConfigured, sanitizeProdigiError, formatFulfilmentError } from "./prodigiClient";
 import { requiredAttributesForSku } from "@shared/commerce/prodigiProducts";
 import type {
   ProdigiOrderRequest,
@@ -178,7 +178,18 @@ export async function createPrintFulfilment(
     };
   } catch (e) {
     // A paid order whose fulfilment failed stays paid + fulfilment_status 'failed', visible in admin.
-    const error = e instanceof Error ? `${e.name}: ${e.message}` : "Unknown Prodigi error";
+    // Preserve the SANITIZED provider diagnostic (status + traceparent + a short redacted message)
+    // instead of collapsing a ProdigiApiError to "ProdigiApiError: Prodigi 500 …", which threw away
+    // the response body and the trace id support needs. Never logs the key, request body, or headers.
+    const error = formatFulfilmentError(e);
+    const diag = sanitizeProdigiError(e);
+    if (diag) {
+      console.warn(
+        `[prodigi][fulfilment-failed] order=${order.reference} status=${diag.statusCode} ${diag.statusText}` +
+        (diag.traceParent ? ` trace=${diag.traceParent}` : "") +
+        (diag.providerMessage ? ` provider="${diag.providerMessage}"` : ""),
+      );
+    }
     return { state: "failed", prodigiOrderId: null, fulfilmentStatus: "failed", tracking: null, error };
   }
 }
