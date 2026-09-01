@@ -137,6 +137,19 @@ describe("PRINT vs ORIGINAL confirmation — different subject + content", () =>
     expect(pe.html).not.toContain("Yerevan studio");
     expect(pe.html).not.toContain("crated by hand");
   });
+  it("print carries the approved copy: archival-materials line, next-steps, and a 'View order' button", () => {
+    expect(pe.html).toContain("produced to order using archival materials and professional fine art printing standards");
+    expect(pe.html).toContain("Your print will now move into production");
+    expect(pe.html).toContain("As soon as it is dispatched, you'll receive another email with shipping and tracking details");
+    expect(pe.html).toContain("View order");
+    expect(pe.text).toContain("produced to order using archival materials");
+  });
+  it("print always shows Quantity (even 1) and drops the redundant 'Payment: Confirmed' row", () => {
+    const q1 = buildConfirmationEmail(toModel(makePrintOrder({ artwork_snapshot: JSON.stringify({ itemType: "print", title: "Blue Hour", material: "stretched-canvas", sizeLabel: "A3", quantity: 1, image: "https://cdn/x.jpg" }) }), BASE, TRACK));
+    expect(q1.text).toContain("Quantity: 1");
+    expect(q1.html).toContain("Quantity");
+    expect(q1.html).not.toContain(">Payment<");   // no "Payment: Confirmed" row on the print confirmation
+  });
   it("original uses original-artwork copy and contains NO print-specific language", () => {
     expect(oe.html).toContain("original artwork is now reserved");
     expect(oe.html).toContain("Yerevan studio");
