@@ -3,12 +3,15 @@ import {
   printJsonLd,
   printIsIndexable,
   injectPrintMeta,
+  printMetaDescription,
+  injectPrintsIndexMeta,
   renderPrintHtml,
   printImageUrl,
   type PrintSsrDetail,
 } from "./printSsr";
 
 const BASE = "https://animuradyan.com";
+const SHELL = `<!doctype html><html><head><title>Ani Muradyan – Contemporary Oil Painter</title><meta name="title" content="old"><meta name="description" content="old"><meta property="og:title" content="old"><meta property="og:description" content="old"><meta property="og:url" content="old"><meta name="twitter:title" content="old"><meta name="twitter:description" content="old"><meta name="robots" content="index,follow"><link rel="canonical" href="https://animuradyan.com/old"></head><body><div id="root"></div></body></html>`;
 
 function detail(over: Partial<PrintSsrDetail> = {}): PrintSsrDetail {
   return {
@@ -98,5 +101,56 @@ describe("renderPrintHtml", () => {
   });
   it("shows coming soon for an unready print", () => {
     expect(renderPrintHtml(detail({ purchasable: false }), BASE)).toContain("Coming soon");
+  });
+});
+
+describe("printMetaDescription — front-loads the work's real subject", () => {
+  it("leads with the description's first sentence so the SERP snippet says what it depicts", () => {
+    const d = printMetaDescription(detail({
+      title: "Beyond Every Limit",
+      description: "Edge of the Infinite captures the quiet power of nature through luminous blue waters, towering white cliffs and an expansive horizon. More text that should not appear.",
+    }));
+    expect(d.startsWith("Edge of the Infinite captures the quiet power of nature")).toBe(true);
+    expect(d).toContain("luminous blue waters");
+    expect(d).not.toContain("More text that should not appear");
+    expect(d).toContain("Beyond Every Limit"); // still names the print
+    expect(d).toContain("Giclée fine-art print");
+  });
+  it("falls back to the plain framing when there is no description", () => {
+    const d = printMetaDescription(detail({ title: "Untitled", description: "" }));
+    expect(d).toContain("Museum-quality");
+    expect(d).toContain('"Untitled"');
+  });
+});
+
+describe("injectPrintsIndexMeta — the /prints listing gets its OWN SEO", () => {
+  const cards = [
+    { title: "Beyond Every Limit", slug: "beyond_every_limit" },
+    { title: "Road Through Gold", slug: "road_through_gold" },
+  ];
+  const out = injectPrintsIndexMeta(SHELL, cards, BASE);
+
+  it("replaces the inherited homepage title with a fine-art-prints title", () => {
+    expect(out).toContain("<title>Fine Art Prints — Giclée Prints of Contemporary Paintings | Ani Muradyan</title>");
+    expect(out).not.toContain("Ani Muradyan – Contemporary Oil Painter</title>");
+  });
+  it("sets a prints-specific description + canonical + og:url + index,follow", () => {
+    expect(out).toContain('name="description" content="Museum-quality giclée fine art prints');
+    expect(out).toContain('rel="canonical" href="https://animuradyan.com/prints"');
+    expect(out).toContain('property="og:url" content="https://animuradyan.com/prints"');
+    expect(out).toContain('name="robots" content="index,follow"');
+  });
+  it("injects a crawlable H1 + a link per purchasable print", () => {
+    expect(out).toContain('id="prints-ssr"');
+    expect(out).toContain(">Fine Art Prints</h1>");
+    expect(out).toContain('href="https://animuradyan.com/prints/beyond_every_limit"');
+    expect(out).toContain('href="https://animuradyan.com/prints/road_through_gold"');
+    expect(out).toContain('href="https://animuradyan.com/artworks"'); // links back to originals
+  });
+  it("adds a CollectionPage + ItemList JSON-LD covering every print", () => {
+    expect(out).toContain('id="prints-collection-jsonld"');
+    expect(out).toContain('"@type":"CollectionPage"');
+    expect(out).toContain('"@type":"ItemList"');
+    expect(out).toContain('"numberOfItems":2');
   });
 });
