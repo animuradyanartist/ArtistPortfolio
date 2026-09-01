@@ -132,6 +132,16 @@ export default function BlogPostPage() {
                 See the paintings
               </a>
             </Link>
+            <Link href="/prints">
+              <a className="text-[11px] tracking-[0.2em] uppercase text-stone-700 border-b border-stone-400 pb-1 hover:border-stone-800 hover:text-stone-900 transition-colors">
+                Fine-art prints
+              </a>
+            </Link>
+            <Link href="/about">
+              <a className="text-[11px] tracking-[0.2em] uppercase text-stone-700 border-b border-stone-400 pb-1 hover:border-stone-800 hover:text-stone-900 transition-colors">
+                About the artist
+              </a>
+            </Link>
           </div>
         </nav>
       </article>
