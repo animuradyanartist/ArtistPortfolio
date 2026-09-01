@@ -44,6 +44,7 @@ vi.mock("./emailLog", () => ({
 
 import {
   sendOrderConfirmation, sendPackedEmail, sendShippedEmail, sendPreparingStatusEmail, sendInTransitEmail,
+  sendDeliveredEmail,
 } from "./index";
 
 function makeOrder(o: Partial<OrderRow> = {}): OrderRow {
@@ -129,5 +130,13 @@ describe("status emails — one per status, re-set sends no duplicate", () => {
     await sendInTransitEmail(makeOrder({ tracking_url: "https://x/y" }));
     expect(H.sent).toHaveLength(2);
     expect(H.sent[0].subject).toBe("Your order is on the way");
+  });
+
+  it("delivered sends once; a duplicate delivered event sends nothing (once-only)", async () => {
+    expect((await sendDeliveredEmail(makeOrder({ status: "delivered" }))).status).toBe("sent");
+    const again = await sendDeliveredEmail(makeOrder({ status: "delivered" }));
+    expect(again.status).toBe("skipped");
+    expect(H.sent).toHaveLength(1);
+    expect(H.sent[0].subject).toBe("Your order has arrived — Endless Horizon");
   });
 });

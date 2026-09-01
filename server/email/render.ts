@@ -484,36 +484,38 @@ Track your order: ${m.trackUrl}${m.trackingUrl ? `\nCarrier tracking: ${m.tracki
 
 /** D. Delivery confirmation. */
 export function buildDeliveredEmail(m: Model): EmailContent {
-  const thanks = m.isPrint
-    ? `Thank you for bringing one of my pieces into your space as a print. It genuinely means a great deal.`
-    : `Thank you for giving one of my paintings a home. It genuinely means a great deal.`;
+  // Warm, concise, no marketing language. Print body never implies studio/manual handling.
+  const body = m.isPrint
+    ? `I hope your fine art print arrived safely and that you enjoy it in its new space.`
+    : `I hope your artwork arrived safely and that you enjoy living with it.`;
+  const rows = [summaryRow("Order", esc(m.reference))];
+
   const inner = [
     eyebrow("Delivered"),
-    heading(`It has arrived.`),
-    para(`${m.firstName}, your ${itemNoun(m)}${m.artworkTitle ? ` — <span style="font-family:${SERIF};font-style:italic">${esc(m.artworkTitle)}</span> —` : ""} has been delivered. I hope it feels right the moment you unwrap it.`),
+    heading(`Your order has arrived.`),
+    para(`${m.firstName}, ${body}`),
     artworkBlock(m),
-    para(`If anything at all is not as it should be — the piece, the packaging, anything — please just reply to this email and I'll make it right, personally.`),
-    para(thanks),
-    button("View your order", m.trackUrl),
+    summaryTable(rows),
+    para(`If anything at all is not as it should be, please just reply to this email and I'll make it right, personally.`),
+    button("View order", m.trackUrl),
     rule(),
-    para(`With gratitude,<br><span style="font-family:${SERIF};font-style:italic;font-size:17px;color:${STONE_900}">Ani</span>`),
+    para(`<span style="font-family:${SERIF};font-style:italic;font-size:17px;color:${STONE_900}">Ani Muradyan</span>`),
   ].join("");
 
   const text =
-`It has arrived.
+`Your order has arrived.
 
-${m.firstName}, your ${itemNoun(m)}${m.artworkTitle ? ` — "${m.artworkTitle}" —` : ""} has been delivered. I hope it feels right the moment you unwrap it.
+${m.firstName}, ${body}
+
+Order: ${m.reference}
 
 If anything is not as it should be, just reply to this email and I'll make it right, personally.
 
-${thanks}
+View order: ${m.trackUrl}
 
-View your order: ${m.trackUrl}
+Ani Muradyan${textFooter()}`;
 
-With gratitude,
-Ani${textFooter()}`;
-
-  return { subject: `Your order has been delivered`, html: layout(`Your order ${m.reference} has been delivered.`, inner), text };
+  return { subject: `Your order has arrived — ${subjectTitle(m)}`, html: layout(`Your order ${m.reference} has arrived.`, inner), text };
 }
 
 /**
