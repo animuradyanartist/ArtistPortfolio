@@ -26,6 +26,7 @@ import { verifyMasterToken, readMasterStream, findMasterObjectKey } from "./mast
 import { getProdigiProduct } from "../prodigi/prodigiProducts";
 import { MATERIAL_CATEGORY, CATEGORY_LABEL, type PrintMaterial } from "@shared/commerce/prodigiProducts";
 import { isCheckoutConfigured } from "../stripeClient";
+import { resolvePromoForOrder } from "../promoCheckout";
 import { cropExtractPx } from "@shared/commerce/printCrop";
 import sharp from "sharp";
 
@@ -183,6 +184,17 @@ export function registerPrintRoutes(app: Express): void {
       const itemsMinor = resolveVariantPrice(resolved.variant, quantity);
       if (itemsMinor == null) return res.json({ available: false, reason: "unpriced" });
 
+      // PROMO PREVIEW — server-validated against the item subtotal (the checkout POST re-validates).
+      // The discount never touches shipping. An invalid code returns a message, never a fake discount.
+      const promoRes = await resolvePromoForOrder(b.promoCode, {
+        itemType: "prints", currency: resolved.variant.currency, itemsMinor, now: new Date(),
+      });
+      const discountMinor = promoRes.status === "applied" ? promoRes.applied.discountMinor : 0;
+      const promo = promoRes.status === "applied"
+        ? { applied: true, code: promoRes.applied.code, discountMinor,
+            discountType: promoRes.applied.discountType, discountValue: promoRes.applied.discountValue }
+        : promoRes.status === "error" ? { applied: false, error: promoRes.error, message: promoRes.message } : null;
+
       // SERVER-RESOLVED customer-facing display for the checkout/cart summary — safe fields only
       // (no SKU, cost, margin, print-area pixels, master URL or storage key). The image is the
       // public artwork URL, never the base64 storefront image.
@@ -196,6 +208,8 @@ export function registerPrintRoutes(app: Express): void {
         unitMinor: resolveVariantPrice(resolved.variant, 1),
         quantity,
         itemsMinor,
+        discountMinor,
+        promo,
         currency: resolved.variant.currency,
         checkoutEnabled: isCheckoutConfigured(),
       };
@@ -226,7 +240,8 @@ export function registerPrintRoutes(app: Express): void {
         available: true,
         ...display,
         shippingMinor: quote.shippingMinor,
-        totalMinor: itemsMinor + quote.shippingMinor,
+        // Discount reduces the item subtotal only; shipping is added at full and never discounted.
+        totalMinor: (itemsMinor - discountMinor) + quote.shippingMinor,
         currency: quote.currency,
         method: quote.method,
       });

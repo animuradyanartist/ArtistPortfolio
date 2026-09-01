@@ -72,7 +72,11 @@ try {
          'exception_state','customer_message','internal_notes','tracking_token'))::int AS lifecycle_cols,
       (SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename='order_emails')::int AS order_emails_table,
       (SELECT count(*) FROM pg_indexes
-        WHERE indexname IN ('orders_tracking_token_unique','order_emails_dedupe_unique','order_emails_order_idx'))::int AS lifecycle_indexes`);
+        WHERE indexname IN ('orders_tracking_token_unique','order_emails_dedupe_unique','order_emails_order_idx'))::int AS lifecycle_indexes,
+      (SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename='promo_codes')::int AS promo_table,
+      (SELECT count(*) FROM information_schema.columns
+        WHERE table_name='orders' AND column_name IN
+        ('promo_code','promo_discount_minor','promo_discount_type','promo_discount_value','promo_code_id'))::int AS promo_order_cols`);
   const r = rows[0];
   console.log(`  ${applied}/${list.length} applied`);
   console.log(`  commerce columns on artworks : ${r.commerce_cols}/15`);
@@ -81,8 +85,11 @@ try {
   console.log(`  order-lifecycle columns      : ${r.lifecycle_cols}/8  (tracking_url, tracking_token, …)`);
   console.log(`  order_emails table           : ${r.order_emails_table}/1`);
   console.log(`  order-lifecycle indexes      : ${r.lifecycle_indexes}/3`);
+  console.log(`  promo_codes table            : ${r.promo_table}/1`);
+  console.log(`  promo order-snapshot columns : ${r.promo_order_cols}/5  (promo_code, promo_discount_minor, …)`);
   const ok = r.commerce_cols === 15 && r.commerce_tables === 2 && r.sweeper_index === 1 &&
-    r.lifecycle_cols === 8 && r.order_emails_table === 1 && r.lifecycle_indexes === 3;
+    r.lifecycle_cols === 8 && r.order_emails_table === 1 && r.lifecycle_indexes === 3 &&
+    r.promo_table === 1 && r.promo_order_cols === 5;
   console.log(ok
     ? "\nDevelopment now matches what production has, including the order-lifecycle schema.\nA publish preview should propose NO drops."
     : "\nSTILL INCOMPLETE — do not publish. Something above is short; report the numbers.");
