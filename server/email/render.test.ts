@@ -97,10 +97,33 @@ describe("shipped email", () => {
 });
 
 describe("delivered email", () => {
-  const e = buildDeliveredEmail(toModel(makeOrder({ status: "delivered", delivered_at: new Date("2026-09-12T00:00:00Z") }), BASE, TRACK));
+  const oe = buildDeliveredEmail(toModel(makeOrder({ status: "delivered", delivered_at: new Date("2026-09-12T00:00:00Z") }), BASE, TRACK));
+  const pe = buildDeliveredEmail(toModel(makePrintOrder({ status: "delivered" }), BASE, TRACK));
+
   it("is a warm arrival confirmation inviting contact", () => {
-    expect(e.html.toLowerCase()).toContain("arrived");
-    expect(e.html.toLowerCase()).toContain("reply");
+    expect(oe.html.toLowerCase()).toContain("arrived");
+    expect(oe.html.toLowerCase()).toContain("reply");
+  });
+  it("ORIGINAL: approved structure — DELIVERED eyebrow, 'Your order has arrived.', order row, View order, Ani Muradyan", () => {
+    expect(oe.subject).toBe("Your order has arrived — Endless Horizon");
+    expect(oe.html).toContain("Delivered");
+    expect(oe.html).toContain("Your order has arrived.");
+    expect(oe.html).toContain("I hope your artwork arrived safely and that you enjoy living with it.");
+    expect(oe.html).toContain("AM-2026-0007");             // order number
+    expect(oe.html).toContain("View order");
+    expect(oe.html).toContain("Ani Muradyan");
+    expect(oe.text).toContain("Your order has arrived.");
+    expect(oe.text).toContain("Ani Muradyan");
+  });
+  it("PRINT: distinct print body, and NO Yerevan / manual-packing / studio wording", () => {
+    expect(pe.html).toContain("I hope your fine art print arrived safely and that you enjoy it in its new space.");
+    expect(pe.html).not.toMatch(/Yerevan studio|crated by hand|packed by hand|in my studio/i);
+    expect(pe.html).not.toContain("I hope your artwork arrived safely");   // not the original body
+  });
+  it("uses the public https artwork image, never base64/data:", () => {
+    expect(pe.html).toContain("https://animuradyan.com/img/artwork/42/0");
+    expect(pe.html).not.toContain("data:image");
+    expect(pe.html).not.toContain("&lt;img");
   });
 });
 
