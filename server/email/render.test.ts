@@ -2,7 +2,21 @@ import { describe, it, expect } from "vitest";
 import type { OrderRow } from "../commerce/orders";
 import {
   toModel, buildConfirmationEmail, buildShippedEmail, buildDeliveredEmail, buildUpdateEmail,
+  buildPackedEmail, buildInTransitEmail,
 } from "./render";
+
+// A PRINT order — base64 storefront image in the snapshot (the real production case), material + size.
+function makePrintOrder(o: Partial<OrderRow> = {}): OrderRow {
+  return makeOrder({
+    item_type: "print", artwork_id: 42,
+    artwork_snapshot: JSON.stringify({
+      itemType: "print", title: "Blue Hour", material: "german-etching",
+      sizeLabel: "16×20 in (40×50 cm)", widthCm: 40, heightCm: 50, quantity: 2,
+      image: "data:image/webp;base64,UklGRhIAAABXRUJQVlA4TAYAAAAvAAAAAAfQ//73v/+BiOh/AAA=",
+    }),
+    ...o,
+  });
+}
 
 const BASE = "https://animuradyan.com";
 const TRACK = "https://animuradyan.com/track/tok_secret";
@@ -99,5 +113,92 @@ describe("manual / delay update email", () => {
   });
   it("still has a Track Order CTA", () => {
     expect(e.html).toContain(TRACK);
+  });
+});
+
+describe("PRINT vs ORIGINAL confirmation — different subject + content", () => {
+  const pe = buildConfirmationEmail(toModel(makePrintOrder(), BASE, TRACK));
+  const oe = buildConfirmationEmail(toModel(makeOrder(), BASE, TRACK));
+
+  it("print subject is 'Print order confirmed — {title}'; original is 'Order confirmed — {title}'", () => {
+    expect(pe.subject).toBe("Print order confirmed — Blue Hour");
+    expect(oe.subject).toBe("Order confirmed — Endless Horizon");
+  });
+  it("print clearly labels 'Fine Art Print' + Material (category) + Size + quantity", () => {
+    expect(pe.html).toContain("Fine Art Print");
+    expect(pe.html).toContain("Fine Art Paper");                 // german-etching → Fine Art Paper
+    expect(pe.html).toContain("16×20 in (40×50 cm)");
+    expect(pe.text).toContain("Material: Fine Art Paper");
+    expect(pe.text).toContain("Size: 16×20 in (40×50 cm)");
+    expect(pe.text).toContain("Quantity: 2");
+  });
+  it("print uses production copy, never the Yerevan-studio original wording", () => {
+    expect(pe.html).toContain("being prepared for production");
+    expect(pe.html).not.toContain("Yerevan studio");
+    expect(pe.html).not.toContain("crated by hand");
+  });
+  it("original uses original-artwork copy and contains NO print-specific language", () => {
+    expect(oe.html).toContain("original artwork is now reserved");
+    expect(oe.html).toContain("Yerevan studio");
+    expect(oe.html).not.toContain("Fine Art Print");
+    expect(oe.html).not.toContain("Material");
+  });
+});
+
+describe("email IMAGE — absolute public URL, never base64 / never raw <img> text", () => {
+  const pe = buildConfirmationEmail(toModel(makePrintOrder(), BASE, TRACK));
+  it("a base64 snapshot image is DROPPED for a compact public artwork URL", () => {
+    expect(pe.html).toContain("https://animuradyan.com/img/artwork/42/0");
+    expect(pe.html).not.toContain("data:image");     // the base64 data URI never reaches the email
+    expect(pe.html).not.toMatch(/base64/i);
+  });
+  it("the image is a REAL <img> tag (not escaped text), and no escaped '&lt;img' appears", () => {
+    expect(pe.html).toMatch(/<img src="https:\/\/animuradyan\.com\/img\/artwork\/42\/0"/);
+    expect(pe.html).not.toContain("&lt;img");         // never renders '<img src="' as literal text
+  });
+  it("an already-absolute https image (e.g. a mockup) is used as-is", () => {
+    const withMockup = buildConfirmationEmail(toModel(
+      makePrintOrder({ artwork_snapshot: JSON.stringify({ itemType: "print", title: "Blue Hour", material: "stretched-canvas", sizeLabel: "A3", image: "https://cdn.prodigi.com/mockup/xyz.jpg" }) }),
+      BASE, TRACK));
+    expect(withMockup.html).toContain("https://cdn.prodigi.com/mockup/xyz.jpg");
+  });
+});
+
+describe("packed email", () => {
+  const pe = buildPackedEmail(toModel(makePrintOrder(), BASE, TRACK));
+  const oe = buildPackedEmail(toModel(makeOrder(), BASE, TRACK));
+  it("subject is 'Your order is packed' and says it's packed", () => {
+    expect(pe.subject).toBe("Your order is packed");
+    expect(pe.html.toLowerCase()).toContain("packed");
+  });
+  it("labels a print as a Fine Art Print; an original as Original artwork", () => {
+    expect(pe.html).toContain("Fine Art Print");
+    expect(oe.html).toContain("Original artwork");
+  });
+});
+
+describe("in-transit email", () => {
+  const e = buildInTransitEmail(toModel(makeOrder({ shipping_carrier: "FedEx", tracking_number: "TRK123", tracking_url: "https://track.fedex.com/TRK123" }), BASE, TRACK));
+  it("subject is 'Your order is on the way' and includes carrier + tracking link", () => {
+    expect(e.subject).toBe("Your order is on the way");
+    expect(e.html).toContain("TRK123");
+    expect(e.html).toContain("https://track.fedex.com/TRK123");
+    expect(e.html).toContain(TRACK);
+  });
+});
+
+describe("shipped email — tracking + print/original wording", () => {
+  it("includes the tracking number, carrier and clickable link when present", () => {
+    const e = buildShippedEmail(toModel(makeOrder({ shipping_carrier: "DHL", tracking_number: "DHL999", tracking_url: "https://dhl.com/DHL999" }), BASE, TRACK));
+    expect(e.subject).toBe("Your order has shipped — Endless Horizon");
+    expect(e.html).toContain("DHL999");
+    expect(e.html).toContain("https://dhl.com/DHL999");
+  });
+  it("a print does NOT say 'left the studio'; an original does", () => {
+    const pe = buildShippedEmail(toModel(makePrintOrder(), BASE, TRACK));
+    const oe = buildShippedEmail(toModel(makeOrder(), BASE, TRACK));
+    expect(pe.html).not.toContain("left the studio");
+    expect(pe.html).toContain("produced");
+    expect(oe.html).toContain("left the studio");
   });
 });

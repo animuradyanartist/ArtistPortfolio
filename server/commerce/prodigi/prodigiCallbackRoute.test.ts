@@ -91,3 +91,101 @@ describe("processProdigiCallback — the routed callback shell", () => {
     expect(persist).not.toHaveBeenCalled();
   });
 });
+
+describe("processProdigiCallback — PRINT customer lifecycle (Prodigi drives status + email)", () => {
+  const advance = () => vi.fn(async () => ({ statusChanged: true, email: "sent" as const }));
+
+  it("inproduction → advances the customer to Preparing + sends the preparing email once", async () => {
+    const advanceLifecycle = advance();
+    const d = deps({
+      getOrderByProdigiId: async () => ({ id: 100, fulfilment_status: "created", status: "paid" }),
+      getProdigiOrder: async () => prodigiOrder("InProgress", { inProduction: "InProgress" }),
+      advanceLifecycle,
+    });
+    const r = await processProdigiCallback(d, { token: "good-token", body });
+    expect(r.body.applied).toBe(true);
+    expect(r.body.fulfilmentStatus).toBe("inproduction");
+    expect(advanceLifecycle).toHaveBeenCalledTimes(1);
+    expect(advanceLifecycle).toHaveBeenCalledWith(100, "preparing", "preparing");
+  });
+
+  it("a DUPLICATE inproduction callback advances nothing + sends NO email", async () => {
+    const advanceLifecycle = advance();
+    const persist = vi.fn(async () => {});
+    const d = deps({
+      getOrderByProdigiId: async () => ({ id: 100, fulfilment_status: "inproduction", status: "preparing" }),
+      getProdigiOrder: async () => prodigiOrder("InProgress", { inProduction: "InProgress" }),
+      persist, advanceLifecycle,
+    });
+    const r = await processProdigiCallback(d, { token: "good-token", body });
+    expect(r.body.applied).toBe(false);
+    expect(persist).not.toHaveBeenCalled();
+    expect(advanceLifecycle).not.toHaveBeenCalled();
+  });
+
+  it("shipped → persists real Prodigi tracking + advances to Shipped + sends the shipped email once", async () => {
+    const advanceLifecycle = advance();
+    const persist = vi.fn(async () => {});
+    const d = deps({
+      getOrderByProdigiId: async () => ({ id: 100, fulfilment_status: "inproduction", status: "preparing" }),
+      getProdigiOrder: async () => prodigiOrder("InProgress", { shipping: "InProgress" }, { number: "TRK9", url: "https://track/9" }),
+      persist, advanceLifecycle,
+    });
+    const r = await processProdigiCallback(d, { token: "good-token", body });
+    expect(persist).toHaveBeenCalledWith(100, { fulfilmentStatus: "shipped", carrier: "DHL", trackingNumber: "TRK9", trackingUrl: "https://track/9" });
+    expect(advanceLifecycle).toHaveBeenCalledTimes(1);
+    expect(advanceLifecycle).toHaveBeenCalledWith(100, "shipped", "shipped");
+  });
+
+  it("a DUPLICATE shipped callback advances nothing + sends NO email", async () => {
+    const advanceLifecycle = advance();
+    const d = deps({
+      getOrderByProdigiId: async () => ({ id: 100, fulfilment_status: "shipped", status: "shipped" }),
+      getProdigiOrder: async () => prodigiOrder("InProgress", { shipping: "InProgress" }, { number: "TRK9", url: "https://track/9" }),
+      advanceLifecycle,
+    });
+    const r = await processProdigiCallback(d, { token: "good-token", body });
+    expect(r.body.applied).toBe(false);
+    expect(advanceLifecycle).not.toHaveBeenCalled();
+  });
+
+  it("an OUT-OF-ORDER inproduction after shipped does NOT regress or email", async () => {
+    const advanceLifecycle = advance();
+    const persist = vi.fn(async () => {});
+    const d = deps({
+      getOrderByProdigiId: async () => ({ id: 100, fulfilment_status: "shipped", status: "shipped" }),
+      getProdigiOrder: async () => prodigiOrder("InProgress", { inProduction: "InProgress" }),
+      persist, advanceLifecycle,
+    });
+    const r = await processProdigiCallback(d, { token: "good-token", body });
+    expect(r.body.applied).toBe(false);
+    expect(persist).not.toHaveBeenCalled();
+    expect(advanceLifecycle).not.toHaveBeenCalled();
+  });
+
+  it("complete → advances to Shipped (never Delivered) when not already shipped", async () => {
+    const advanceLifecycle = advance();
+    const d = deps({
+      getOrderByProdigiId: async () => ({ id: 100, fulfilment_status: "inproduction", status: "preparing" }),
+      getProdigiOrder: async () => prodigiOrder("Complete", {}),
+      advanceLifecycle,
+    });
+    const r = await processProdigiCallback(d, { token: "good-token", body });
+    expect(r.body.fulfilmentStatus).toBe("complete");
+    expect(advanceLifecycle).toHaveBeenCalledWith(100, "shipped", "shipped");
+  });
+
+  it("complete AFTER shipped closes the Prodigi order but sends no second customer email", async () => {
+    const advanceLifecycle = advance();
+    const persist = vi.fn(async () => {});
+    const d = deps({
+      getOrderByProdigiId: async () => ({ id: 100, fulfilment_status: "shipped", status: "shipped" }),
+      getProdigiOrder: async () => prodigiOrder("Complete", {}),
+      persist, advanceLifecycle,
+    });
+    const r = await processProdigiCallback(d, { token: "good-token", body });
+    expect(r.body.applied).toBe(true);                       // fulfilment advances shipped → complete
+    expect(persist).toHaveBeenCalled();                      // fulfilment_status persisted
+    expect(advanceLifecycle).not.toHaveBeenCalled();         // but the customer is already "shipped" → no email
+  });
+});

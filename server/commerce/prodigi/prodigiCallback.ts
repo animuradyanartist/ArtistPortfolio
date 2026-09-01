@@ -11,6 +11,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { mapProdigiStatus, extractTracking, type FulfilmentTracking } from "./printFulfilment";
 import type { ProdigiOrderResponse } from "./prodigiTypes";
+import { canTransition, type OrderStatus } from "@shared/commerce/orderStatus";
 
 /** Constant-time string compare that can't throw on length mismatch. */
 export function tokensMatch(provided: string | undefined | null, expected: string | undefined | null): boolean {
@@ -80,4 +81,45 @@ export function applyRefetchedOrder(
     tracking,
     apply: shouldApplyStatus(currentStatus, fulfilmentStatus),
   };
+}
+
+/**
+ * THE PRODIGI → CUSTOMER LIFECYCLE MAP (print orders only). Prodigi is the source of truth for a
+ * print's fulfilment, so a genuine forward Prodigi state drives the customer-facing `order.status`
+ * and the matching once-only email — Ani never sets a print's status by hand.
+ *
+ * Uses ONLY the states our integration actually derives (mapProdigiStatus): created, inproduction,
+ * shipped, complete, cancelled (+ pending/failed). We do NOT invent a Prodigi "packed" or
+ * "in transit" state:
+ *   • created      → the order is already "paid"/confirmed from the Stripe webhook → NO customer change
+ *                    and NO email (the confirmation email was already sent on payment).
+ *   • inproduction → "preparing" (In production) → send the preparing email.
+ *   • shipped      → "shipped" (+ real Prodigi tracking) → send the shipped email.
+ *   • complete     → Prodigi's order is fully dispatched/closed. It is NOT a delivery confirmation
+ *                    (Prodigi does not confirm delivery), so it maps to "shipped", never "delivered".
+ *   • cancelled/failed/pending → no automatic customer move (handled by refund/admin recovery).
+ *
+ * The move is gated to a genuine FORWARD transition from the current customer status via
+ * `canTransition`, so a duplicate or out-of-order callback yields no change and no email.
+ */
+export interface CustomerLifecycleMove {
+  /** The customer status to advance to, or null for no customer-visible change. */
+  status: OrderStatus | null;
+  /** The once-only lifecycle email to send, or null. */
+  email: "preparing" | "shipped" | null;
+}
+
+export function customerLifecycleForFulfilment(
+  currentCustomerStatus: string | null | undefined,
+  fulfilmentStatus: string,
+): CustomerLifecycleMove {
+  const target: OrderStatus | null =
+    fulfilmentStatus === "inproduction" ? "preparing"
+    : (fulfilmentStatus === "shipped" || fulfilmentStatus === "complete") ? "shipped"
+    : null;
+  if (!target) return { status: null, email: null };
+  const cur = (currentCustomerStatus ?? "") as OrderStatus;
+  // Only move FORWARD (and never onto the same status) — no regressions, no churn.
+  if (cur === target || !canTransition(cur, target)) return { status: null, email: null };
+  return { status: target, email: target === "preparing" ? "preparing" : "shipped" };
 }
