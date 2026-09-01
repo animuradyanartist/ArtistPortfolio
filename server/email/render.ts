@@ -270,46 +270,49 @@ export function buildConfirmationEmail(m: Model): EmailContent {
 
 /** A print order: produced to order by the fulfilment partner — never "crated in the Yerevan studio". */
 function printConfirmation(m: Model): EmailContent {
-  const rows = [
-    summaryRow("Order", esc(m.reference)),
+  // The print/production detail (what was bought) …
+  const detailRows = [
     summaryRow("Item", "Fine Art Print"),
     m.materialCategoryLabel ? summaryRow("Material", esc(m.materialCategoryLabel)) : "",
     m.sizeLabel ? summaryRow("Size", esc(m.sizeLabel)) : "",
-    m.quantity > 1 ? summaryRow("Quantity", String(m.quantity)) : "",
+    summaryRow("Quantity", String(m.quantity)),           // always shown (mock shows "Quantity: 1")
+  ].filter(Boolean);
+  // … then the order / payment / destination.
+  const orderRows = [
+    summaryRow("Order", esc(m.reference)),
     m.total ? summaryRow("Total paid", esc(m.total), { strong: true }) : "",
-    summaryRow("Payment", "Confirmed"),
     m.destination ? summaryRow("Shipping to", esc(m.destination)) : "",
   ].filter(Boolean);
 
   const inner = [
     eyebrow("Print order confirmed"),
     heading(`Thank you, ${m.firstName}.`),
-    para(`Your fine art print has been received and is now being prepared for production. I'll keep you updated as it is produced and shipped.`),
+    para(`Your fine art print order has been received and is now being prepared for production.`),
+    para(`Each print is produced to order using archival materials and professional fine art printing standards.`),
     artworkBlock(m),
-    summaryTable(rows),
+    summaryTable(detailRows),
+    summaryTable(orderRows),
     `<div style="font-family:${SANS};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:${STONE_500};padding:18px 0 8px">What happens next</div>`,
-    infoNote(`Your print is made to order on archival materials and dispatched once it's ready. You'll get an email with tracking the moment it ships.`),
-    para(`You can follow your order at any time using the button below.`),
-    button("Track your order", m.trackUrl),
-    rule(),
-    para(`With warmth,<br><span style="font-family:${SERIF};font-style:italic;font-size:17px;color:${STONE_900}">Ani</span>`),
+    infoNote(`Your print will now move into production. As soon as it is dispatched, you'll receive another email with shipping and tracking details.`),
+    button("View order", m.trackUrl),
   ].join("");
 
   const text =
 `Thank you, ${m.firstName}.
 
-Your fine art print has been received and is now being prepared for production. I'll keep you updated as it is produced and shipped.
+Your fine art print order has been received and is now being prepared for production.
+
+Each print is produced to order using archival materials and professional fine art printing standards.
+
+Item: Fine Art Print
+${m.materialCategoryLabel ? `Material: ${m.materialCategoryLabel}\n` : ""}${m.sizeLabel ? `Size: ${m.sizeLabel}\n` : ""}Quantity: ${m.quantity}
 
 Order: ${m.reference}
-Item: Fine Art Print
-${m.materialCategoryLabel ? `Material: ${m.materialCategoryLabel}\n` : ""}${m.sizeLabel ? `Size: ${m.sizeLabel}\n` : ""}${m.quantity > 1 ? `Quantity: ${m.quantity}\n` : ""}${m.total ? `Total paid: ${m.total}\n` : ""}Payment: Confirmed
-${m.destination ? `Shipping to: ${m.destination}\n` : ""}
-Your print is made to order and dispatched once ready. You'll get an email with tracking the moment it ships.
+${m.total ? `Total paid: ${m.total}\n` : ""}${m.destination ? `Shipping to: ${m.destination}\n` : ""}
+What happens next
+Your print will now move into production. As soon as it is dispatched, you'll receive another email with shipping and tracking details.
 
-Track your order: ${m.trackUrl}
-
-With warmth,
-Ani${textFooter()}`;
+View order: ${m.trackUrl}${textFooter()}`;
 
   return { subject: `Print order confirmed — ${subjectTitle(m)}`, html: layout(`Your fine art print order ${m.reference} is confirmed. Thank you.`, inner), text };
 }
