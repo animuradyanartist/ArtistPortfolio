@@ -24,6 +24,8 @@ import { quotePrintShipping } from "./printShipping";
 import { getPrintMasterRef, getVariant, getPrintMaster, cropFromRow } from "./adminPrintRepo";
 import { verifyMasterToken, readMasterStream, findMasterObjectKey } from "./masterStorage";
 import { getProdigiProduct } from "../prodigi/prodigiProducts";
+import { MATERIAL_CATEGORY, CATEGORY_LABEL, type PrintMaterial } from "@shared/commerce/prodigiProducts";
+import { isCheckoutConfigured } from "../stripeClient";
 import { cropExtractPx } from "@shared/commerce/printCrop";
 import sharp from "sharp";
 
@@ -169,7 +171,7 @@ export function registerPrintRoutes(app: Express): void {
       let quantity = Number(b.quantity);
       if (!Number.isFinite(quantity)) quantity = 1;
       quantity = Math.min(10, Math.max(1, Math.floor(quantity)));
-      if (!Number.isInteger(variantId) || variantId <= 0 || !/^[A-Z]{2}$/.test(country)) {
+      if (!Number.isInteger(variantId) || variantId <= 0) {
         return res.status(400).json({ available: false, reason: "bad-request" });
       }
 
@@ -180,6 +182,30 @@ export function registerPrintRoutes(app: Express): void {
       }
       const itemsMinor = resolveVariantPrice(resolved.variant, quantity);
       if (itemsMinor == null) return res.json({ available: false, reason: "unpriced" });
+
+      // SERVER-RESOLVED customer-facing display for the checkout/cart summary — safe fields only
+      // (no SKU, cost, margin, print-area pixels, master URL or storage key). The image is the
+      // public artwork URL, never the base64 storefront image.
+      const product = getProdigiProduct(resolved.variant.prodigiSku);
+      const display = {
+        title: resolved.print.title,
+        itemKind: "Fine Art Print" as const,
+        materialLabel: CATEGORY_LABEL[MATERIAL_CATEGORY[resolved.variant.material as PrintMaterial]] ?? resolved.variant.material,
+        sizeLabel: product?.displayName ?? resolved.variant.sizeLabel,
+        imageUrl: resolved.print.artworkId != null ? `/img/artwork/${resolved.print.artworkId}/0` : null,
+        unitMinor: resolveVariantPrice(resolved.variant, 1),
+        quantity,
+        itemsMinor,
+        currency: resolved.variant.currency,
+        checkoutEnabled: isCheckoutConfigured(),
+      };
+
+      res.set("Cache-Control", "no-store");
+      // No valid destination yet → return the display so the summary renders, but no shipping/total
+      // (fail-closed: the page cannot proceed to payment until a real quote exists).
+      if (!/^[A-Z]{2}$/.test(country)) {
+        return res.json({ available: false, reason: "no-country", ...display });
+      }
 
       const attributes: Record<string, string> = {};
       if (resolved.variant.framed && resolved.variant.frameColour) attributes.frameColour = resolved.variant.frameColour;
@@ -192,19 +218,13 @@ export function registerPrintRoutes(app: Express): void {
         ...(Object.keys(attributes).length ? { attributes } : {}),
       });
 
-      res.set("Cache-Control", "no-store");
       if (!quote.ok) {
         // Honest: we could not obtain a live shipping figure — the client shows a message, not a number.
-        return res.json({
-          available: false,
-          reason: quote.reason,
-          itemsMinor,
-          currency: resolved.variant.currency,
-        });
+        return res.json({ available: false, reason: quote.reason, ...display });
       }
       return res.json({
         available: true,
-        itemsMinor,
+        ...display,
         shippingMinor: quote.shippingMinor,
         totalMinor: itemsMinor + quote.shippingMinor,
         currency: quote.currency,

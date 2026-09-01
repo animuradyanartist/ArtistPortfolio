@@ -14,9 +14,21 @@ import {
   retainedSizeOnCategoryChange,
   materialCategoryLabel,
   sizeOptionLabel,
+  printCheckoutHref,
   type SelectorOption,
   type SizeOption,
 } from "./printSelector";
+
+describe("printCheckoutHref — Buy now / cart line → dedicated checkout, identifiers only", () => {
+  it("carries the variant id + quantity, and NO price", () => {
+    expect(printCheckoutHref(100, 2)).toBe("/checkout?variant=100&qty=2");
+    expect(printCheckoutHref(100, 2)).not.toMatch(/price|amount|minor|\$/i);
+  });
+  it("clamps quantity into 1..10", () => {
+    expect(printCheckoutHref(5, 0)).toBe("/checkout?variant=5&qty=1");
+    expect(printCheckoutHref(5, 99)).toBe("/checkout?variant=5&qty=10");
+  });
+});
 
 function opt(over: Partial<SelectorOption> = {}): SelectorOption {
   return { material: "german-etching", sizeLabel: "A3", framed: false, frameColour: null, state: "purchasable", ...over };

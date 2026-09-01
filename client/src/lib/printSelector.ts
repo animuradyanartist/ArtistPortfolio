@@ -115,6 +115,15 @@ function retail(minor: number, currency: string): string {
   }
 }
 
+/**
+ * The dedicated-checkout link for ONE print line — a variant identifier + quantity only. No price or
+ * fulfilment data ever travels in the URL; the server re-resolves everything authoritatively.
+ */
+export function printCheckoutHref(variantId: number, quantity: number): string {
+  const q = Math.min(10, Math.max(1, Math.floor(Number(quantity) || 1)));
+  return `/checkout?variant=${variantId}&qty=${q}`;
+}
+
 /** The dropdown option label: "A3 (29.7×42 cm) — $69". Dimensions/price are appended only when present. */
 export function sizeOptionLabel(o: SizeOption): string {
   const name = (o.sizeName && o.sizeName.trim()) || o.sizeLabel;

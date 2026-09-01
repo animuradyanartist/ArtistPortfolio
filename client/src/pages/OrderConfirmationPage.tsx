@@ -53,7 +53,11 @@ export default function OrderConfirmationPage() {
         currency: data.currency || "EUR",
         items: data.artwork?.id ? [{ id: data.artwork.id, title: data.artwork.title ?? "" }] : [],
       });
-      if (data.artwork?.id) cart.remove(data.artwork.id);
+      // Clear ONLY the purchased line, leaving the rest of the cart intact. A print snapshot carries
+      // `printVariantId`; an original snapshot carries `id`.
+      const snap = data.artwork as { id?: number; itemType?: string; printVariantId?: number } | null;
+      if (snap?.itemType === "print" && snap.printVariantId) cart.removePrint(Number(snap.printVariantId));
+      else if (snap?.id) cart.remove(snap.id);
     }
   }, [data, cart]);
 

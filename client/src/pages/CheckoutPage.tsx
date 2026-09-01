@@ -1,13 +1,15 @@
 /**
- * CHECKOUT — collect what is needed to send a crate, then hand off to Stripe.
+ * CHECKOUT — one dedicated page for BOTH an original artwork and a fine-art print.
  *
- * No card field appears anywhere in this file, or anywhere in this codebase. The form below
- * collects a name and an address; payment happens on Stripe's own page, which is why card
- * data never touches this server and why PCI scope stays where it belongs.
+ * No card field appears anywhere in this file, or anywhere in this codebase. The form collects a
+ * name and an address; payment happens on Stripe's own page, which is why card data never touches
+ * this server and why PCI scope stays where it belongs.
  *
- * The totals shown are recomputed by the server as the country changes, and recomputed AGAIN
- * — from fresh rows — inside the checkout request. What is displayed here is a preview of the
- * server's answer, never the input to it.
+ * ONE ITEM PER CHECKOUT (the backend is one-item-per-order by design). The item is identified by the
+ * URL — `?artwork=<id>` for an original, or `?variant=<id>&qty=<n>` for a print — and NOTHING about
+ * price or fulfilment travels in the URL. The summary and the charge are BOTH resolved by the server:
+ * what is shown here is a preview of the server's answer, never the input to it. A tampered
+ * client-side price cannot change what is charged.
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
@@ -19,24 +21,47 @@ import { readAttribution, trackBeginCheckout } from "@/lib/commerceAnalytics";
 
 const REGION_REQUIRED = new Set(["US", "CA", "AU"]);
 
+function money(minor: number, currency: string): string {
+  try { return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(minor / 100); }
+  catch { return `${(minor / 100).toFixed(2)} ${currency}`; }
+}
+
+interface OriginalValidate {
+  checkoutEnabled: boolean;
+  items: Array<{ id: number; title: string; dimensions: string; imageUrl: string; priceFormatted: string | null; purchasable: boolean }>;
+  totals: null | { ok: true; itemsFormatted: string; shippingFormatted: string; totalFormatted: string; shippingEstimated: boolean; dutiesMayApply: boolean; totalMinor: number; shippingMinor: number; currency: string } | { ok: false };
+}
+interface PrintQuote {
+  available: boolean; reason?: string; checkoutEnabled?: boolean;
+  title: string; itemKind: string; materialLabel: string; sizeLabel: string; imageUrl: string | null;
+  unitMinor: number | null; quantity: number; itemsMinor: number; currency: string;
+  shippingMinor?: number; totalMinor?: number;
+}
+
 export default function CheckoutPage() {
   const search = useSearch();
   const [, navigate] = useLocation();
   const cart = useCart();
-  const artworkId = Number.parseInt(new URLSearchParams(search).get("artwork") ?? "", 10);
+  const params = new URLSearchParams(search);
+  const artworkId = Number.parseInt(params.get("artwork") ?? "", 10);
+  const variantId = Number.parseInt(params.get("variant") ?? "", 10);
+  const qtyRaw = Number.parseInt(params.get("qty") ?? "1", 10);
+  const quantity = Number.isInteger(qtyRaw) ? Math.min(10, Math.max(1, qtyRaw)) : 1;
+  const isPrint = Number.isInteger(variantId) && variantId > 0;
+  const isOriginal = !isPrint && Number.isInteger(artworkId) && artworkId > 0;
 
   const [country, setCountry] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", address1: "", address2: "", city: "", region: "", postalCode: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", address1: "", address2: "", city: "", region: "", postalCode: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => { setCountry(displayCountry(cart.country)); }, [cart.country]);
 
-  const { data } = useQuery<{ checkoutEnabled: boolean; items: Array<{ id: number; title: string; dimensions: string; imageUrl: string; priceFormatted: string | null; purchasable: boolean }>;
-    totals: null | { ok: true; itemsFormatted: string; shippingFormatted: string; totalFormatted: string; shippingEstimated: boolean; dutiesMayApply: boolean; totalMinor: number; shippingMinor: number; currency: string } | { ok: false } }>({
+  // ── ORIGINAL: validate + price via the cart endpoint ──
+  const originalQ = useQuery<OriginalValidate>({
     queryKey: ["/api/commerce/cart/validate", artworkId, country],
-    enabled: Number.isInteger(artworkId) && Boolean(country),
+    enabled: isOriginal && Boolean(country),
     queryFn: async () => {
       const r = await fetch("/api/commerce/cart/validate", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -47,16 +72,58 @@ export default function CheckoutPage() {
     },
   });
 
-  const item = data?.items?.[0];
-  const totals = data?.totals && "ok" in data.totals && data.totals.ok ? data.totals : null;
+  // ── PRINT: server-resolved display + shipping via the print quote endpoint (fail-closed) ──
+  const printQ = useQuery<PrintQuote>({
+    queryKey: ["/api/commerce/prints/quote", variantId, quantity, country],
+    enabled: isPrint,
+    queryFn: async () => {
+      const r = await fetch("/api/commerce/prints/quote", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId, quantity, country: country ?? "" }),
+      });
+      if (!r.ok) throw new Error("quote failed");
+      return r.json();
+    },
+  });
 
-  const begun = useMemo(() => ({ done: false }), [artworkId]);
-  useEffect(() => {
-    if (item && totals && !begun.done) {
-      begun.done = true;
-      trackBeginCheckout([{ id: item.id, title: item.title }], totals.totalMinor, totals.currency);
+  // A single normalised summary the aside renders, whichever kind this is.
+  const summary = useMemo(() => {
+    if (isPrint) {
+      const d = printQ.data;
+      if (!d || !d.title) return null;
+      return {
+        kind: "print" as const, title: d.title, imageUrl: d.imageUrl, dimensions: null as string | null,
+        itemKind: "Fine Art Print", materialLabel: d.materialLabel, sizeLabel: d.sizeLabel, quantity: d.quantity,
+        itemsFormatted: d.itemsMinor != null ? money(d.itemsMinor, d.currency) : null,
+        shippingFormatted: d.shippingMinor != null ? money(d.shippingMinor, d.currency) : null,
+        totalFormatted: d.totalMinor != null ? money(d.totalMinor, d.currency) : null,
+        shippingEstimated: false, dutiesMayApply: true,
+        ready: d.available === true, totalMinor: d.totalMinor ?? null, currency: d.currency,
+      };
     }
-  }, [item, totals, begun]);
+    const item = originalQ.data?.items?.[0];
+    const totals = originalQ.data?.totals && "ok" in originalQ.data.totals && originalQ.data.totals.ok ? originalQ.data.totals : null;
+    if (!item) return null;
+    return {
+      kind: "original" as const, title: item.title, imageUrl: item.imageUrl, dimensions: item.dimensions,
+      itemKind: "Original artwork", materialLabel: null as string | null, sizeLabel: null as string | null, quantity: 1,
+      itemsFormatted: totals?.itemsFormatted ?? null,
+      shippingFormatted: totals?.shippingFormatted ?? null,
+      totalFormatted: totals?.totalFormatted ?? null,
+      shippingEstimated: Boolean(totals?.shippingEstimated), dutiesMayApply: Boolean(totals?.dutiesMayApply),
+      ready: Boolean(totals), totalMinor: totals?.totalMinor ?? null, currency: totals?.currency ?? "EUR",
+    };
+  }, [isPrint, printQ.data, originalQ.data]);
+
+  const checkoutEnabled = isPrint ? printQ.data?.checkoutEnabled : originalQ.data?.checkoutEnabled;
+
+  const begun = useMemo(() => ({ done: false }), [artworkId, variantId]);
+  useEffect(() => {
+    if (summary?.ready && summary.totalMinor != null && !begun.done) {
+      begun.done = true;
+      trackBeginCheckout([{ id: isPrint ? variantId : artworkId, title: summary.title }], summary.totalMinor, summary.currency);
+    }
+  }, [summary, begun, isPrint, variantId, artworkId]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -64,23 +131,33 @@ export default function CheckoutPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true); setFailure(null); setErrors({});
+    // The server owns validation; we send name as a single field (buyer_name is one column) and let
+    // the server be the rule. Phone is optional end-to-end.
+    const buyer = {
+      name: `${form.firstName} ${form.lastName}`.trim(),
+      email: form.email, phone: form.phone, country,
+      address1: form.address1, address2: form.address2, city: form.city, region: form.region, postalCode: form.postalCode,
+    };
     try {
+      const payload = isPrint
+        ? { print: { variantId, quantity }, buyer, attribution: { ...(readAttribution() ?? {}), printPath: `/prints` } }
+        : { artworkIds: [artworkId], buyer, attribution: { ...(readAttribution() ?? {}), artworkPath: `/artworks/${artworkId}` } };
       const r = await fetch("/api/commerce/checkout", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          artworkIds: [artworkId],
-          buyer: { ...form, country },
-          attribution: { ...(readAttribution() ?? {}), artworkPath: `/artworks/${artworkId}` },
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
       const body = await r.json().catch(() => ({}));
       if (r.ok && body.url) {
-        // Leaving for Stripe. The cart entry is cleared on the confirmation page, not here —
-        // an abandoned payment must not lose the work from the cart.
+        // Leaving for Stripe. The cart line is cleared on the confirmation page, not here — an
+        // abandoned payment must not lose the item from the cart.
         window.location.href = body.url as string;
         return;
       }
-      if (body.errors) setErrors(body.errors as Record<string, string>);
+      // Server errors are keyed by `name/email/…`; map the single `name` error onto both name fields.
+      if (body.errors) {
+        const errs = body.errors as Record<string, string>;
+        if (errs.name) { errs.firstName = errs.name; }
+        setErrors(errs);
+      }
       setFailure((body.message as string) ?? "Checkout could not be started.");
     } catch {
       setFailure("Checkout could not be started. Nothing has been charged.");
@@ -89,9 +166,8 @@ export default function CheckoutPage() {
     }
   };
 
-  // Nobody should reach this page with payment unconfigured, but a pasted URL does not know
-  // that. The form is not rendered at all rather than collecting an address it cannot use.
-  if (data && data.checkoutEnabled === false) {
+  // Payment unconfigured (a pasted URL cannot know that) → collect no address it cannot use.
+  if (checkoutEnabled === false) {
     return (
       <Shell>
         <p className="text-stone-700 max-w-prose leading-relaxed">
@@ -103,8 +179,8 @@ export default function CheckoutPage() {
     );
   }
 
-  if (!Number.isInteger(artworkId)) {
-    return <Shell><p className="text-stone-600">No work selected. <Link href="/artworks" className="border-b border-stone-400">Browse the paintings</Link>.</p></Shell>;
+  if (!isPrint && !isOriginal) {
+    return <Shell><p className="text-stone-600">No item selected. <Link href="/prints" className="border-b border-stone-400">Browse the prints</Link> or the <Link href="/artworks" className="border-b border-stone-400">paintings</Link>.</p></Shell>;
   }
 
   return (
@@ -113,11 +189,10 @@ export default function CheckoutPage() {
         <form onSubmit={submit} className="space-y-6" noValidate>
           <h2 className="font-playfair text-2xl text-stone-900">Where should it go?</h2>
 
-          <Field label="Full name" value={form.name} onChange={set("name")} error={errors.name} autoComplete="name" />
+          <Field label="Email" type="email" value={form.email} onChange={set("email")} error={errors.email} autoComplete="email" />
           <div className="grid gap-6 sm:grid-cols-2">
-            <Field label="Email" type="email" value={form.email} onChange={set("email")} error={errors.email} autoComplete="email" />
-            <Field label="Phone" value={form.phone} onChange={set("phone")} error={errors.phone} autoComplete="tel"
-              hint="The courier needs this to arrange delivery." />
+            <Field label="First name" value={form.firstName} onChange={set("firstName")} error={errors.firstName} autoComplete="given-name" />
+            <Field label="Last name" value={form.lastName} onChange={set("lastName")} error={errors.lastName} autoComplete="family-name" />
           </div>
 
           <div>
@@ -139,39 +214,56 @@ export default function CheckoutPage() {
             )}
             <Field label="Postal code" value={form.postalCode} onChange={set("postalCode")} error={errors.postalCode} autoComplete="postal-code" />
           </div>
+          <Field label="Phone (optional)" value={form.phone} onChange={set("phone")} error={errors.phone} autoComplete="tel"
+            hint="Optional — only used if the courier needs to reach you about delivery." />
 
           {failure && <p className="text-sm text-red-700 bg-red-50 px-3 py-2 rounded">{failure}</p>}
 
-          <button type="submit" disabled={submitting || !totals}
+          <button type="submit" disabled={submitting || !summary?.ready}
             className="inline-block bg-stone-900 text-stone-50 px-8 py-3 text-[11px] tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors disabled:opacity-50">
             {submitting ? "Taking you to payment…" : "Continue to payment"}
           </button>
+          {!summary?.ready && country && (
+            <p className="text-xs text-stone-500">We couldn't get a live shipping quote to that destination. Please try another address or contact us.</p>
+          )}
           <p className="text-xs text-stone-500">Payment is handled by Stripe. Your card details never reach this website.</p>
         </form>
 
         <aside className="lg:border-l lg:border-stone-300 lg:pl-10">
-          {item && (
+          {summary && (
             <>
-              <div className="aspect-[3/2] overflow-hidden bg-stone-200/60 mb-4">
-                <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
-              </div>
-              <h3 className="font-playfair text-xl text-stone-900">{item.title}</h3>
-              <p className="text-sm text-stone-600 mb-6">{item.dimensions}</p>
+              {summary.imageUrl && (
+                <div className="aspect-[3/2] overflow-hidden bg-stone-200/60 mb-4">
+                  <img src={summary.imageUrl} alt={summary.title} className="w-full h-full object-cover" />
+                </div>
+              )}
+              <p className="text-[11px] tracking-[0.2em] uppercase text-stone-500">{summary.itemKind}</p>
+              <h3 className="font-playfair text-xl text-stone-900 mt-1">{summary.title}</h3>
+              {summary.kind === "original" && summary.dimensions && (
+                <p className="text-sm text-stone-600 mb-6">{summary.dimensions}</p>
+              )}
+              {summary.kind === "print" && (
+                <p className="text-sm text-stone-600 mb-6">{summary.materialLabel} · {summary.sizeLabel}{summary.quantity > 1 ? ` · Qty ${summary.quantity}` : ""}</p>
+              )}
             </>
           )}
-          {totals && (
+          {summary?.ready ? (
             <dl className="space-y-3 border-t border-stone-300 pt-4">
-              <Line label="Work" value={totals.itemsFormatted} />
-              <Line label={totals.shippingEstimated ? "Estimated shipping" : "Shipping"} value={totals.shippingFormatted} />
-              <div className="border-t border-stone-300 pt-3"><Line label="Total" value={totals.totalFormatted} strong /></div>
-              {totals.dutiesMayApply && (
+              <Line label={summary.kind === "print" ? "Print" : "Work"} value={summary.itemsFormatted ?? ""} />
+              <Line label={summary.shippingEstimated ? "Estimated shipping" : "Shipping"} value={summary.shippingFormatted ?? ""} />
+              <div className="border-t border-stone-300 pt-3"><Line label="Total" value={summary.totalFormatted ?? ""} strong /></div>
+              {summary.dutiesMayApply && (
                 <p className="text-xs text-stone-500 leading-relaxed pt-2">
-                  Import duties or taxes charged by your country are not included and are payable
-                  on delivery.
+                  Import duties or taxes charged by your country are not included and are payable on delivery.
                 </p>
               )}
             </dl>
-          )}
+          ) : summary ? (
+            <div className="border-t border-stone-300 pt-4">
+              {summary.itemsFormatted && <Line label={summary.kind === "print" ? "Print" : "Work"} value={summary.itemsFormatted} />}
+              <p className="text-xs text-stone-500 mt-3">Choose your country to see shipping and the total.</p>
+            </div>
+          ) : null}
         </aside>
       </div>
     </Shell>

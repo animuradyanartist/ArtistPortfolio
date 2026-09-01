@@ -38,8 +38,11 @@ export function validateBuyer(body: unknown): Validated<BuyerDetails> {
 
   if (name.length < 2 || name.length > 120) errors.name = "Please give your full name.";
   if (!EMAIL.test(email) || email.length > 200) errors.email = "Please give a valid email address.";
-  // A courier needs a number to arrange delivery of a crate; this is not marketing data.
-  if (phone.replace(/[^\d]/g, "").length < 6) errors.phone = "Please give a phone number the courier can use.";
+  // Phone is OPTIONAL — neither Prodigi (it sends phoneNumber only when present) nor our own
+  // shipping requires it, and Etsy-style guest checkout does not collect it. If a buyer DOES give a
+  // number we sanity-check it isn't junk; a blank phone is always accepted.
+  if (phone && phone.replace(/[^\d]/g, "").length < 6) errors.phone = "That phone number looks too short — leave it blank if you'd rather not give one.";
+  if (phone.length > 40) errors.phone = "That phone number is too long.";
   if (!country || !zoneFor(country)) errors.country = "Please choose a destination we can ship to.";
   if (address1.length < 3 || address1.length > 200) errors.address1 = "Please give a street address.";
   if (city.length < 1 || city.length > 120) errors.city = "Please give a city.";
