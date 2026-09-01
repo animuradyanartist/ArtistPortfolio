@@ -6,6 +6,13 @@ import path from "node:path";
 // The @shared / @ aliases mirror tsconfig paths so tests can import the shared
 // helper and the client seo module (for the artworkPath regression test).
 export default defineConfig({
+  // The client .test.tsx files render components with react-dom/server, so their
+  // JSX must be transpiled. Vitest's bundled (rolldown) Vite transpiles JSX with
+  // oxc; point it at React's automatic runtime so .tsx suites compile. The `node`
+  // environment is kept because renderToStaticMarkup needs no DOM.
+  oxc: {
+    jsx: { runtime: "automatic", importSource: "react" },
+  },
   resolve: {
     alias: {
       "@shared": path.resolve(import.meta.dirname, "shared"),
@@ -14,7 +21,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["shared/**/*.test.ts", "server/**/*.test.ts", "client/src/**/*.test.ts"],
+    include: ["shared/**/*.test.{ts,tsx}", "server/**/*.test.{ts,tsx}", "client/src/**/*.test.{ts,tsx}"],
     // The two singulart suites are written against `node:test`, not Vitest, so Vitest
     // finds no suite in them and fails the run. They are excluded here rather than
     // rewritten — they still run under `node --test` — and the header comment above was

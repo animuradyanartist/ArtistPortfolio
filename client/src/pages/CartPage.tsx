@@ -28,6 +28,7 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart";
+import { printCheckoutHref } from "@/lib/printSelector";
 import { Eyebrow } from "@/components/editorial";
 import { countryOptions, displayCountry } from "@/lib/countries";
 
@@ -70,16 +71,64 @@ export default function CartPage() {
         <Eyebrow>Your selection</Eyebrow>
         <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-10">Cart</h1>
 
-        {cart.ids.length === 0 ? (
+        {cart.ids.length === 0 && cart.prints.length === 0 ? (
           <p className="text-stone-600">
             Nothing here yet.{" "}
-            <Link href="/artworks" className="border-b border-stone-400 hover:border-stone-800">Browse the paintings</Link>.
+            <Link href="/prints" className="border-b border-stone-400 hover:border-stone-800">Browse the prints</Link>{" "}
+            or the <Link href="/artworks" className="border-b border-stone-400 hover:border-stone-800">paintings</Link>.
           </p>
-        ) : isLoading ? (
-          <p className="text-stone-500">Checking availability…</p>
         ) : (
           <>
-            <ul className="border-t border-stone-300">
+            {/* ── FINE ART PRINTS — each line is checked out and paid on its own (one order per line). ── */}
+            {cart.prints.length > 0 && (
+              <section className="mb-12">
+                <h2 className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-2">Fine art prints</h2>
+                <ul className="border-t border-stone-300">
+                  {cart.prints.map((l) => (
+                    <li key={l.variantId} className="flex gap-6 border-b border-stone-300 py-6">
+                      <div className="shrink-0 w-24 h-24 overflow-hidden bg-stone-200/60">
+                        {l.imageUrl ? <img src={l.imageUrl} alt={l.title} className="w-full h-full object-cover" /> : null}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-playfair text-xl text-stone-900">{l.title}</h3>
+                        <p className="text-sm text-stone-600 mt-1">Fine Art Print · {l.materialLabel} · {l.sizeLabel}</p>
+                        <div className="flex items-center gap-3 mt-3">
+                          <span className="text-[11px] tracking-[0.2em] uppercase text-stone-500">Qty</span>
+                          <div className="inline-flex items-center border border-stone-300">
+                            <button aria-label="Decrease quantity" onClick={() => cart.setPrintQuantity(l.variantId, l.quantity - 1)} disabled={l.quantity <= 1} className="px-3 py-1.5 text-stone-700 hover:bg-stone-100 disabled:opacity-40">−</button>
+                            <span className="px-3 tabular-nums">{l.quantity}</span>
+                            <button aria-label="Increase quantity" onClick={() => cart.setPrintQuantity(l.variantId, l.quantity + 1)} disabled={l.quantity >= 10} className="px-3 py-1.5 text-stone-700 hover:bg-stone-100 disabled:opacity-40">+</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 flex flex-col items-end">
+                        <p className="text-sm text-stone-900 tabular-nums">{money(l.unitPriceMinor, l.currency)}</p>
+                        {l.quantity > 1 && <p className="text-xs text-stone-500 tabular-nums mt-0.5">Subtotal {money(l.unitPriceMinor * l.quantity, l.currency)}</p>}
+                        <Link href={printCheckoutHref(l.variantId, l.quantity)}
+                          className="mt-3 inline-block bg-stone-900 text-stone-50 px-5 py-2 text-[11px] tracking-[0.18em] uppercase hover:bg-stone-700 transition-colors">
+                          Check out this item
+                        </Link>
+                        <button onClick={() => cart.removePrint(l.variantId)}
+                          className="mt-3 text-[11px] tracking-[0.18em] uppercase text-stone-500 hover:text-stone-800 border-b border-transparent hover:border-stone-400">
+                          Remove
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-stone-500 leading-relaxed pt-3">
+                  Each item is checked out and paid on its own. Prices shown are indicative — shipping and the final total are quoted for your destination at checkout.
+                </p>
+              </section>
+            )}
+
+            {/* ── ORIGINAL ARTWORKS — one-of-one, one order per work (server-revalidated). ── */}
+            {cart.ids.length > 0 && (isLoading ? (
+              <p className="text-stone-500">Checking availability…</p>
+            ) : (
+              <>
+                {cart.prints.length > 0 && <h2 className="text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-2">Original artworks</h2>}
+                <ul className="border-t border-stone-300">
               {data?.items.map((item) => (
                 <li key={item.id} className="flex gap-6 border-b border-stone-300 py-6">
                   <Link href={`/artworks/${item.id}`} className="shrink-0 w-24 h-24 overflow-hidden bg-stone-200/60">
@@ -153,11 +202,18 @@ export default function CartPage() {
                 </p>
               )}
             </div>
+              </>
+            ))}
           </>
         )}
       </div>
     </div>
   );
+}
+
+function money(minor: number, currency: string): string {
+  try { return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(minor / 100); }
+  catch { return `${(minor / 100).toFixed(2)} ${currency}`; }
 }
 
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {

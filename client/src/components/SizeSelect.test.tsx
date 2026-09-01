@@ -52,7 +52,10 @@ describe("SizeSelect — one dropdown, never size buttons", () => {
     const html = render(CANVAS);
     expect(html).toContain("16×20 in (40.6×50.8 cm) — $129");
     expect(html).toContain("24×36 in (61×91.4 cm) — $189");
-    expect(html).not.toMatch(/GLOBAL-|wrap|MirrorWrap|px\b|SKU/i);
+    // "px" here guards against a pixel *dimension* leaking into a label (e.g. "600px"),
+    // so it requires a digit before "px" — the bare `px\b` also matched the Tailwind
+    // `px-3` padding utility on the <select>, which is styling, not shown content.
+    expect(html).not.toMatch(/GLOBAL-|wrap|MirrorWrap|\d\s*px\b|SKU/i);
   });
 
   it("marks the current value as selected in the closed state", () => {

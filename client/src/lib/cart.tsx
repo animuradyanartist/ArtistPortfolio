@@ -12,16 +12,27 @@
  * the same as adding it once, so there is no quantity to display and no +/- control to build.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { addPrintLine, removePrintLine, setPrintLineQty, cartCount, type PrintCartLine } from "./cartLines";
+
+export type { PrintCartLine } from "./cartLines";
 
 const STORAGE_KEY = "am.cart.v1";
+const PRINTS_KEY = "am.cart.prints.v1";
 const COUNTRY_KEY = "am.cart.country.v1";
 
 interface CartState {
+  // ── originals (quantity-one; a Set of artwork ids) ──
   ids: number[];
-  count: number;
   has: (id: number) => boolean;
   add: (id: number) => void;
   remove: (id: number) => void;
+  // ── prints (variant + quantity) ──
+  prints: PrintCartLine[];
+  addPrint: (line: PrintCartLine) => void;
+  removePrint: (variantId: number) => void;
+  setPrintQuantity: (variantId: number, quantity: number) => void;
+  // ── shared ──
+  count: number;           // originals + total print quantity
   clear: () => void;
   country: string | null;
   setCountry: (c: string) => void;
@@ -41,12 +52,26 @@ function readIds(): number[] {
   } catch { return []; }
 }
 
+function readPrints(): PrintCartLine[] {
+  try {
+    const raw = localStorage.getItem(PRINTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    // Defensive on read: keep only well-formed lines; clamp quantity to 1..10.
+    return parsed
+      .filter((l): l is PrintCartLine => Boolean(l) && Number.isInteger((l as PrintCartLine).variantId) && (l as PrintCartLine).variantId > 0)
+      .map((l) => ({ ...l, quantity: Math.min(10, Math.max(1, Math.floor(Number(l.quantity) || 1))) }));
+  } catch { return []; }
+}
+
 function readCountry(): string | null {
   try { return localStorage.getItem(COUNTRY_KEY); } catch { return null; }
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [ids, setIds] = useState<number[]>([]);
+  const [prints, setPrints] = useState<PrintCartLine[]>([]);
   // KNOWN ON THE FIRST RENDER, because something asks for a shipping quote on it.
   //
   // This was read in the mount effect with the ids. That is right for the ids — the cart
@@ -61,11 +86,41 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // client paint agree.
   useEffect(() => {
     setIds(readIds());
+    setPrints(readPrints());
   }, []);
 
   const persist = useCallback((next: number[]) => {
     setIds(next);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* quota or private mode */ }
+  }, []);
+
+  const persistPrints = useCallback((next: PrintCartLine[]) => {
+    setPrints(next);
+    try { localStorage.setItem(PRINTS_KEY, JSON.stringify(next)); } catch { /* quota or private mode */ }
+  }, []);
+
+  const addPrint = useCallback((line: PrintCartLine) => {
+    setPrints((prev) => {
+      const next = addPrintLine(prev, line);
+      try { localStorage.setItem(PRINTS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const removePrint = useCallback((variantId: number) => {
+    setPrints((prev) => {
+      const next = removePrintLine(prev, variantId);
+      try { localStorage.setItem(PRINTS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const setPrintQuantity = useCallback((variantId: number, quantity: number) => {
+    setPrints((prev) => {
+      const next = setPrintLineQty(prev, variantId, quantity);
+      try { localStorage.setItem(PRINTS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
   }, []);
 
   const add = useCallback((id: number) => {
@@ -85,7 +140,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const clear = useCallback(() => persist([]), [persist]);
+  const clear = useCallback(() => { persist([]); persistPrints([]); }, [persist, persistPrints]);
 
   const setCountry = useCallback((c: string) => {
     setCountryState(c);
@@ -93,9 +148,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<CartState>(() => ({
-    ids, count: ids.length, has: (id) => ids.includes(id),
-    add, remove, clear, country, setCountry,
-  }), [ids, add, remove, clear, country, setCountry]);
+    ids, has: (id) => ids.includes(id), add, remove,
+    prints, addPrint, removePrint, setPrintQuantity,
+    count: cartCount(ids, prints),
+    clear, country, setCountry,
+  }), [ids, add, remove, prints, addPrint, removePrint, setPrintQuantity, clear, country, setCountry]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

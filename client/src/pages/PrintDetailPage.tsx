@@ -13,7 +13,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Eyebrow } from "@/components/editorial";
-import { countryOptions } from "@/lib/countries";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 import { type PrintCategory } from "@shared/commerce/prodigiProducts";
 import {
@@ -23,13 +22,14 @@ import {
   seedSelection,
   retainedSizeOnCategoryChange,
   materialCategoryLabel,
+  printCheckoutHref,
 } from "@/lib/printSelector";
 import { SizeSelect } from "@/components/SizeSelect";
+import { useCart } from "@/lib/cart";
+import { useToast } from "@/hooks/use-toast";
 import {
-  readAttribution,
   trackViewItemPrint,
   trackSelectItemPrint,
-  trackBeginCheckoutPrint,
 } from "@/lib/commerceAnalytics";
 
 interface Option {
@@ -67,7 +67,6 @@ interface PrintDetail {
   options: Option[];
 }
 
-const REGION_REQUIRED = new Set(["US", "CA", "AU"]);
 
 function money(minor: number, currency: string): string {
   try {
@@ -277,7 +276,7 @@ export default function PrintDetailPage() {
               <p className="text-stone-600 text-sm">That size isn’t available. Please choose another.</p>
             )}
             {selected && selected.state === "purchasable" && selected.priceMinor != null && (
-              <PurchasableBlock detail={data} option={selected} navigate={navigate} />
+              <BuyBlock detail={data} option={selected} navigate={navigate} />
             )}
             {selected && selected.state === "preview" && selected.priceMinor != null && (
               <PreviewBlock option={selected} />
@@ -308,176 +307,68 @@ export default function PrintDetailPage() {
 }
 
 /**
- * A live shipping quote for the chosen variant + destination. `idle` before a destination is known
- * (we show "calculated at checkout", never a fake number); `ok` with a real Prodigi figure; or
- * `unavailable` when Prodigi cannot quote yet — still no fabricated amount.
+ * BUY BLOCK — the print PDP purchase actions. NO address/shipping form appears here (that awkward
+ * inline flow is gone): the customer picks a quantity, then either ADDS TO CART (stays on the page,
+ * keeps browsing) or BUYS NOW (→ the dedicated /checkout page). Only safe identifiers/display metadata
+ * are stored in the cart; the server re-resolves the authoritative price + shipping at checkout.
  */
-type ShipQuote =
-  | { status: "idle" | "loading" | "unavailable" }
-  | { status: "ok"; shippingMinor: number; totalMinor: number; currency: string };
-
-function PurchasableBlock({ detail, option, navigate }: {
-  detail: PrintDetail; option: Option; navigate: (to: string) => void;
-}) {
-  const [buying, setBuying] = useState(false);
+function BuyBlock({ detail, option, navigate }: { detail: PrintDetail; option: Option; navigate: (to: string) => void }) {
+  const cart = useCart();
+  const { toast } = useToast();
   const [qty, setQty] = useState(1);
-  const [country, setCountry] = useState("DE");
-  const [form, setForm] = useState({ name: "", email: "", phone: "", address1: "", address2: "", city: "", region: "", postalCode: "" });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const [ship, setShip] = useState<ShipQuote>({ status: "idle" });
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const inCart = option.id != null && cart.prints.some((l) => l.variantId === option.id);
 
-  // Fetch a REAL shipping quote once a destination is known (the form is open + a country chosen).
-  // Debounced; the server calls Prodigi. On any failure we fall back to "calculated at checkout" —
-  // shipping truly depends on destination, so we never show a number we didn't get from the provider.
-  useEffect(() => {
-    if (!buying || option.id == null || !country) { setShip({ status: "idle" }); return; }
-    let cancelled = false;
-    setShip({ status: "loading" });
-    const t = setTimeout(async () => {
-      try {
-        const r = await fetch("/api/commerce/prints/quote", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ variantId: option.id, quantity: qty, country }),
-        });
-        const b = await r.json().catch(() => ({}));
-        if (cancelled) return;
-        if (r.ok && b.available && typeof b.shippingMinor === "number") {
-          setShip({ status: "ok", shippingMinor: b.shippingMinor, totalMinor: b.totalMinor, currency: b.currency ?? option.currency });
-        } else {
-          setShip({ status: "unavailable" });
-        }
-      } catch {
-        if (!cancelled) setShip({ status: "unavailable" });
-      }
-    }, 350);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [buying, option.id, country, qty, option.currency]);
+  const sizeText = option.sizeName
+    ? `${option.sizeName}${option.widthCm && option.heightCm ? ` (${option.widthCm}×${option.heightCm} cm)` : ""}`
+    : option.sizeLabel;
+  const materialLabel = materialCategoryLabel(categoryOfMaterial(option.material));
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true); setFailure(null); setErrors({});
-    trackBeginCheckoutPrint(
-      {
-        id: detail.id, title: detail.title, priceMinor: option.priceMinor, currency: option.currency,
-        printProductId: detail.id, printVariantId: option.id ?? undefined, artworkId: detail.artworkId,
-        material: option.material, size: option.sizeLabel,
-        frame: frameLabel(frameKeyOf(option)), quantity: qty,
-      },
-      (option.priceMinor ?? 0) * qty, option.currency,
-    );
-    try {
-      const r = await fetch("/api/commerce/checkout", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          print: { variantId: option.id, quantity: qty },
-          buyer: { ...form, country },
-          attribution: { ...(readAttribution() ?? {}), printPath: `/prints/${detail.slug}` },
-        }),
-      });
-      const body = await r.json().catch(() => ({}));
-      if (r.ok && body.url) { window.location.href = body.url as string; return; }
-      if (body.errors) setErrors(body.errors as Record<string, string>);
-      setFailure((body.message as string) ?? "Checkout could not be started.");
-    } catch {
-      setFailure("Checkout could not be started. Nothing has been charged.");
-    } finally {
-      setSubmitting(false);
-    }
+  const addToCart = () => {
+    if (option.id == null || option.priceMinor == null) return;
+    cart.addPrint({
+      variantId: option.id, quantity: qty, title: detail.title,
+      materialLabel, sizeLabel: sizeText, unitPriceMinor: option.priceMinor, currency: option.currency,
+      imageUrl: detail.artworkId != null ? `/img/artwork/${detail.artworkId}/0` : "",
+    });
+    toast({ title: "Added to cart", description: `${detail.title} · ${materialLabel} · ${sizeText}` });
+  };
+  const buyNow = () => {
+    if (option.id == null) return;
+    navigate(printCheckoutHref(option.id, qty));
   };
 
-  if (!buying) {
-    return (
-      <div>
-        <p className="font-playfair text-3xl text-stone-900 mb-1 tabular-nums">
-          {money(option.priceMinor!, option.currency)}
-        </p>
-        <p className="text-xs text-stone-500 mb-4">
-          Printed to order · ships worldwide · shipping calculated at checkout{option.effectiveDpi ? ` · ${option.effectiveDpi} DPI` : ""}
-        </p>
-        <button
-          onClick={() => setBuying(true)}
-          className="inline-block bg-stone-900 text-stone-50 px-8 py-3 text-[11px] tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors"
-        >
-          Buy this print
+  return (
+    <div>
+      <p className="font-playfair text-3xl text-stone-900 mb-1 tabular-nums">{money(option.priceMinor!, option.currency)}</p>
+      <p className="text-xs text-stone-500 mb-5">Printed to order · ships worldwide · shipping calculated at checkout{option.effectiveDpi ? ` · ${option.effectiveDpi} DPI` : ""}</p>
+
+      <div className="flex items-center gap-3 mb-5">
+        <span className="text-[11px] tracking-[0.2em] uppercase text-stone-500">Quantity</span>
+        <div className="inline-flex items-center border border-stone-300">
+          <button type="button" aria-label="Decrease quantity" onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-3 py-2 text-stone-700 hover:bg-stone-100 disabled:opacity-40" disabled={qty <= 1}>−</button>
+          <span className="px-4 tabular-nums" aria-live="polite">{qty}</span>
+          <button type="button" aria-label="Increase quantity" onClick={() => setQty((q) => Math.min(10, q + 1))} className="px-3 py-2 text-stone-700 hover:bg-stone-100 disabled:opacity-40" disabled={qty >= 10}>+</button>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        {/* Primary: Add to cart. Secondary: Buy now. */}
+        <button type="button" onClick={addToCart}
+          className="flex-1 bg-stone-900 text-stone-50 px-6 py-3 text-[11px] tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors">
+          {inCart ? "Add another" : "Add to cart"}
+        </button>
+        <button type="button" onClick={buyNow}
+          className="flex-1 border border-stone-800 text-stone-900 px-6 py-3 text-[11px] tracking-[0.2em] uppercase hover:bg-stone-900 hover:text-white transition-colors">
+          Buy now
         </button>
       </div>
-    );
-  }
-
-  const printMinor = (option.priceMinor ?? 0) * qty;
-
-  return (
-    <form onSubmit={submit} className="space-y-5" noValidate>
-      <div className="flex items-start justify-between gap-4">
-        {/* Print / Shipping / Total — shipping is a REAL Prodigi quote to the chosen country; until
-            a destination resolves we say "calculated at checkout" rather than invent a figure. */}
-        <div className="space-y-1 text-sm">
-          <div className="flex items-baseline gap-3">
-            <span className="text-stone-500 w-16">Print</span>
-            <span className="text-stone-900 tabular-nums">{money(printMinor, option.currency)}</span>
-          </div>
-          <div className="flex items-baseline gap-3">
-            <span className="text-stone-500 w-16">Shipping</span>
-            <span className="text-stone-900 tabular-nums">
-              {ship.status === "ok"
-                ? money(ship.shippingMinor, ship.currency)
-                : ship.status === "loading"
-                  ? "Calculating…"
-                  : <span className="text-stone-500">Calculated at checkout</span>}
-            </span>
-          </div>
-          <div className="flex items-baseline gap-3 pt-1 border-t border-stone-200">
-            <span className="text-stone-500 w-16">Total</span>
-            <span className="font-playfair text-xl text-stone-900 tabular-nums">
-              {ship.status === "ok"
-                ? money(ship.totalMinor, ship.currency)
-                : <>{money(printMinor, option.currency)}<span className="text-sm text-stone-500 font-sans"> + shipping</span></>}
-            </span>
-          </div>
-        </div>
-        <label className="flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase text-stone-500 shrink-0">
-          Qty
-          <select value={qty} onChange={(e) => setQty(Number(e.target.value))}
-            className="bg-transparent border-b border-stone-300 focus:border-stone-800 focus:outline-none py-1 text-stone-900">
-            {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </label>
-      </div>
-
-      <PField label="Full name" value={form.name} onChange={set("name")} error={errors.name} autoComplete="name" />
-      <div className="grid gap-5 sm:grid-cols-2">
-        <PField label="Email" type="email" value={form.email} onChange={set("email")} error={errors.email} autoComplete="email" />
-        <PField label="Phone" value={form.phone} onChange={set("phone")} error={errors.phone} autoComplete="tel" />
-      </div>
-      <div>
-        <label className="block text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-2">Country</label>
-        <select className="w-full bg-transparent border-b border-stone-300 focus:border-stone-800 focus:outline-none py-2 text-stone-900"
-          value={country} onChange={(e) => setCountry(e.target.value)}>
-          {countryOptions().map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
-        </select>
-        {errors.country && <p className="text-sm text-red-700 mt-1">{errors.country}</p>}
-      </div>
-      <PField label="Address" value={form.address1} onChange={set("address1")} error={errors.address1} autoComplete="address-line1" />
-      <PField label="Address line 2 (optional)" value={form.address2} onChange={set("address2")} error={errors.address2} autoComplete="address-line2" />
-      <div className="grid gap-5 sm:grid-cols-3">
-        <PField label="City" value={form.city} onChange={set("city")} error={errors.city} autoComplete="address-level2" />
-        {REGION_REQUIRED.has(country) && (
-          <PField label="State / province" value={form.region} onChange={set("region")} error={errors.region} autoComplete="address-level1" />
-        )}
-        <PField label="Postal code" value={form.postalCode} onChange={set("postalCode")} error={errors.postalCode} autoComplete="postal-code" />
-      </div>
-
-      {failure && <p className="text-sm text-red-700 bg-red-50 px-3 py-2 rounded">{failure}</p>}
-
-      <button type="submit" disabled={submitting}
-        className="inline-block bg-stone-900 text-stone-50 px-8 py-3 text-[11px] tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors disabled:opacity-50">
-        {submitting ? "Taking you to payment…" : "Continue to payment"}
-      </button>
-      <p className="text-xs text-stone-500">Payment is handled by Stripe. Your card details never reach this website.</p>
-    </form>
+      {inCart && (
+        <p className="text-xs text-stone-500 mt-3">
+          In your <Link href="/cart" className="border-b border-stone-400 hover:border-stone-800">cart</Link> — each item is checked out on its own.
+        </p>
+      )}
+      <p className="text-xs text-stone-500 mt-3">Payment is handled by Stripe. Your card details never reach this website.</p>
+    </div>
   );
 }
 

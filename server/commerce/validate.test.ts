@@ -32,7 +32,6 @@ describe("buyer details", () => {
     ["a one-letter name",     { ...good, name: "A" },           "name"],
     ["an unparseable email",  { ...good, email: "nope" },       "email"],
     ["an email with no host", { ...good, email: "a@b" },        "email"],
-    ["a missing phone",       { ...good, phone: "" },           "phone"],
     ["a phone of punctuation",{ ...good, phone: "---" },        "phone"],
     ["a country we cannot ship to", { ...good, country: "MN" }, "country"],
     ["a blank country",       { ...good, country: "" },         "country"],
@@ -47,6 +46,18 @@ describe("buyer details", () => {
       if (!r.ok) expect(Object.keys(r.errors)).toContain(field);
     });
   }
+
+  it("PHONE IS OPTIONAL — a blank phone is accepted (Prodigi/shipping do not require it)", () => {
+    const noPhone = validateBuyer({ ...good, phone: "" });
+    expect(noPhone.ok).toBe(true);
+    if (noPhone.ok) expect(noPhone.value.phone).toBe("");
+    const missingPhone = validateBuyer({ ...good, phone: undefined });
+    expect(missingPhone.ok).toBe(true);
+  });
+  it("accepts a valid phone when one IS given", () => {
+    const r = validateBuyer({ ...good, phone: "+1 415 555 0100" });
+    expect(r.ok).toBe(true);
+  });
 
   it("requires a state where a courier genuinely needs one", () => {
     for (const c of ["US", "CA", "AU"]) {
