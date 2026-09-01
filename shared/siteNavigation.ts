@@ -1,27 +1,19 @@
 /**
- * WHAT THE SITE'S NAVIGATION SHOWS — and the one entry that comes and goes.
+ * WHAT THE SITE'S NAVIGATION SHOWS — and where the Articles/Blog entry now lives.
  *
- * The Articles link is conditional, and the condition is not a preference. §1 of the
- * article brief: "Once at least one real article is published, expose the existing article
- * index in the website navigation with the user-facing label: Articles. Do not expose an
- * empty Articles section."
+ * The blog is deliberately OUT of the top/main navigation (desktop and mobile). It is reached
+ * from the FOOTER only. The route itself — /blog — is unchanged; only its discovery moves.
  *
- * That was previously honoured by hand — the /blog entry sat commented out with a note to
- * link it in the same commit as the first real piece of writing. Which works exactly once,
- * in one direction. It cannot un-link itself if she unpublishes the only article, and it
- * relies on whoever publishes remembering to ship a code change at the same moment. A nav
- * link to "Nothing published yet" advertises an empty room, and an artist's site advertising
- * an empty room is worse than one with no writing section at all.
+ * §1 of the article brief still governs the footer link: "Once at least one real article is
+ * published, expose the existing article index … Do not expose an empty Articles section."
+ * So the footer link is conditional on the published count, not a hand-maintained flag. That
+ * decision lives here as a pure function of the count — no fetch, no React — so both the
+ * "shown" and "hidden" directions are testable without publishing something to the live site.
  *
- * So the decision lives here, as a function of the published count, and the component that
- * renders it just asks. PURE — no fetch, no React — so both directions are testable without
- * a browser, which is the only way to check the disappearing case without publishing
- * something real to make a link appear.
- *
- * THE LABEL IS "Articles" because §1 names it. The route stays /blog: §1 also says to reuse
- * it "unless there is a genuine technical reason to change it. The user-facing navigation
- * label matters more than renaming working infrastructure." Renaming the route would break
- * every existing link and the sitemap for a word nobody sees.
+ * THE LABEL IS "Articles" because §1 names it. The route stays /blog: §1 says to reuse it
+ * "unless there is a genuine technical reason to change it. The user-facing navigation label
+ * matters more than renaming working infrastructure." Renaming the route would break every
+ * existing link and the sitemap for a word nobody sees.
  */
 
 export interface NavItem {
@@ -29,7 +21,10 @@ export interface NavItem {
   href: string;
 }
 
-/** The entries that are always present, in order. */
+/**
+ * The TOP navigation, in order. Articles/Blog is intentionally NOT here — it was moved to the
+ * footer. This list is the single source for both the desktop bar and the mobile drawer.
+ */
 const ALWAYS: NavItem[] = [
   { name: "Home", href: "/" },
   { name: "Originals", href: "/artworks" },
@@ -40,30 +35,25 @@ const ALWAYS: NavItem[] = [
   { name: "Contact", href: "/contact" },
 ];
 
-/** Where Articles sits when it is shown — after Exhibitions, before Gallery. */
-const ARTICLES_AFTER = "Exhibitions";
-
+/** The Articles/Blog entry — now rendered in the footer (never the top nav). Route unchanged. */
 export const ARTICLES_ITEM: NavItem = { name: "Articles", href: "/blog" };
 
 /**
- * The navigation for a site with `publishedArticleCount` live articles.
- *
- * A count that is missing, negative or not a number is treated as zero: while the query is
- * still loading we do not yet know that anything is published, and flashing a link that
- * then vanishes is worse than showing it a moment late.
+ * The top navigation. The blog is no longer injected here regardless of the published count —
+ * it lives in the footer. The optional count is kept for call-site compatibility and ignored.
  */
-export function siteNavigation(publishedArticleCount: number | null | undefined): NavItem[] {
+export function siteNavigation(_publishedArticleCount?: number | null): NavItem[] {
+  return [...ALWAYS];
+}
+
+/**
+ * True when the FOOTER should show the Articles/Blog link — only once at least one article is
+ * published (§1: never advertise an empty Articles section). A missing, negative or non-number
+ * count is treated as zero, so a link never flashes while the count is still loading.
+ */
+export function showsArticles(publishedArticleCount: number | null | undefined): boolean {
   const count = typeof publishedArticleCount === "number" && Number.isFinite(publishedArticleCount)
     ? publishedArticleCount
     : 0;
-  if (count <= 0) return [...ALWAYS];
-  const out = [...ALWAYS];
-  const at = out.findIndex((i) => i.name === ARTICLES_AFTER);
-  out.splice(at === -1 ? out.length : at + 1, 0, ARTICLES_ITEM);
-  return out;
-}
-
-/** True when the Articles entry should be visible. Kept separate for readability at call sites. */
-export function showsArticles(publishedArticleCount: number | null | undefined): boolean {
-  return siteNavigation(publishedArticleCount).some((i) => i.href === ARTICLES_ITEM.href);
+  return count > 0;
 }
