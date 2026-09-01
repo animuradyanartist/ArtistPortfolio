@@ -23,7 +23,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface Draft {
+export interface Draft {
   id?: number;
   code: string;
   discountType: "percentage" | "fixed";
@@ -131,83 +131,15 @@ export default function AdminPromoCodes() {
 
   // ── Editor ──────────────────────────────────────────────────────────────
   if (editing) {
-    const d = editing;
-    const set = (patch: Partial<Draft>) => setEditing({ ...d, ...patch });
-    const err = (k: string) => errors[k] ? <p className="text-xs text-red-600 mt-1">{errors[k]}</p> : null;
     return (
-      <Card className="border-slate-200/50 shadow-lg">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>{d.id ? "Edit promo code" : "New promo code"}</CardTitle>
-          <Button variant="ghost" onClick={() => { setEditing(null); setErrors({}); }}>Cancel</Button>
-        </CardHeader>
-        <CardContent className="space-y-4 max-w-lg">
-          <div>
-            <label className="text-sm font-medium text-slate-700">Code</label>
-            <Input value={d.code} onChange={(e) => set({ code: e.target.value })} placeholder="SAVE10" autoCapitalize="characters" />
-            <p className="text-xs text-slate-500 mt-1">Customers can type it in any case — SAVE10, save10 and “ save10 ” all match.</p>
-            {err("code")}
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Discount type</label>
-            <select className={FIELD} value={d.discountType}
-              onChange={(e) => set({ discountType: e.target.value as Draft["discountType"] })}>
-              <option value="percentage">Percentage</option>
-              <option value="fixed">Fixed amount</option>
-            </select>
-            {err("discountType")}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-slate-700">{d.discountType === "percentage" ? "Percent (1–100)" : "Amount"}</label>
-              <Input value={d.amount} onChange={(e) => set({ amount: e.target.value })}
-                inputMode="decimal" placeholder={d.discountType === "percentage" ? "10" : "10.00"} />
-              {err("discountValue")}
-            </div>
-            {d.discountType === "fixed" && (
-              <div>
-                <label className="text-sm font-medium text-slate-700">Currency</label>
-                <select className={FIELD} value={d.currency} onChange={(e) => set({ currency: e.target.value })}>
-                  {STORE_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-                {err("currency")}
-              </div>
-            )}
-          </div>
-          {d.discountType === "fixed" && (
-            <p className="text-xs text-slate-500 -mt-2">Only applies to orders in this currency (originals are EUR, prints may be USD).</p>
-          )}
-          <div>
-            <label className="text-sm font-medium text-slate-700">Applies to</label>
-            <select className={FIELD} value={d.appliesTo} onChange={(e) => set({ appliesTo: e.target.value as Draft["appliesTo"] })}>
-              <option value="all">All products</option>
-              <option value="originals">Originals only</option>
-              <option value="prints">Prints only</option>
-            </select>
-            {err("appliesTo")}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-slate-700">Valid from <span className="text-slate-400 font-normal">(optional)</span></label>
-              <Input type="date" value={d.validFrom} onChange={(e) => set({ validFrom: e.target.value })} />
-              {err("validFrom")}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700">Expires <span className="text-slate-400 font-normal">(optional)</span></label>
-              <Input type="date" value={d.expiresAt} onChange={(e) => set({ expiresAt: e.target.value })} />
-              {err("expiresAt")}
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={d.active} onChange={(e) => set({ active: e.target.checked })} />
-            Active
-          </label>
-          <div className="flex gap-2 pt-2">
-            <Button onClick={() => save.mutate(d)} disabled={save.isPending || !d.code.trim() || !d.amount.trim()}>
-              {save.isPending ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <PromoForm
+        draft={editing}
+        errors={errors}
+        saving={save.isPending}
+        onChange={setEditing}
+        onCancel={() => { setEditing(null); setErrors({}); }}
+        onSave={() => save.mutate(editing)}
+      />
     );
   }
 
@@ -304,5 +236,97 @@ export default function AdminPromoCodes() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/**
+ * The create/edit form. Exported and presentational (state lives in the parent) so a test can render
+ * it directly and assert every field the spec requires is present.
+ */
+export function PromoForm({ draft, errors, saving, onChange, onCancel, onSave }: {
+  draft: Draft;
+  errors: Record<string, string>;
+  saving: boolean;
+  onChange: (draft: Draft) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const d = draft;
+  const set = (patch: Partial<Draft>) => onChange({ ...d, ...patch });
+  const err = (k: string) => errors[k] ? <p className="text-xs text-red-600 mt-1">{errors[k]}</p> : null;
+  return (
+    <Card className="border-slate-200/50 shadow-lg">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>{d.id ? "Edit promo code" : "New promo code"}</CardTitle>
+        <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+      </CardHeader>
+      <CardContent className="space-y-4 max-w-lg">
+        <div>
+          <label className="text-sm font-medium text-slate-700">Code</label>
+          <Input value={d.code} onChange={(e) => set({ code: e.target.value })} placeholder="SAVE10" autoCapitalize="characters" />
+          <p className="text-xs text-slate-500 mt-1">Customers can type it in any case — SAVE10, save10 and “ save10 ” all match.</p>
+          {err("code")}
+        </div>
+        <div>
+          <label className="text-sm font-medium text-slate-700">Discount type</label>
+          <select className={FIELD} value={d.discountType}
+            onChange={(e) => set({ discountType: e.target.value as Draft["discountType"] })}>
+            <option value="percentage">Percentage</option>
+            <option value="fixed">Fixed amount</option>
+          </select>
+          {err("discountType")}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium text-slate-700">{d.discountType === "percentage" ? "Percent (1–100)" : "Amount"}</label>
+            <Input value={d.amount} onChange={(e) => set({ amount: e.target.value })}
+              inputMode="decimal" placeholder={d.discountType === "percentage" ? "10" : "10.00"} />
+            {err("discountValue")}
+          </div>
+          {d.discountType === "fixed" && (
+            <div>
+              <label className="text-sm font-medium text-slate-700">Currency</label>
+              <select className={FIELD} value={d.currency} onChange={(e) => set({ currency: e.target.value })}>
+                {STORE_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              {err("currency")}
+            </div>
+          )}
+        </div>
+        {d.discountType === "fixed" && (
+          <p className="text-xs text-slate-500 -mt-2">Only applies to orders in this currency (originals are EUR, prints may be USD).</p>
+        )}
+        <div>
+          <label className="text-sm font-medium text-slate-700">Applies to</label>
+          <select className={FIELD} value={d.appliesTo} onChange={(e) => set({ appliesTo: e.target.value as Draft["appliesTo"] })}>
+            <option value="all">All products</option>
+            <option value="originals">Originals only</option>
+            <option value="prints">Prints only</option>
+          </select>
+          {err("appliesTo")}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium text-slate-700">Valid from <span className="text-slate-400 font-normal">(optional)</span></label>
+            <Input type="date" value={d.validFrom} onChange={(e) => set({ validFrom: e.target.value })} />
+            {err("validFrom")}
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700">Expires <span className="text-slate-400 font-normal">(optional)</span></label>
+            <Input type="date" value={d.expiresAt} onChange={(e) => set({ expiresAt: e.target.value })} />
+            {err("expiresAt")}
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={d.active} onChange={(e) => set({ active: e.target.checked })} />
+          Active
+        </label>
+        <div className="flex gap-2 pt-2">
+          <Button onClick={onSave} disabled={saving || !d.code.trim() || !d.amount.trim()}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
