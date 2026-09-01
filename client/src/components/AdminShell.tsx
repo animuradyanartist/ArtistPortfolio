@@ -14,12 +14,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-interface TabItem { key: string; label: string; icon: LucideIcon }
-interface RouteItem { label: string; icon: LucideIcon; href: string }
-interface NavGroup { heading: string; tabs?: TabItem[]; routes?: RouteItem[] }
+export interface TabItem { key: string; label: string; icon: LucideIcon }
+export interface RouteItem { label: string; icon: LucideIcon; href: string }
+export interface NavGroup { heading: string; tabs?: TabItem[]; routes?: RouteItem[] }
 
-// The real admin sections, grouped. Tab keys match AdminPage's `activeTab` union.
-const NAV: NavGroup[] = [
+// The real admin sections, grouped. Tab keys match AdminPage's `activeTab` union — this is the
+// SINGLE source the sidebar renders, so a section is visible iff it appears here. Exported so a test
+// can assert the navigation without needing a DOM (see AdminPromoCodes.test.tsx).
+export const ADMIN_NAV: NavGroup[] = [
   {
     heading: "Content",
     tabs: [
@@ -73,7 +75,7 @@ export default function AdminShell({
 
   const NavList = (
     <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-      {NAV.map((group) => (
+      {ADMIN_NAV.map((group) => (
         <div key={group.heading}>
           <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
             {group.heading}
