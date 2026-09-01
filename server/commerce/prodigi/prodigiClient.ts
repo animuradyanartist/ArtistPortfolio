@@ -71,6 +71,68 @@ export class ProdigiApiError extends Error {
   }
 }
 
+/** The SANITIZED diagnostic we may store on the order / log. No key, no request body, no headers. */
+export interface SanitizedProdigiError {
+  statusCode: number;
+  statusText: string;
+  /** W3C `traceparent` — the reference Prodigi support looks an incident up by. Carries no secret. */
+  traceParent: string | null;
+  /** A short, redacted message pulled from the provider's RESPONSE body — never the whole body. */
+  providerMessage: string | null;
+}
+
+// Belt-and-suspenders: strip anything URL/token/key-shaped before a provider message is persisted or
+// shown in admin, even though the response body should never contain our signed asset URL or key.
+const SENSITIVE_IN_MESSAGE = /(https?:\/\/[^\s"'<>]+|(?:token|key|apikey|api[-_]?key|signature|sig)=[^\s"'&<>]+)/gi;
+
+/** Pull ONE short message-like field out of a provider response body. Never dumps the whole body. */
+function extractProviderMessage(body: unknown): string | null {
+  let msg: string | null = null;
+  if (body && typeof body === "object") {
+    const b = body as Record<string, unknown>;
+    const err = b.error as Record<string, unknown> | undefined;
+    if (typeof b.message === "string") msg = b.message;
+    else if (err && typeof err.message === "string") msg = err.message;
+    else if (typeof b.detail === "string") msg = b.detail;
+    else if (typeof b.title === "string") msg = b.title;
+    else if (typeof b.outcome === "string") msg = `outcome: ${b.outcome}`;
+  } else if (typeof body === "string") {
+    msg = body;
+  }
+  if (!msg) return null;
+  return msg.replace(SENSITIVE_IN_MESSAGE, "[redacted]").replace(/\s+/g, " ").trim().slice(0, 300);
+}
+
+/**
+ * Turn a caught error into a sanitized Prodigi diagnostic, or null if it is not a `ProdigiApiError`.
+ * Keeps ONLY: status code/text, the W3C traceparent, and a short redacted provider message.
+ */
+export function sanitizeProdigiError(e: unknown): SanitizedProdigiError | null {
+  if (!(e instanceof ProdigiApiError)) return null;
+  return {
+    statusCode: e.statusCode,
+    statusText: e.statusText,
+    traceParent: e.traceParent,
+    providerMessage: extractProviderMessage(e.body),
+  };
+}
+
+/**
+ * A single-line, admin-safe fulfilment-error string. For a Prodigi API error it preserves the status,
+ * the traceparent (so support can find the incident) and a short redacted provider message; for any
+ * other error it falls back to `name: message`. Safe to store in `fulfilment_error` and show in admin.
+ */
+export function formatFulfilmentError(e: unknown): string {
+  const s = sanitizeProdigiError(e);
+  if (s) {
+    const parts = [`ProdigiApiError ${s.statusCode} ${s.statusText}`];
+    if (s.traceParent) parts.push(`trace=${s.traceParent}`);
+    if (s.providerMessage) parts.push(`provider="${s.providerMessage}"`);
+    return parts.join(" | ");
+  }
+  return e instanceof Error ? `${e.name}: ${e.message}` : "Unknown Prodigi error";
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const cfg = config();
   if (!cfg) throw new ProdigiNotConfiguredError();

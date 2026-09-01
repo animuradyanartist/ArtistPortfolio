@@ -12,6 +12,7 @@
 import { ensureFulfilmentIdempotencyKey, setPrintFulfilment, type OrderRow } from "../orders";
 import { printOrderToInternal } from "./printCheckout";
 import { createPrintFulfilment } from "../prodigi/printFulfilment";
+import { formatFulfilmentError } from "../prodigi/prodigiClient";
 import { getPrintMaster, getVariant, cropFromRow } from "./adminPrintRepo";
 import { signedMasterUrl } from "./masterStorage";
 
@@ -82,7 +83,7 @@ export async function fulfilPrintOrder(order: OrderRow, baseUrl: string): Promis
       await setPrintFulfilment(order.id, {
         provider: "prodigi",
         fulfilmentStatus: "failed",
-        error: e instanceof Error ? `${e.name}: ${e.message}` : "Unknown fulfilment error",
+        error: formatFulfilmentError(e),
       });
     } catch {
       // Fulfilment bookkeeping must never be the thing that fails the paid webhook.
