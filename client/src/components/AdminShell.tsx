@@ -10,7 +10,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import {
   Home, Map, Palette, Layers, FileText, Landmark, Images, User, Mail,
-  Users, MessageSquare, ShoppingBag, Search, ExternalLink, LogOut, Menu, X,
+  Users, MessageSquare, ShoppingBag, Search, Tag, ExternalLink, LogOut, Menu, X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,6 +43,9 @@ const NAV: NavGroup[] = [
   },
   {
     heading: "Commerce",
+    tabs: [
+      { key: "promo-codes", label: "Promo Codes", icon: Tag },
+    ],
     routes: [
       { label: "Orders", icon: ShoppingBag, href: "/admin/orders" },
       { label: "SEO", icon: Search, href: "/admin/seo" },

@@ -1,36 +1,18 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { Menu, X, ShoppingBag } from "lucide-react";
 import { useCart } from "@/lib/cart";
-import { useAfterPaint } from "@/lib/afterPaint";
 import { Button } from "@/components/ui/button";
-import type { BlogPost } from "@shared/schema";
 import { siteNavigation } from "@shared/siteNavigation";
 
 export default function Navigation() {
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // ARTICLES APPEARS ONLY WHEN THERE IS SOMETHING TO READ (§1).
-  //
-  // /api/blog returns published posts only, so the count is the condition — no separate
-  // flag to set, and unpublishing the last article removes the link on its own. The query
-  // shares BlogPage's cache key and the client sets staleTime: Infinity, so this costs one
-  // request per session rather than one per page.
-  //
-  // AND NOT BEFORE THE PAGE THE VISITOR ASKED FOR HAS PAINTED. This ran on mount, so every
-  // page on the site — including an artwork page, where the painting is the whole point —
-  // spent a round trip deciding whether a navigation link should exist before it showed
-  // anything. Gated on the browser being idle, it is the last thing the page does rather
-  // than one of the first. Nothing else changes: still one request per session, still
-  // driven by the published count.
-  const navReady = useAfterPaint();
-  const { data: publishedPosts } = useQuery<BlogPost[]>({
-    queryKey: ["/api/blog"],
-    enabled: navReady,
-  });
-  const navigation = siteNavigation(publishedPosts?.length);
+  // The blog lives in the FOOTER now, not the top nav — so this bar no longer needs the
+  // published-article count that used to gate an "Articles" link here. `siteNavigation` is a
+  // fixed list; the desktop bar and the mobile drawer both render it.
+  const navigation = siteNavigation();
 
   const isActive = (href: string) => {
     if (href === "/" && location === "/") return true;

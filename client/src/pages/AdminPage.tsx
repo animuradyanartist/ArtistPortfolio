@@ -18,6 +18,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import AdminArticles from "@/components/AdminArticles";
+import AdminPromoCodes from "@/components/AdminPromoCodes";
 import AdminShell from "@/components/AdminShell";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
@@ -35,7 +36,7 @@ const PATH_IMAGE_SLOTS = [
 export default function AdminPage() {
   const [, setLocation] = useLocation();
   const [password, setPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<'homepage' | 'path' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact' | 'collectors' | 'messages' | 'articles'>('homepage');
+  const [activeTab, setActiveTab] = useState<'homepage' | 'path' | 'artworks' | 'prints' | 'exhibitions' | 'gallery' | 'artist' | 'contact' | 'collectors' | 'messages' | 'articles' | 'promo-codes'>('homepage');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
@@ -760,6 +761,7 @@ export default function AdminPage() {
         {/* Articles — the whole owner side of publishing. Career OS can only ever put a
             draft here; this tab is the only path from a draft to a public page. */}
         {activeTab === 'articles' && <AdminArticles />}
+        {activeTab === 'promo-codes' && <AdminPromoCodes />}
 
         {/* Homepage Tab */}
         {activeTab === 'homepage' && (

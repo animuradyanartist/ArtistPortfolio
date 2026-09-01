@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Eyebrow } from "@/components/editorial";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
 import { type PrintCategory } from "@shared/commerce/prodigiProducts";
 import {
@@ -439,21 +440,39 @@ function ProductInfo() {
  */
 function PrintGallery({ images, title }: { images: string[]; title: string }) {
   const [active, setActive] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const idx = Math.min(active, Math.max(0, images.length - 1));
   const current = images[idx] ?? null;
   return (
     <div>
       <div className="relative flex items-center justify-center overflow-hidden bg-stone-200/50 aspect-[4/5] p-6 md:p-10">
         {current ? (
-          <img
-            src={current}
-            alt={`Fine-art print of ${title}`}
-            className="max-w-full max-h-full w-auto h-auto object-contain shadow-[0_10px_40px_-12px_rgba(28,25,23,0.35)]"
-          />
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(true)}
+            aria-label="Open full-screen viewer"
+            className="flex h-full w-full items-center justify-center cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-800"
+          >
+            <img
+              src={current}
+              alt={`Fine-art print of ${title}`}
+              className="max-w-full max-h-full w-auto h-auto object-contain shadow-[0_10px_40px_-12px_rgba(28,25,23,0.35)]"
+            />
+          </button>
         ) : (
           <div className="grid place-items-center text-stone-400">No image</div>
         )}
       </div>
+      {/* Fullscreen viewer — the SAME public gallery list (storefront images + Prodigi mockup); the master never reaches here. */}
+      <ImageLightbox
+        images={images}
+        index={idx}
+        open={lightboxOpen}
+        onOpenChange={setLightboxOpen}
+        onIndexChange={setActive}
+        alt={() => `Fine-art print of ${title}`}
+        title={title}
+      />
       {images.length > 1 && (
         <div className="flex flex-wrap gap-3 mt-4">
           {images.map((src, i) => (

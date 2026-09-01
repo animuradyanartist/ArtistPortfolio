@@ -24,6 +24,7 @@ import {
   markOrderPaid, markOrderCancelled, markOrderFailed, markOrderRefunded, claimStripeEvent,
 } from "./orders";
 import { sendOrderConfirmation } from "../email";
+import { resolvePromoForOrder, promoOrderSnapshot } from "./promoCheckout";
 import { publicOrderView, publicTrackingView } from "./orderView";
 import { clientIpOf } from "../loginRateLimit";
 import { getVariantForCheckout } from "./prints/printRepo";
@@ -154,6 +155,19 @@ async function handlePrintCheckout(req: Request, res: Response, stripe: NonNulla
   const prodigiCostMinor = shipOutcome.prodigiCostMinor;   // null if Prodigi omitted the items cost
   const prodigiShippingMinor = shipOutcome.shippingMinor;
 
+  // PROMO — re-validated server-side (never the client's word). Reduces the ITEM subtotal only; the
+  // Prodigi shipping line is untouched, and the Prodigi cost/SKU/fulfilment are entirely unaffected.
+  const promoRes = await resolvePromoForOrder((req.body ?? {}).promoCode, {
+    itemType: "prints", currency: plan.plan.currency, itemsMinor: plan.plan.itemsMinor, now: new Date(),
+  });
+  if (promoRes.status === "error") {
+    return res.status(409).json({ code: "promo-invalid", promoError: promoRes.error, message: promoRes.message });
+  }
+  const promoSnap = promoOrderSnapshot(promoRes);
+  const discountMinor = promoRes.status === "applied" ? promoRes.applied.discountMinor : 0;
+  const discountedItemsMinor = plan.plan.itemsMinor - discountMinor;
+  const chargedTotalMinor = discountedItemsMinor + shippingMinor;
+
   const reference = await nextReference();
   const order = await createOrder({
     reference,
@@ -174,7 +188,8 @@ async function handlePrintCheckout(req: Request, res: Response, stripe: NonNulla
     item_price_minor: plan.plan.itemsMinor,
     currency: plan.plan.currency,
     shipping_minor: shippingMinor,
-    total_minor: totalMinor,
+    total_minor: chargedTotalMinor,
+    ...promoSnap,
     shipping_basis: shippingBasis,
     // Fulfilment-side accounting (Prodigi's own costs at order time) — internal, never shown publicly.
     prodigi_cost_minor: prodigiCostMinor,
@@ -193,17 +208,32 @@ async function handlePrintCheckout(req: Request, res: Response, stripe: NonNulla
         itemType: "print", printVariantId: String(resolved.variant.id),
       },
       line_items: [
-        {
-          quantity: plan.plan.stripeLineItem.quantity,
-          price_data: {
-            currency: plan.plan.currency.toLowerCase(),
-            unit_amount: plan.plan.stripeLineItem.unitAmountMinor,
-            product_data: {
-              name: plan.plan.stripeLineItem.name,
-              description: plan.plan.stripeLineItem.description,
+        // No promo → the item line is byte-for-byte unchanged (quantity × per-unit price). With a
+        // promo, a subtotal discount can't always split evenly per unit, so the item collapses to a
+        // single line at the SERVER-computed discounted subtotal. Either way the client never sets it.
+        discountMinor > 0
+          ? {
+              quantity: 1,
+              price_data: {
+                currency: plan.plan.currency.toLowerCase(),
+                unit_amount: discountedItemsMinor,
+                product_data: {
+                  name: plan.plan.stripeLineItem.name,
+                  description: `${plan.plan.stripeLineItem.description} · Promo ${promoSnap.promo_code}`,
+                },
+              },
+            }
+          : {
+              quantity: plan.plan.stripeLineItem.quantity,
+              price_data: {
+                currency: plan.plan.currency.toLowerCase(),
+                unit_amount: plan.plan.stripeLineItem.unitAmountMinor,
+                product_data: {
+                  name: plan.plan.stripeLineItem.name,
+                  description: plan.plan.stripeLineItem.description,
+                },
+              },
             },
-          },
-        },
         // A real, quoted shipping line — added only when Prodigi actually quoted it (never a
         // fabricated amount, and omitted entirely when shipping is 0/absorbed).
         ...(shippingMinor > 0
@@ -358,22 +388,40 @@ export function registerCommerceRoutes(app: Express): void {
       const purchasable = artworks.filter((_, i) => items[i]!.purchasable);
 
       let totals: unknown = null;
+      let promo: unknown = null;
       if (country && purchasable.length) {
         const priced = await priceOrder(purchasable, country, now);
-        totals = priced.ok
-          ? {
-              ok: true, currency: priced.currency,
-              itemsMinor: priced.itemsMinor, shippingMinor: priced.shippingMinor, totalMinor: priced.totalMinor,
-              itemsFormatted: formatMoney(priced.itemsMinor, priced.currency),
-              shippingFormatted: formatMoney(priced.shippingMinor, priced.currency),
-              totalFormatted: formatMoney(priced.totalMinor, priced.currency),
-              shippingEstimated: priced.shippingEstimated,
-              dutiesMayApply: zoneFor(country) ? isLikelyImportDutiable(zoneFor(country)!) : true,
-            }
-          : { ok: false, error: priced.error };
+        if (priced.ok) {
+          // The discount is a PREVIEW here — the checkout POST re-validates from scratch. The discount
+          // reduces the ITEM subtotal only; shipping is added afterwards and is never discounted.
+          const pr = await resolvePromoForOrder((req.body ?? {}).promoCode, {
+            itemType: "originals", currency: priced.currency, itemsMinor: priced.itemsMinor, now,
+          });
+          const discountMinor = pr.status === "applied" ? pr.applied.discountMinor : 0;
+          const totalMinor = (priced.itemsMinor - discountMinor) + priced.shippingMinor;
+          totals = {
+            ok: true, currency: priced.currency,
+            itemsMinor: priced.itemsMinor, shippingMinor: priced.shippingMinor,
+            discountMinor, totalMinor,
+            itemsFormatted: formatMoney(priced.itemsMinor, priced.currency),
+            shippingFormatted: formatMoney(priced.shippingMinor, priced.currency),
+            totalFormatted: formatMoney(totalMinor, priced.currency),
+            shippingEstimated: priced.shippingEstimated,
+            dutiesMayApply: zoneFor(country) ? isLikelyImportDutiable(zoneFor(country)!) : true,
+          };
+          promo = pr.status === "applied"
+            ? {
+                applied: true, code: pr.applied.code,
+                discountMinor, discountFormatted: formatMoney(discountMinor, priced.currency),
+                discountType: pr.applied.discountType, discountValue: pr.applied.discountValue,
+              }
+            : pr.status === "error" ? { applied: false, error: pr.error, message: pr.message } : null;
+        } else {
+          totals = { ok: false, error: priced.error };
+        }
       }
 
-      return res.json({ items, missing, country: country || null, totals, checkoutEnabled: isCheckoutConfigured() });
+      return res.json({ items, missing, country: country || null, totals, promo, checkoutEnabled: isCheckoutConfigured() });
     } catch {
       return res.status(500).json({ message: "Could not check your cart right now." });
     }
@@ -469,6 +517,21 @@ export function registerCommerceRoutes(app: Express): void {
         });
       }
 
+      // PROMO — RE-VALIDATED HERE FROM SCRATCH, never trusting the "Apply" preview. It reduces the
+      // ITEM subtotal only (shipping is untouched); an invalid/expired code is refused so the buyer
+      // re-confirms rather than being charged an unexpected amount. The applied discount is snapshotted
+      // onto the order below, and the Stripe item line uses the SERVER-computed discounted amount.
+      const promoRes = await resolvePromoForOrder((req.body ?? {}).promoCode, {
+        itemType: "originals", currency: priced.currency, itemsMinor: priced.itemsMinor, now: new Date(),
+      });
+      if (promoRes.status === "error") {
+        return res.status(409).json({ code: "promo-invalid", promoError: promoRes.error, message: promoRes.message });
+      }
+      const promoSnap = promoOrderSnapshot(promoRes);
+      const discountMinor = promoRes.status === "applied" ? promoRes.applied.discountMinor : 0;
+      const discountedItemsMinor = priced.itemsMinor - discountMinor;
+      const chargedTotalMinor = discountedItemsMinor + priced.shippingMinor;
+
       const reference = await nextReference();
       const order = await createOrder({
         reference,
@@ -486,7 +549,8 @@ export function registerCommerceRoutes(app: Express): void {
         item_price_minor: priced.itemsMinor,
         currency: priced.currency,
         shipping_minor: priced.shippingMinor,
-        total_minor: priced.totalMinor,
+        total_minor: chargedTotalMinor,
+        ...promoSnap,
         shipping_basis: priced.shippingBasis,
         shipping_calculation: JSON.stringify(priced.lines.map((l) => ({
           artworkId: l.artwork.id,
@@ -527,10 +591,13 @@ export function registerCommerceRoutes(app: Express): void {
               quantity: 1,
               price_data: {
                 currency: priced.currency.toLowerCase(),
-                unit_amount: priced.itemsMinor,
+                // SERVER-computed discounted item subtotal (full price minus the re-validated promo).
+                // The client never supplies this amount; shipping below is never discounted.
+                unit_amount: discountedItemsMinor,
                 product_data: {
                   name: artwork.title,
-                  description: [artwork.medium, artwork.dimensions, artwork.year].filter(Boolean).join(" · "),
+                  description: [artwork.medium, artwork.dimensions, artwork.year].filter(Boolean).join(" · ")
+                    + (discountMinor > 0 ? ` · Promo ${promoSnap.promo_code}` : ""),
                 },
               },
             },

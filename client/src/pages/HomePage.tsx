@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import type { Artwork, HomepageSettings, ArtistBio, Exhibition } from "@shared/schema";
+import type { Artwork, HomepageSettings, ArtistBio, Exhibition, BlogPost } from "@shared/schema";
+import { showsArticles, ARTICLES_ITEM } from "@shared/siteNavigation";
 import backgroundImage from "@assets/1bg_1750936488071.png";
 import { updateCanonicalUrl, updateMetaDescription, artworkPath, generateArtworkAlt } from "@/lib/seo";
 import { SHOW_PRICES } from "@/lib/featureFlags";
@@ -31,6 +32,12 @@ export default function HomePage() {
   });
   const { data: exhibitions = [] } = useQuery<Exhibition[]>({
     queryKey: ["/api/exhibitions"],
+  });
+  // The blog lives in the footer (not the top nav). /api/blog returns published posts only, so
+  // the count is the condition — the footer link shows once something is published and hides
+  // itself when the last article is unpublished (§1: never advertise an empty Articles section).
+  const { data: publishedPosts } = useQuery<BlogPost[]>({
+    queryKey: ["/api/blog"],
   });
 
   // Used as the About-section fallback portrait
@@ -431,6 +438,9 @@ export default function HomePage() {
               <li><Link href="/prints" className="hover:text-stone-900 transition-colors">Prints</Link></li>
               <li><Link href="/exhibitions" className="hover:text-stone-900 transition-colors">Exhibitions</Link></li>
               <li><Link href="/gallery" className="hover:text-stone-900 transition-colors">Gallery</Link></li>
+              {showsArticles(publishedPosts?.length) && (
+                <li><Link href={ARTICLES_ITEM.href} className="hover:text-stone-900 transition-colors">{ARTICLES_ITEM.name}</Link></li>
+              )}
             </ul>
             <ul className="space-y-2 text-sm text-stone-700">
               <li>

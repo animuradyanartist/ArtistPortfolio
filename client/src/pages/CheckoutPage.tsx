@@ -26,16 +26,22 @@ function money(minor: number, currency: string): string {
   catch { return `${(minor / 100).toFixed(2)} ${currency}`; }
 }
 
+type PromoInfo =
+  | { applied: true; code: string; discountMinor: number; discountType: string; discountValue: number }
+  | { applied: false; error: string; message: string }
+  | null;
+
 interface OriginalValidate {
   checkoutEnabled: boolean;
   items: Array<{ id: number; title: string; dimensions: string; imageUrl: string; priceFormatted: string | null; purchasable: boolean }>;
-  totals: null | { ok: true; itemsFormatted: string; shippingFormatted: string; totalFormatted: string; shippingEstimated: boolean; dutiesMayApply: boolean; totalMinor: number; shippingMinor: number; currency: string } | { ok: false };
+  totals: null | { ok: true; itemsFormatted: string; shippingFormatted: string; totalFormatted: string; shippingEstimated: boolean; dutiesMayApply: boolean; totalMinor: number; shippingMinor: number; discountMinor?: number; currency: string } | { ok: false };
+  promo?: PromoInfo;
 }
 interface PrintQuote {
   available: boolean; reason?: string; checkoutEnabled?: boolean;
   title: string; itemKind: string; materialLabel: string; sizeLabel: string; imageUrl: string | null;
   unitMinor: number | null; quantity: number; itemsMinor: number; currency: string;
-  shippingMinor?: number; totalMinor?: number;
+  shippingMinor?: number; totalMinor?: number; discountMinor?: number; promo?: PromoInfo;
 }
 
 export default function CheckoutPage() {
@@ -55,17 +61,22 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // Promo code: `promoInput` is the field; `appliedCode` is what the server is asked to price. The
+  // server owns validation and the discount — the client only echoes what it returns. Applying just
+  // re-runs the quote/validate query with the code; the final checkout POST re-validates from scratch.
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedCode, setAppliedCode] = useState("");
 
   useEffect(() => { setCountry(displayCountry(cart.country)); }, [cart.country]);
 
   // ── ORIGINAL: validate + price via the cart endpoint ──
   const originalQ = useQuery<OriginalValidate>({
-    queryKey: ["/api/commerce/cart/validate", artworkId, country],
+    queryKey: ["/api/commerce/cart/validate", artworkId, country, appliedCode],
     enabled: isOriginal && Boolean(country),
     queryFn: async () => {
       const r = await fetch("/api/commerce/cart/validate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artworkIds: [artworkId], country }),
+        body: JSON.stringify({ artworkIds: [artworkId], country, promoCode: appliedCode }),
       });
       if (!r.ok) throw new Error("validate failed");
       return r.json();
@@ -74,12 +85,12 @@ export default function CheckoutPage() {
 
   // ── PRINT: server-resolved display + shipping via the print quote endpoint (fail-closed) ──
   const printQ = useQuery<PrintQuote>({
-    queryKey: ["/api/commerce/prints/quote", variantId, quantity, country],
+    queryKey: ["/api/commerce/prints/quote", variantId, quantity, country, appliedCode],
     enabled: isPrint,
     queryFn: async () => {
       const r = await fetch("/api/commerce/prints/quote", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variantId, quantity, country: country ?? "" }),
+        body: JSON.stringify({ variantId, quantity, country: country ?? "", promoCode: appliedCode }),
       });
       if (!r.ok) throw new Error("quote failed");
       return r.json();
@@ -91,12 +102,15 @@ export default function CheckoutPage() {
     if (isPrint) {
       const d = printQ.data;
       if (!d || !d.title) return null;
+      const discount = d.discountMinor ?? 0;
       return {
         kind: "print" as const, title: d.title, imageUrl: d.imageUrl, dimensions: null as string | null,
         itemKind: "Fine Art Print", materialLabel: d.materialLabel, sizeLabel: d.sizeLabel, quantity: d.quantity,
         itemsFormatted: d.itemsMinor != null ? money(d.itemsMinor, d.currency) : null,
         shippingFormatted: d.shippingMinor != null ? money(d.shippingMinor, d.currency) : null,
         totalFormatted: d.totalMinor != null ? money(d.totalMinor, d.currency) : null,
+        discountFormatted: discount > 0 ? `−${money(discount, d.currency)}` : null,
+        promo: d.promo ?? null,
         shippingEstimated: false, dutiesMayApply: true,
         ready: d.available === true, totalMinor: d.totalMinor ?? null, currency: d.currency,
       };
@@ -104,12 +118,15 @@ export default function CheckoutPage() {
     const item = originalQ.data?.items?.[0];
     const totals = originalQ.data?.totals && "ok" in originalQ.data.totals && originalQ.data.totals.ok ? originalQ.data.totals : null;
     if (!item) return null;
+    const discount = totals?.discountMinor ?? 0;
     return {
       kind: "original" as const, title: item.title, imageUrl: item.imageUrl, dimensions: item.dimensions,
       itemKind: "Original artwork", materialLabel: null as string | null, sizeLabel: null as string | null, quantity: 1,
       itemsFormatted: totals?.itemsFormatted ?? null,
       shippingFormatted: totals?.shippingFormatted ?? null,
       totalFormatted: totals?.totalFormatted ?? null,
+      discountFormatted: discount > 0 && totals ? `−${money(discount, totals.currency)}` : null,
+      promo: originalQ.data?.promo ?? null,
       shippingEstimated: Boolean(totals?.shippingEstimated), dutiesMayApply: Boolean(totals?.dutiesMayApply),
       ready: Boolean(totals), totalMinor: totals?.totalMinor ?? null, currency: totals?.currency ?? "EUR",
     };
@@ -128,6 +145,10 @@ export default function CheckoutPage() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  // Apply = ask the server to price with this code (it validates + computes). Remove = clear it.
+  const applyPromoCode = () => { setFailure(null); setAppliedCode(promoInput.trim()); };
+  const removePromoCode = () => { setPromoInput(""); setAppliedCode(""); };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true); setFailure(null); setErrors({});
@@ -139,9 +160,12 @@ export default function CheckoutPage() {
       address1: form.address1, address2: form.address2, city: form.city, region: form.region, postalCode: form.postalCode,
     };
     try {
+      // Only the promo CODE is sent — never a discount or total. The server re-validates it and
+      // recomputes the charge; if it is no longer valid the checkout is refused (see below).
+      const promoField = appliedCode ? { promoCode: appliedCode } : {};
       const payload = isPrint
-        ? { print: { variantId, quantity }, buyer, attribution: { ...(readAttribution() ?? {}), printPath: `/prints` } }
-        : { artworkIds: [artworkId], buyer, attribution: { ...(readAttribution() ?? {}), artworkPath: `/artworks/${artworkId}` } };
+        ? { print: { variantId, quantity }, buyer, ...promoField, attribution: { ...(readAttribution() ?? {}), printPath: `/prints` } }
+        : { artworkIds: [artworkId], buyer, ...promoField, attribution: { ...(readAttribution() ?? {}), artworkPath: `/artworks/${artworkId}` } };
       const r = await fetch("/api/commerce/checkout", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
@@ -150,6 +174,12 @@ export default function CheckoutPage() {
         // Leaving for Stripe. The cart line is cleared on the confirmation page, not here — an
         // abandoned payment must not lose the item from the cart.
         window.location.href = body.url as string;
+        return;
+      }
+      // The promo turned invalid between Apply and Submit — drop it, tell the buyer, don't charge.
+      if (body.code === "promo-invalid") {
+        setAppliedCode("");
+        setFailure((body.message as string) ?? "That promo code can no longer be applied. Please review your order.");
         return;
       }
       // Server errors are keyed by `name/email/…`; map the single `name` error onto both name fields.
@@ -251,6 +281,9 @@ export default function CheckoutPage() {
             <dl className="space-y-3 border-t border-stone-300 pt-4">
               <Line label={summary.kind === "print" ? "Print" : "Work"} value={summary.itemsFormatted ?? ""} />
               <Line label={summary.shippingEstimated ? "Estimated shipping" : "Shipping"} value={summary.shippingFormatted ?? ""} />
+              {summary.discountFormatted && summary.promo?.applied && (
+                <Line label={`Promo ${summary.promo.code}`} value={summary.discountFormatted} />
+              )}
               <div className="border-t border-stone-300 pt-3"><Line label="Total" value={summary.totalFormatted ?? ""} strong /></div>
               {summary.dutiesMayApply && (
                 <p className="text-xs text-stone-500 leading-relaxed pt-2">
@@ -264,6 +297,47 @@ export default function CheckoutPage() {
               <p className="text-xs text-stone-500 mt-3">Choose your country to see shipping and the total.</p>
             </div>
           ) : null}
+
+          {/* PROMO CODE — the server validates and computes the discount; the client only shows the
+              result it returns. Available once the summary can be priced (a country is chosen). */}
+          {summary?.ready && (
+            <div className="border-t border-stone-300 pt-4 mt-4">
+              <label htmlFor="promo" className="block text-[11px] tracking-[0.2em] uppercase text-stone-500 mb-2">Promo code</label>
+              {summary.promo?.applied ? (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-green-700">
+                    Code <span className="font-medium">{summary.promo.code}</span> applied.
+                  </p>
+                  <button type="button" onClick={removePromoCode} className="text-xs text-stone-600 underline hover:text-stone-900">
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      id="promo"
+                      value={promoInput}
+                      onChange={(e) => setPromoInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyPromoCode(); } }}
+                      placeholder="Promo code"
+                      autoComplete="off" autoCapitalize="characters" spellCheck={false}
+                      className="flex-1 border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400"
+                    />
+                    <button
+                      type="button" onClick={applyPromoCode} disabled={!promoInput.trim()}
+                      className="px-4 py-2 bg-stone-900 text-white text-sm transition-colors hover:bg-stone-700 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {summary.promo && summary.promo.applied === false && (
+                    <p role="status" className="text-sm text-red-700 mt-2">{summary.promo.message}</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </aside>
       </div>
     </Shell>

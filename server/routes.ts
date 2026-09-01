@@ -39,6 +39,7 @@ import { registerCommerceRoutes } from "./commerce/routes";
 import { registerTestCheckoutRoutes } from "./commerce/testCheckout";
 import { registerTestArtworkRoutes } from "./commerce/testArtwork";
 import { registerAdminCommerceRoutes } from "./commerce/adminRoutes";
+import { registerPromoAdminRoutes } from "./commerce/promoAdminRoutes";
 import { registerPrintRoutes } from "./commerce/prints/printRoutes";
 import { registerAdminPrintRoutes } from "./commerce/prints/adminPrintRoutes";
 import { registerProdigiCallbackRoute } from "./commerce/prodigi/prodigiCallbackRoute";
@@ -198,6 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerTestCheckoutRoutes(app);
   registerTestArtworkRoutes(app);
   registerAdminCommerceRoutes(app);
+  registerPromoAdminRoutes(app);
   // Print storefront read API + Pinterest feed, and the Prodigi fulfilment callback endpoint.
   // One commerce system — these extend it; they never introduce a second checkout or order store.
   registerPrintRoutes(app);

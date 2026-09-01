@@ -630,10 +630,21 @@ export const orders = pgTable("orders", {
    *  Kept so search and image traffic can eventually be judged against sales, not clicks. */
   attribution: text("attribution"),
 
+  // ── PROMO CODE, snapshotted at checkout (all nullable; null on an order with no code). These
+  //    are a HISTORICAL RECORD copied from the validated promo at purchase time — like
+  //    artwork_snapshot, the order stays correct even if the promo row is later edited,
+  //    deactivated or deleted. `promo_code_id` is a soft reference for reporting, never a cascade. ──
+  promoCode: text("promo_code"),
+  promoDiscountMinor: integer("promo_discount_minor"),
+  promoDiscountType: text("promo_discount_type"),
+  promoDiscountValue: integer("promo_discount_value"),
+  promoCodeId: integer("promo_code_id"),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (t) => ({
   referenceUnique: uniqueIndex("orders_reference_unique").on(t.reference),
+  promoCodeIdx: index("orders_promo_code_idx").on(t.promoCode),
   // PARTIAL, matching the boot DDL exactly. Most orders have no session id until Stripe is
   // called, and a plain unique index would be fine in Postgres (it permits many NULLs) — but
   // the DDL writes `WHERE stripe_checkout_session_id IS NOT NULL` and a declaration that says
@@ -731,6 +742,53 @@ export const orderAudit = pgTable("order_audit", {
   orderIdx: index("order_audit_order_idx").on(t.orderId),
 }));
 export type OrderAudit = typeof orderAudit.$inferSelect;
+
+/**
+ * PROMO CODES — a customer discount applied to the ITEM SUBTOTAL at checkout (never to shipping).
+ *
+ * The code the customer types is matched case-insensitively: `code_normalized` (trim + uppercase)
+ * is the unique key, so SAVE10, save10 and " save10 " are one code. `code` keeps the exact form an
+ * admin entered, for display.
+ *
+ * A percentage discount (`discount_value` 1..100) is currency-agnostic and carries NO currency. A
+ * fixed discount (`discount_value` in minor units, > 0) MUST carry a `currency` and only applies to
+ * an order in that same currency — the store prices originals in EUR and print variants in USD, so a
+ * fixed amount is meaningless without one. `applies_to` scopes a code to all / originals / prints.
+ *
+ * This MVP has NO usage limit / usage counter by design: a hard cap would race two buyers to the last
+ * redemption before either Stripe payment settled, and the paid webhook cannot un-charge the loser.
+ * A reservation/redemption ledger can be added later. Validation is always re-run server-side at the
+ * final checkout POST; the applied discount is snapshotted onto the order for history.
+ */
+export const promoCodes = pgTable("promo_codes", {
+  id: serial("id").primaryKey(),
+  /** The exact form an admin entered (for display). */
+  code: text("code").notNull(),
+  /** trim + uppercase of `code`; the unique, case-insensitive lookup key. */
+  codeNormalized: text("code_normalized").notNull(),
+  /** 'percentage' | 'fixed' */
+  discountType: text("discount_type").notNull(),
+  /** percentage: 1..100 · fixed: minor currency units, > 0 */
+  discountValue: integer("discount_value").notNull(),
+  /** REQUIRED for fixed (must match the order currency); NULL for percentage. */
+  currency: text("currency"),
+  /** 'all' | 'originals' | 'prints' */
+  appliesTo: text("applies_to").notNull().default("all"),
+  active: boolean("active").notNull().default(true),
+  validFrom: timestamp("valid_from"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  codeNormalizedUnique: uniqueIndex("promo_codes_code_normalized_unique").on(t.codeNormalized),
+  activeIdx: index("promo_codes_active_idx").on(t.active),
+}));
+
+export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsertPromoCode = z.infer<typeof insertPromoCodeSchema>;
+export type PromoCode = typeof promoCodes.$inferSelect;
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // SEO GROWTH SYSTEM (DataForSEO) — the buyer-intent keyword model, historical snapshots, the action

@@ -322,5 +322,31 @@ export const SELF_HEAL_DDL: readonly string[] = [
         cache_hit boolean NOT NULL DEFAULT false,
         created_at timestamp DEFAULT now()
       )`,
-  `CREATE INDEX IF NOT EXISTS seo_api_usage_created_idx ON seo_api_usage (created_at)`
+  `CREATE INDEX IF NOT EXISTS seo_api_usage_created_idx ON seo_api_usage (created_at)`,
+  // ── PROMO CODES (customer discount on the item subtotal). Additive; must mirror shared/schema.ts.
+  //    No usage limit/counter in this MVP by design (a hard cap races two buyers to the last
+  //    redemption before either Stripe payment settles). ──
+  `CREATE TABLE IF NOT EXISTS promo_codes (
+        id serial PRIMARY KEY,
+        code text NOT NULL,
+        code_normalized text NOT NULL,
+        discount_type text NOT NULL,
+        discount_value integer NOT NULL,
+        currency text,
+        applies_to text NOT NULL DEFAULT 'all',
+        active boolean NOT NULL DEFAULT true,
+        valid_from timestamp,
+        expires_at timestamp,
+        created_at timestamp DEFAULT now(),
+        updated_at timestamp DEFAULT now()
+      )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS promo_codes_code_normalized_unique ON promo_codes (code_normalized)`,
+  `CREATE INDEX IF NOT EXISTS promo_codes_active_idx ON promo_codes (active)`,
+  // Order snapshot columns for the applied promo (nullable; a historical record — see shared/schema.ts).
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_discount_minor integer`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_discount_type text`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_discount_value integer`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code_id integer`,
+  `CREATE INDEX IF NOT EXISTS orders_promo_code_idx ON orders (promo_code)`
 ];

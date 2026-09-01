@@ -8,6 +8,7 @@ import { artworkCommerceDisplay } from "@shared/commerce/display";
 import { isKnownAddressFor } from "@shared/artworkAddress";
 import { artworkJsonLd, artworkDimensions, type SsrArtwork } from "@shared/artworkSsr";
 import { ArtworkMissingError, isMissingResponse, meansArtworkMissing, artworkViewState } from "@shared/artworkAvailability";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { useAfterPaint } from "@/lib/afterPaint";
 import {
   updateCanonicalUrl,
@@ -68,6 +69,7 @@ export default function ArtworkDetailPage() {
   const [location, setLocation] = useLocation();
   const idParam = params.id as string;
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const preloaded = preloadFor(idParam);
 
@@ -218,15 +220,22 @@ export default function ArtworkDetailPage() {
           <div>
             <div className="relative bg-stone-200 overflow-hidden">
               {images.length > 0 ? (
-                <img
-                  src={images[currentImageIndex]}
-                  alt={generateArtworkAlt(artwork.title, artwork.medium)}
-                  title={`${artwork.title} – ${artwork.medium} by Ani Muradyan`}
-                  width={artworkDimensions(artwork as unknown as SsrArtwork)?.width}
-                  height={artworkDimensions(artwork as unknown as SsrArtwork)?.height}
-                  className="w-full object-cover aspect-[4/5]"
-                  loading="eager"
-                />
+                <button
+                  type="button"
+                  onClick={() => setLightboxOpen(true)}
+                  aria-label="Open full-screen viewer"
+                  className="block w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-800 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f5f1ea]"
+                >
+                  <img
+                    src={images[currentImageIndex]}
+                    alt={generateArtworkAlt(artwork.title, artwork.medium)}
+                    title={`${artwork.title} – ${artwork.medium} by Ani Muradyan`}
+                    width={artworkDimensions(artwork as unknown as SsrArtwork)?.width}
+                    height={artworkDimensions(artwork as unknown as SsrArtwork)?.height}
+                    className="w-full object-cover aspect-[4/5]"
+                    loading="eager"
+                  />
+                </button>
               ) : (
                 <div className="w-full aspect-[4/5] flex items-center justify-center">
                   <p className="text-sm text-stone-400">No image available</p>
@@ -276,6 +285,17 @@ export default function ArtworkDetailPage() {
                 ))}
               </div>
             )}
+
+            {/* Fullscreen viewer — the SAME public `images` array; no master/private source. */}
+            <ImageLightbox
+              images={images}
+              index={currentImageIndex}
+              open={lightboxOpen}
+              onOpenChange={setLightboxOpen}
+              onIndexChange={setCurrentImageIndex}
+              alt={() => generateArtworkAlt(artwork.title, artwork.medium)}
+              title={artwork.title}
+            />
           </div>
 
           {/* Details column */}
