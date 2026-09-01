@@ -128,7 +128,7 @@ function renderArticleHtml(
     dateLine +
     `<p style="font-size:1.15rem;color:#475569;margin-bottom:2rem">${esc(post.excerpt)}</p>` +
     blocks +
-    `<p style="margin-top:2.5rem"><a href="/blog" style="color:#1d4ed8;text-decoration:underline">\u2190 All writing</a> \u00b7 <a href="/artworks" style="color:#1d4ed8;text-decoration:underline">See the paintings</a></p>` +
+    `<p style="margin-top:2.5rem"><a href="/blog" style="color:#1d4ed8;text-decoration:underline">\u2190 All writing</a> \u00b7 <a href="/artworks" style="color:#1d4ed8;text-decoration:underline">See the paintings</a> \u00b7 <a href="/prints" style="color:#1d4ed8;text-decoration:underline">Fine-art prints</a></p>` +
     `</article>`;
 }
 import {
@@ -1952,7 +1952,18 @@ Crawl-delay: 1
 
             if (req.path === '/prints') {
               const cards = await getPurchasablePrintCollection();
-              html = setRobots(html, cards.length ? 'index,follow' : 'noindex,follow');
+              if (!cards.length) {
+                // Nothing purchasable yet — do not advertise an empty shop.
+                html = setRobots(html, 'noindex,follow');
+                return res.status(200).set('Content-Type', 'text/html').send(html);
+              }
+              // A REAL MONEY PAGE. Until now /prints inherited the homepage <title> + meta, so a
+              // crawl of the site's print shop read "Ani Muradyan – Contemporary Oil Painter" and
+              // nothing about fine-art prints. `injectPrintsIndexMeta` (pure + unit-tested) gives it
+              // its own title/description/OG/canonical, a crawlable heading + print links, a
+              // CollectionPage JSON-LD and robots index,follow — no keyword stuffing.
+              const { injectPrintsIndexMeta } = await import('@shared/printSsr');
+              html = injectPrintsIndexMeta(html, cards.map((c) => ({ title: c.title, slug: c.slug })), SEO_BASE_URL);
               return res.status(200).set('Content-Type', 'text/html').send(html);
             }
 

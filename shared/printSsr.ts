@@ -46,7 +46,22 @@ export function printMetaTitle(d: PrintSsrDetail): string {
 }
 
 export function printMetaDescription(d: PrintSsrDetail): string {
-  return `Museum-quality giclée fine-art print of "${d.title}" by ${PRINT_BRAND} on archival Hahnemühle paper. Open edition. The original painting remains unique.`;
+  // Front-load the work's OWN subject (its real description's first sentence) so the SERP snippet
+  // states what the piece depicts — e.g. a blue coastal seascape — instead of a generic boilerplate
+  // that reads the same for every print. Falls back to the plain framing when there is no description.
+  const lead = firstSentence(d.description);
+  const framing = `Giclée fine-art print of "${d.title}" by ${PRINT_BRAND} on archival Hahnemühle paper — open edition; the original painting remains unique.`;
+  return lead ? `${lead} ${framing}` : `Museum-quality ${framing}`;
+}
+
+/** The first sentence of a description, whitespace-collapsed and capped so a meta stays sane. */
+function firstSentence(text: string | null | undefined): string {
+  const t = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  const m = t.match(/^.*?[.!?](?=\s|$)/);
+  let s = (m ? m[0] : t).trim();
+  if (s.length > 160) s = s.slice(0, 157).replace(/\s+\S*$/, "") + "…";
+  return s;
 }
 
 /**
@@ -152,6 +167,90 @@ export function injectPrintMeta(html: string, d: PrintSsrDetail, baseUrl: string
 
   const jsonStr = JSON.stringify(printJsonLd(d, baseUrl)).replace(/</g, "\\u003c");
   out = out.replace(/<\/head>/i, `  <script type="application/ld+json" id="print-jsonld">${jsonStr}</script>\n</head>`);
+
+  return out;
+}
+
+/** The public print-shop listing card the /prints index SEO needs (title + slug). */
+export interface PrintIndexCard {
+  title: string;
+  slug: string;
+}
+
+export const PRINTS_INDEX_TITLE =
+  "Fine Art Prints — Giclée Prints of Contemporary Paintings | Ani Muradyan";
+export const PRINTS_INDEX_DESCRIPTION =
+  "Museum-quality giclée fine art prints of Ani Muradyan's contemporary oil paintings — landscapes and seascapes, printed to order on archival Hahnemühle paper. Each original remains a unique work.";
+
+/**
+ * Give the /prints LISTING its own SEO instead of inheriting the homepage <title>/meta. Sets the
+ * prints title/description/OG/twitter/canonical, injects a crawlable heading + print links (removed
+ * client-side once the React grid mounts), a CollectionPage + ItemList JSON-LD, and robots
+ * index,follow. Call ONLY when there is at least one purchasable print. Pure string work, so it is
+ * unit-tested directly. `cards` are the purchasable prints, in display order.
+ */
+export function injectPrintsIndexMeta(html: string, cards: PrintIndexCard[], baseUrl: string): string {
+  const base = baseUrl.replace(/\/+$/, "");
+  const url = `${base}/prints`;
+  const title = PRINTS_INDEX_TITLE;
+  const desc = PRINTS_INDEX_DESCRIPTION;
+
+  let out = html;
+  out = out.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(title)}</title>`);
+
+  const setMeta = (attr: "name" | "property", key: string, content: string) => {
+    const re = new RegExp(`<meta\\s+${attr}=["']${key}["'][^>]*>`, "i");
+    const tag = `<meta ${attr}="${key}" content="${escapeHtml(content)}">`;
+    if (re.test(out)) out = out.replace(re, tag);
+    else out = out.replace(/<\/head>/i, `  ${tag}\n</head>`);
+  };
+  setMeta("name", "title", title);
+  setMeta("name", "description", desc);
+  setMeta("property", "og:title", title);
+  setMeta("property", "og:description", desc);
+  setMeta("property", "og:url", url);
+  setMeta("name", "twitter:title", title);
+  setMeta("name", "twitter:description", desc);
+  setMeta("name", "robots", "index,follow");
+
+  const canonicalTag = `<link rel="canonical" href="${escapeHtml(url)}">`;
+  out = /<link\s+rel=["']canonical["'][^>]*>/i.test(out)
+    ? out.replace(/<link\s+rel=["']canonical["'][^>]*>/i, canonicalTag)
+    : out.replace(/<\/head>/i, `  ${canonicalTag}\n</head>`);
+
+  const items = cards
+    .map((c) => {
+      const href = printCanonicalUrl(baseUrl, c.slug);
+      return `<li style="margin-bottom:0.5rem"><a href="${escapeHtml(href)}" style="color:#1d4ed8;text-decoration:underline">${escapeHtml(c.title)} — fine-art print</a></li>`;
+    })
+    .join("");
+  const ssr =
+    `<section id="prints-ssr" style="padding:3rem 1.5rem;max-width:1200px;margin:0 auto;font-family:system-ui,sans-serif">` +
+    `<h1 style="font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem">Fine Art Prints</h1>` +
+    `<p style="font-size:1.1rem;color:#475569;margin-bottom:1.5rem">Museum-quality giclée fine-art prints of contemporary oil paintings and landscapes by Armenian artist Ani Muradyan, printed to order on archival Hahnemühle paper. The original paintings remain unique works — <a href="${escapeHtml(base)}/artworks" style="color:#1d4ed8;text-decoration:underline">browse the originals</a>.</p>` +
+    `<ul style="list-style:disc;padding-left:1.5rem;color:#334155">${items}</ul>` +
+    `</section>`;
+  out = out.replace('<div id="root">', ssr + '<div id="root">');
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Fine Art Prints by Ani Muradyan",
+    description: desc,
+    url,
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: cards.length,
+      itemListElement: cards.map((c, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: printCanonicalUrl(baseUrl, c.slug),
+        name: `${c.title} — Fine-Art Print`,
+      })),
+    },
+  };
+  const jsonStr = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
+  out = out.replace(/<\/head>/i, `  <script type="application/ld+json" id="prints-collection-jsonld">${jsonStr}</script>\n</head>`);
 
   return out;
 }
