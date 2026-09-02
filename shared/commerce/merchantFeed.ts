@@ -31,7 +31,13 @@ export interface MerchantFeedItem {
   priceMinor: number;
   /** ISO 4217 code, e.g. "USD" — the currency of the starting-price variant. */
   currency: string;
+  /** Total stored display images. Images 1..N-1 become additional_image_link (first-party /img/print
+   *  refs — the SAME gallery images the PDP shows). Omit/undefined → only the primary image_link. */
+  imageCount?: number | null;
 }
+
+// Google accepts up to 10 additional_image_link values per item.
+const MAX_ADDITIONAL_IMAGES = 10;
 
 export const MERCHANT_BRAND = "Ani Muradyan";
 
@@ -76,6 +82,18 @@ export function merchantImageLink(baseUrl: string, printId: number): string {
   return `${baseUrl.replace(/\/+$/, "")}/img/print/${printId}/0`;
 }
 
+/**
+ * Additional product images (indexes 1..N-1), each the first-party /img/print ref of one of the
+ * print's own stored gallery images — the same ones a shopper sees on the PDP. Capped at Google's
+ * limit of 10. Empty when the print has one image or the count is unknown. Never the master.
+ */
+export function merchantAdditionalImageLinks(baseUrl: string, printId: number, imageCount?: number | null): string[] {
+  if (typeof imageCount !== "number" || imageCount <= 1) return [];
+  const base = baseUrl.replace(/\/+$/, "");
+  const extra = Math.min(imageCount - 1, MAX_ADDITIONAL_IMAGES);
+  return Array.from({ length: extra }, (_unused, i) => `${base}/img/print/${printId}/${i + 1}`);
+}
+
 function feedItemXml(item: MerchantFeedItem, baseUrl: string): string {
   const e = xmlEscape;
   return [
@@ -85,6 +103,9 @@ function feedItemXml(item: MerchantFeedItem, baseUrl: string): string {
     `      <g:description>${e(merchantDescription(item.title))}</g:description>`,
     `      <g:link>${e(merchantLink(baseUrl, item.slug))}</g:link>`,
     `      <g:image_link>${e(merchantImageLink(baseUrl, item.id))}</g:image_link>`,
+    ...merchantAdditionalImageLinks(baseUrl, item.id, item.imageCount).map(
+      (u) => `      <g:additional_image_link>${e(u)}</g:additional_image_link>`,
+    ),
     `      <g:availability>in_stock</g:availability>`,
     `      <g:price>${e(merchantPrice(item.priceMinor, item.currency))}</g:price>`,
     `      <g:brand>${e(MERCHANT_BRAND)}</g:brand>`,

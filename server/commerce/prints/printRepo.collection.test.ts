@@ -116,7 +116,9 @@ describe("getPurchasablePrintCollection — narrow projection (no SELECT *, no 5
     const sql = printsSql();
     expect(sql).not.toMatch(/select\s+\*/i);         // never SELECT *
     expect(sql).toMatch(/images\[1\]/);              // only the first array element is transferred
-    expect(sql).not.toMatch(/\bimages\b(?!\[)/);     // the full `images` array is never selected bare
+    // The full `images` array is never selected bare (that is the 57 MB transfer). `images[1]` (one
+    // element) and `array_length(images, 1)` (an integer computed IN Postgres) do not transfer it.
+    expect(sql).not.toMatch(/[\s,]images\b(?!\[)/);
   });
 
   it("selects exactly the columns the card + gates need", async () => {

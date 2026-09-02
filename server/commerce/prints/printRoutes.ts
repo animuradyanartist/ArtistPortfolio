@@ -331,6 +331,7 @@ export function registerPrintRoutes(app: Express): void {
           slug: c.slug,
           priceMinor: c.startingPriceMinor as number,
           currency: c.currency,
+          imageCount: c.imageCount,
         }));
       const xml = buildMerchantFeed(items, baseUrlOf(req));
       res.set("Cache-Control", "public, max-age=300");

@@ -462,6 +462,9 @@ export default function HomePage() {
                 </a>
               </li>
               <li><Link href="/contact" className="hover:text-stone-900 transition-colors">Contact</Link></li>
+              <li><Link href="/shipping" className="hover:text-stone-900 transition-colors">Shipping</Link></li>
+              <li><Link href="/returns" className="hover:text-stone-900 transition-colors">Returns &amp; Refunds</Link></li>
+              <li><Link href="/privacy" className="hover:text-stone-900 transition-colors">Privacy</Link></li>
             </ul>
           </div>
           <div className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-stone-300 pt-6 text-xs text-stone-500">

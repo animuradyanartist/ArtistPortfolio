@@ -17,6 +17,9 @@ import PathPage from "@/pages/PathPage";
 import ExhibitionsPage from "@/pages/ExhibitionsPage";
 import GalleryPage from "@/pages/GalleryPage";
 import ContactPage from "@/pages/ContactPage";
+import ShippingPage from "@/pages/ShippingPage";
+import ReturnsPage from "@/pages/ReturnsPage";
+import PrivacyPage from "@/pages/PrivacyPage";
 import AdminPage from "@/pages/AdminPage";
 import CreateArtworkPage from "@/pages/CreateArtworkPage";
 import EditArtworkPage from "@/pages/EditArtworkPage";
@@ -66,6 +69,9 @@ function Router() {
       <Route path="/exhibitions" component={ExhibitionsPage} />
       <Route path="/gallery" component={GalleryPage} />
       <Route path="/contact" component={ContactPage} />
+      <Route path="/shipping" component={ShippingPage} />
+      <Route path="/returns" component={ReturnsPage} />
+      <Route path="/privacy" component={PrivacyPage} />
       <Route path="/admin" component={AdminPage} />
       <Route path="/admin/create-artwork" component={CreateArtworkPage} />
       <Route path="/admin/edit-artwork/:id" component={EditArtworkPage} />
