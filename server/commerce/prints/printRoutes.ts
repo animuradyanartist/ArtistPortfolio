@@ -14,10 +14,9 @@ import {
   getPrintDetailBySlug,
   getPrintFeedInputs,
   getVariantForCheckout,
-  printSlugOf,
   purchasablePrintSlugForArtwork,
 } from "./printRepo";
-import { assessVariant, isPubliclyPurchasable, startingPriceMinor, resolveVariantPrice, publicSelectableVariants } from "@shared/commerce/printProduct";
+import { assessVariant, startingPriceMinor, resolveVariantPrice } from "@shared/commerce/printProduct";
 import { buildFeedTsv } from "@shared/commerce/printFeed";
 import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
 import { quotePrintShipping } from "./printShipping";
@@ -28,7 +27,7 @@ import { MATERIAL_CATEGORY, CATEGORY_LABEL, type PrintMaterial } from "@shared/c
 import { isCheckoutConfigured } from "../stripeClient";
 import { resolvePromoForOrder } from "../promoCheckout";
 import { cropExtractPx } from "@shared/commerce/printCrop";
-import { toImageRef } from "../../images";
+import { serializePrintDetail } from "./printDetailSerializer";
 import sharp from "sharp";
 
 function baseUrlOf(req: Request): string {
@@ -291,65 +290,11 @@ export function registerPrintRoutes(app: Express): void {
         return res.status(404).json({ message: "Print not found" });
       }
 
-      // Expose only the options the configurator may present: enabled + eligible variants that are still
-      // OFFERED. A disabled or resolution-failing variant ('unavailable') is hidden, AND the retired
-      // Photo Rag stock is never offered for a new public purchase (historical orders still fulfil).
-      // This SAME selectable set drives purchasability + starting price below, so a print with no
-      // currently-offered variant (e.g. a historical Photo-Rag-only print) is not publicly purchasable.
-      const selectable = publicSelectableVariants(detail.variants, detail.master);
-      const options = selectable
-        .map((v) => ({ v, a: assessVariant(v, detail.master) }))
-        .map(({ v, a }) => {
-          // The customer-facing size NAME + precise physical cm come from the verified catalogue (the
-          // SKU stays server-side, never sent). `sizeName` is the displayName without the cm suffix
-          // ("A3", "12×16 in"); the decimals are the real physical size (29.7×42, 30.5×40.6, …).
-          const product = getProdigiProduct(v.prodigiSku);
-          const sizeName = product ? product.displayName.split(" (")[0] : v.sizeLabel;
-          return {
-            id: v.id,
-            material: v.material,
-            sizeLabel: v.sizeLabel,
-            sizeName,
-            widthCm: product?.widthCm ?? v.widthCm,
-            heightCm: product?.heightCm ?? v.heightCm,
-            framed: v.framed,
-            frameColour: v.frameColour,
-            currency: v.currency,
-            priceMinor: v.retailMinor,   // RETAIL price (customer-facing), never the Prodigi cost
-            effectiveDpi: v.effectiveDpi,
-            mockup: v.mockups?.[0] ?? null,
-            state: a.state, // 'purchasable' | 'provisional'
-            reason: a.reason,
-            prodigiVerified: a.prodigiVerified,
-          };
-        });
-
-      // Purchasability + starting price are judged on the SAME publicly-selectable set the customer sees.
-      const purchasable = selectable.some((v) => isPubliclyPurchasable(v, detail.master));
-
-      // Swap any base64-in-DB image for a small first-party `/img/print/:id/:idx` ref (the SAME
-      // helper the legacy /api routes use). Sending the raw base64 array here made this response
-      // ~6–8 MB and left the hydrated gallery/lightbox DOM carrying multi-MB data: URIs. The
-      // `/img/print/...` route resolves each ref back to storage.getPrint(id).images[idx] and serves
-      // a cached WebP — no DB/schema change, and non-data values (external URLs) pass through untouched.
-      const displayImages = detail.print.images.map((img, i) =>
-        toImageRef("print", detail.print.id, i, img),
-      );
-
+      // ONE contract. The exact same object is seeded into the SSR preload (window.__PRELOADED_PRINT__),
+      // so the client never depends on a robots-blocked fetch of THIS endpoint to know the print exists.
+      // Images are first-party /img/print refs (no base64, no master); see printDetailSerializer.
       res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-      return res.json({
-        id: detail.print.id,
-        slug: printSlugOf(detail.print),
-        title: detail.print.title,
-        description: detail.print.description,
-        images: displayImages,
-        image: displayImages[0] ?? null,
-        artworkId: detail.print.artworkId,
-        purchasable,
-        startingPriceMinor: startingPriceMinor(selectable, detail.master),
-        masterReady: detail.master?.status === "ready",
-        options,
-      });
+      return res.json(serializePrintDetail(detail));
     } catch {
       return res.status(500).json({ message: "Could not load this print." });
     }
