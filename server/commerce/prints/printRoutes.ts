@@ -19,6 +19,8 @@ import {
 import { assessVariant, startingPriceMinor, resolveVariantPrice } from "@shared/commerce/printProduct";
 import { buildFeedTsv } from "@shared/commerce/printFeed";
 import { buildMerchantFeed } from "@shared/commerce/merchantFeed";
+import { selectMerchantOriginals } from "@shared/commerce/merchantOriginals";
+import { storage } from "../../storage";
 import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
 import { quotePrintShipping } from "./printShipping";
 import { getPrintMasterRef, getVariant, getPrintMaster, cropFromRow } from "./adminPrintRepo";
@@ -333,7 +335,23 @@ export function registerPrintRoutes(app: Express): void {
           currency: c.currency,
           imageCount: c.imageCount,
         }));
-      const xml = buildMerchantFeed(items, baseUrlOf(req));
+      // ORIGINAL PAINTINGS — added to the SAME feed, gated by the canonical isPurchasableArtwork check
+      // (inside selectMerchantOriginals) so only works genuinely buyable on the site are advertised.
+      // Automatic once ON: a newly-published purchasable original appears on the next refresh; a sold
+      // one drops out. Never fabricated — price/currency/link/image all come from the artwork's own row.
+      //
+      // OFF BY DEFAULT via MERCHANT_INCLUDE_ORIGINALS. The originals are priced in EUR and ship by a
+      // destination+size estimate (e.g. ~€420 crated freight to the US) — the print flat-rate US
+      // shipping policy CANNOT represent that, and advertising it would understate shipping (a Merchant
+      // policy violation). Flip this flag ON only AFTER Merchant Center is configured for the originals'
+      // currency + real shipping (see the PR notes / owner decisions). Prints are unaffected either way.
+      const includeOriginals = process.env.MERCHANT_INCLUDE_ORIGINALS === "true";
+      const originals = includeOriginals
+        ? selectMerchantOriginals(
+            (await storage.getAllArtworks()) as unknown as Parameters<typeof selectMerchantOriginals>[0],
+          )
+        : [];
+      const xml = buildMerchantFeed(items, baseUrlOf(req), originals);
       res.set("Cache-Control", "public, max-age=300");
       res.type("application/xml; charset=utf-8");
       return res.send(xml);

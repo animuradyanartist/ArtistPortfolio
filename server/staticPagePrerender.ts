@@ -261,13 +261,14 @@ export function renderReturnsHtml(): string {
   return (
     `<section id="returns-ssr" style="${WRAP}">` +
     `<h1 style="${H1}">Returns &amp; Refunds</h1>` +
-    `<p style="${LEAD}">Because each print is made to order specifically for you, please choose carefully. We stand behind the quality of every piece.</p>` +
-    `<h2>Damaged, defective, or not as described</h2>` +
-    `<p style="${BODY}">If your print arrives damaged, defective, or materially different from what was ordered, we will make it right with a <strong>free replacement or a full refund</strong>. Email ${mailto} within 14 days of delivery with your order number and a photo of the issue.</p>` +
-    `<h2>Change-of-mind returns</h2>` +
+    `<p style="${LEAD}">We stand behind every piece. Returns work differently for made-to-order fine-art prints and for unique original paintings, so each is set out separately below.</p>` +
+    `<h2>Fine-art prints</h2>` +
+    `<p style="${BODY}">If a print arrives damaged, defective, or materially different from what was ordered, we will make it right with a <strong>free replacement or a full refund</strong>. Email ${mailto} within 14 days of delivery with your order number and a photo of the issue.</p>` +
     `<p style="${BODY}">Prints are produced individually to order and are not held in stock, so we are generally unable to accept change-of-mind returns or exchanges once production has begun. If you need to change or cancel an order, contact us as soon as possible and we will do our best before it goes to production.</p>` +
     `<h2>Original paintings</h2>` +
-    `<p style="${BODY}">Original artworks are unique, one-of-a-kind pieces. Please <a href="/contact" style="${LINK}">contact the artist</a> before purchase with any questions about a specific work.</p>` +
+    `<p style="${BODY}">Original paintings are unique, finished works — not made to order. For an original bought online and delivered within the EU, you have a <strong>14-day right to change your mind</strong> from the day it arrives: you may return it for a full refund of the item price, without giving a reason.</p>` +
+    `<p style="${BODY}">For a change-of-mind return you arrange and <strong>pay the return shipping</strong>. Because an original is large and its shipping can be significant, the exact shipping cost is shown at checkout before you buy, and we will estimate the likely return cost on request — so you know the cost before you order. Please return the work unused, in its original condition and packaging, so it arrives safely.</p>` +
+    `<p style="${BODY}">If an original arrives <strong>damaged, defective, or not as described</strong>, we put it right at no cost to you — email ${mailto} within 14 days of delivery with your order number and photos.</p>` +
     `<h2>How refunds are issued</h2>` +
     `<p style="${BODY}">Approved refunds are returned to your original payment method.</p>` +
     `<p><a href="/shipping" style="${LINK}">Shipping</a> · <a href="/contact" style="${LINK}">Contact</a></p>` +
