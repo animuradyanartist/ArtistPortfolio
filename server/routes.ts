@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, insertBlogPostSchema, prints } from "@shared/schema";
 import { artworkCanonicalUrl, artworkCanonicalPath, toSlug } from "@shared/canonical";
+import { injectBreadcrumb } from "@shared/breadcrumb";
 import { artworkFigure, figureImageUrl, parseArticle, parseInline } from "@shared/articleMarkdown";
 import { ARTWORKS_TITLE } from "@shared/pageMeta";
 import {
@@ -1975,13 +1976,26 @@ Crawl-delay: 1
                 slug: printSlugOf(detail.print),
                 title: detail.print.title,
                 description: detail.print.description,
-                image: detail.print.images[0] ?? null,
+                // Use the print's SOURCE-ARTWORK image URL, not the print's stored base64 data URI.
+                // `detail.print.images[0]` is a base64 string, so printImageUrl turned it into the
+                // broken URL `https://animuradyan.com/data:image/png;base64,…` for og:image/twitter:
+                // image AND the SSR <img>, and inlining that ~1MB blob three times bloated the crawled
+                // HTML to ~1.1MB (7.5MB rendered). A base64-heavy page with a broken product image is
+                // a Soft-404 risk. `/img/artwork/:id/0` is the SAME real, fetchable image URL artwork
+                // pages use (which index fine) — a short URL, a valid og:image, a clean page.
+                image: detail.print.artworkId != null ? `/img/artwork/${detail.print.artworkId}/0` : null,
                 artworkId: detail.print.artworkId,
                 purchasable: detail.variants.some((v) => isPubliclyPurchasable(v, detail.master)),
                 startingPriceMinor: startingPriceMinor(detail.variants, detail.master),
                 currency: detail.variants[0]?.currency ?? 'EUR',
               };
               html = injectPrintMeta(html, ssr, SEO_BASE_URL);
+              // Breadcrumb trail (Home → Fine Art Prints → this print) for the rich result + structure.
+              html = injectBreadcrumb(html, [
+                { name: "Home", url: `${SEO_BASE_URL}/` },
+                { name: "Fine Art Prints", url: `${SEO_BASE_URL}/prints` },
+                { name: detail.print.title, url: `${SEO_BASE_URL}/prints/${ssr.slug}` },
+              ]);
               // SOFT-404 FIX. injectPrintMeta only writes the <head> (title/meta/canonical/Product
               // JSON-LD), so a print PDP was served an EMPTY body — `<div id="root"></div>` with no
               // <h1> and no words. When Googlebot does not run/complete the client render, it sees a
@@ -2494,6 +2508,12 @@ Crawl-delay: 1
               // address per image, matching what Google actually indexes.
               const artworkRef = refifyImages("artwork", artwork);
               html = injectArtworkMeta(html, artworkRef);
+              // Breadcrumb trail (Home → Originals → this painting) for the rich result + structure.
+              html = injectBreadcrumb(html, [
+                { name: "Home", url: `${SEO_BASE_URL}/` },
+                { name: "Original Paintings", url: `${SEO_BASE_URL}/artworks` },
+                { name: artwork.title || "Untitled", url: artworkCanonicalUrl(SEO_BASE_URL, artwork) },
+              ]);
               // Measured from the actual bytes, or absent. Never inferred from the physical
               // canvas size — that is centimetres of painting, not pixels of photograph.
               const imageSize = await measurePrimaryImage(artwork.images as (string | null)[] | null);

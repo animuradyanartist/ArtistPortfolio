@@ -89,7 +89,7 @@ export function printJsonLd(d: PrintSsrDetail, baseUrl: string): Record<string, 
       price: (d.startingPriceMinor / 100).toFixed(2),
       availability: "https://schema.org/InStock",
       url,
-      seller: { "@type": "Person", name: PRINT_BRAND },
+      seller: { "@type": "Person", "@id": `${baseUrl.replace(/\/+$/, "")}/#person`, name: PRINT_BRAND },
     };
   }
   return node;
