@@ -177,3 +177,26 @@ describe("print PDP body — anti Soft-404 (route injects renderPrintHtml into #
     expect(full).toContain(`${BASE}/artworks/59`);
   });
 });
+
+describe("print PDP image — no base64 blob in the crawled HTML (anti-bloat / anti Soft-404)", () => {
+  const SHELL2 = `<!doctype html><html><head><title>old</title><meta name="description" content="old"><meta property="og:image" content="old"><meta name="twitter:image" content="old"><link rel="canonical" href="https://x/old"></head><body><div id="root"></div></body></html>`;
+
+  it("documents the BUG: a base64 data URI as d.image becomes a broken absolutized URL", () => {
+    // This is why routes.ts must NOT pass detail.print.images[0] (base64) as the SSR image.
+    expect(printImageUrl(detail({ image: "data:image/png;base64,AAAA" }), BASE))
+      .toBe("https://animuradyan.com/data:image/png;base64,AAAA"); // broken, unfetchable
+  });
+
+  it("the source-artwork URL yields a clean, real og:image and NO base64 inlined", () => {
+    const out = injectPrintMeta(SHELL2, detail({ image: "/img/artwork/59/0" }), BASE);
+    expect(out).toContain('property="og:image" content="https://animuradyan.com/img/artwork/59/0"');
+    expect(out).toContain('name="twitter:image" content="https://animuradyan.com/img/artwork/59/0"');
+    expect(out).not.toContain("data:image"); // the ~1MB base64 blob is gone
+  });
+
+  it("the SSR <article> image is the real URL, not a base64 blob", () => {
+    const body = renderPrintHtml(detail({ image: "/img/artwork/59/0" }), BASE);
+    expect(body).toContain('src="https://animuradyan.com/img/artwork/59/0"');
+    expect(body).not.toContain("data:image");
+  });
+});

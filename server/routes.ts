@@ -1975,7 +1975,14 @@ Crawl-delay: 1
                 slug: printSlugOf(detail.print),
                 title: detail.print.title,
                 description: detail.print.description,
-                image: detail.print.images[0] ?? null,
+                // Use the print's SOURCE-ARTWORK image URL, not the print's stored base64 data URI.
+                // `detail.print.images[0]` is a base64 string, so printImageUrl turned it into the
+                // broken URL `https://animuradyan.com/data:image/png;base64,…` for og:image/twitter:
+                // image AND the SSR <img>, and inlining that ~1MB blob three times bloated the crawled
+                // HTML to ~1.1MB (7.5MB rendered). A base64-heavy page with a broken product image is
+                // a Soft-404 risk. `/img/artwork/:id/0` is the SAME real, fetchable image URL artwork
+                // pages use (which index fine) — a short URL, a valid og:image, a clean page.
+                image: detail.print.artworkId != null ? `/img/artwork/${detail.print.artworkId}/0` : null,
                 artworkId: detail.print.artworkId,
                 purchasable: detail.variants.some((v) => isPubliclyPurchasable(v, detail.master)),
                 startingPriceMinor: startingPriceMinor(detail.variants, detail.master),
