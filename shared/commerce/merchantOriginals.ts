@@ -15,11 +15,20 @@
  * referenced). Pure over its input, so it is unit-tested without a database.
  */
 import { isPurchasableArtwork, type PurchasableArtwork } from "./purchasable";
+import { estimateShipping, type ShippableArtwork } from "./shipping";
 import { artworkCanonicalPath, type CanonicalArtwork } from "../canonical";
-import type { MerchantOriginalItem } from "./merchantFeed";
+import type { MerchantOriginalItem, MerchantShipping } from "./merchantFeed";
 
-/** Everything the selector needs from an artwork row (a superset of the purchasability + canonical inputs). */
-export interface MerchantOriginalArtwork extends PurchasableArtwork, CanonicalArtwork {
+/**
+ * The originals launch market: Germany, France, Italy, Austria — all EUR, and the destinations the
+ * checkout estimator quotes for these works (they resolve to one EU zone, so the amounts match). An
+ * original must have a usable automatic quote to EVERY one of these to enter the feed, so a work whose
+ * shipping refuses (e.g. a freight-only oversized canvas) is excluded rather than advertised as buyable.
+ */
+export const MERCHANT_ORIGINAL_SHIP_COUNTRIES = ["DE", "FR", "IT", "AT"] as const;
+
+/** Everything the selector needs from an artwork row (purchasability + canonical + shipping inputs). */
+export interface MerchantOriginalArtwork extends PurchasableArtwork, CanonicalArtwork, ShippableArtwork {
   /** oil | acrylic | mixed — drives the "Original <medium> Painting" title. */
   type?: string | null;
   /** The artist's own published description (public copy), used verbatim when present. */
@@ -36,17 +45,39 @@ export function typeLabelFor(type: string | null | undefined): string {
 }
 
 /**
- * Select + serialise the ORIGINAL paintings that belong in the Merchant feed. Filters by the canonical
- * purchasability gate, then maps each eligible work to a `MerchantOriginalItem`. `now` is injectable so
+ * Shipping for one original to every launch country, using the AUTHORITATIVE checkout estimator
+ * (`estimateShipping`) — the exact same pure function `/api/commerce/quote` and the checkout run, so the
+ * feed amount equals what the customer is charged, with no duplicated or approximated logic. Returns
+ * `null` if the work cannot be quoted to EVERY launch country (e.g. parcel-too-large / freight-only) —
+ * that work is then excluded from the feed. The shipping currency is the artwork's own website currency.
+ */
+function shippingForLaunchCountries(a: MerchantOriginalArtwork): MerchantShipping[] | null {
+  const currency = a.websiteCurrency as string;
+  const out: MerchantShipping[] = [];
+  for (const country of MERCHANT_ORIGINAL_SHIP_COUNTRIES) {
+    const q = estimateShipping(a, country);
+    if (!q.ok) return null; // a refusal to any launch country → not automatically purchasable there
+    out.push({ country, priceMinor: q.amountMinor, currency });
+  }
+  return out;
+}
+
+/**
+ * Select + serialise the ORIGINAL paintings that belong in the Merchant feed. A work is included ONLY
+ * when it passes the canonical purchasability gate AND has a usable automatic shipping quote to every
+ * launch country; each included work carries its exact per-country shipping. `now` is injectable so
  * reservation/commitment expiry is testable.
  */
 export function selectMerchantOriginals(
   artworks: MerchantOriginalArtwork[],
   now?: Date,
 ): MerchantOriginalItem[] {
-  return artworks
-    .filter((a) => isPurchasableArtwork(a, now))
-    .map((a) => ({
+  const out: MerchantOriginalItem[] = [];
+  for (const a of artworks) {
+    if (!isPurchasableArtwork(a, now)) continue;
+    const shipping = shippingForLaunchCountries(a);
+    if (!shipping) continue; // no usable automatic quote (e.g. freight-only) → excluded
+    out.push({
       id: a.id,
       title: a.title,
       path: artworkCanonicalPath(a),
@@ -58,5 +89,8 @@ export function selectMerchantOriginals(
       imageCount: Array.isArray(a.images)
         ? a.images.filter((i) => typeof i === "string" && i.trim()).length
         : null,
-    }));
+      shipping,
+    });
+  }
+  return out;
 }

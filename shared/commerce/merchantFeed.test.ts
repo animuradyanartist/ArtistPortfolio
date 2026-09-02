@@ -12,9 +12,15 @@ const items: MerchantFeedItem[] = [
   { id: 19, title: "Road Through Gold", slug: "road_through_gold", priceMinor: 6900, currency: "USD" },
   { id: 20, title: "Beyond Every Limit", slug: "beyond_every_limit", priceMinor: 6900, currency: "USD" },
 ];
+const EU_SHIP = [
+  { country: "DE", priceMinor: 31482, currency: "EUR" },
+  { country: "FR", priceMinor: 31482, currency: "EUR" },
+  { country: "IT", priceMinor: 31482, currency: "EUR" },
+  { country: "AT", priceMinor: 31482, currency: "EUR" },
+];
 const originals: MerchantOriginalItem[] = [
-  { id: 40, title: "Blue Drift", path: "/artworks/blue-drift-40", description: "A quiet field of blue.", typeLabel: "Oil", priceMinor: 90000, currency: "EUR", imageCount: 3 },
-  { id: 42, title: "Sea & <Sky>", path: "/sea-and-sky", typeLabel: "Acrylic", priceMinor: 110000, currency: "EUR", imageCount: 1 },
+  { id: 40, title: "Blue Drift", path: "/artworks/blue-drift-40", description: "A quiet field of blue.", typeLabel: "Oil", priceMinor: 90000, currency: "EUR", imageCount: 3, shipping: EU_SHIP },
+  { id: 42, title: "Sea & <Sky>", path: "/sea-and-sky", typeLabel: "Acrylic", priceMinor: 110000, currency: "EUR", imageCount: 1, shipping: EU_SHIP },
 ];
 
 describe("buildMerchantFeed — RSS 2.0 envelope", () => {
@@ -183,5 +189,56 @@ describe("buildMerchantFeed — original paintings in the same feed", () => {
     const xml = buildMerchantFeed([], BASE, [{ id: 7, title: "Free?", path: "/artworks/free-7", typeLabel: "Oil", priceMinor: 0, currency: "EUR" }]);
     expect(xml).not.toContain("original-7");
     expect(xml).not.toContain("<item>");
+  });
+});
+
+describe("buildMerchantFeed — per-item g:shipping on originals (launch market DE/FR/IT/AT, EUR)", () => {
+  it("emits a g:shipping block for EACH launch country with the exact amount + EUR", () => {
+    const xml = buildMerchantFeed([], BASE, [originals[0]]);
+    expect((xml.match(/<g:shipping>/g) ?? [])).toHaveLength(4);
+    for (const c of ["DE", "FR", "IT", "AT"]) {
+      expect(xml).toContain(`<g:country>${c}</g:country>`);
+    }
+    // Each country carries its price as a nested <g:price> inside <g:shipping>, in Google's format.
+    expect((xml.match(/<g:price>314\.82 EUR<\/g:price>/g) ?? [])).toHaveLength(4);
+  });
+
+  it("keeps the item's own <g:price> distinct from its shipping prices", () => {
+    const xml = buildMerchantFeed([], BASE, [originals[0]]);
+    expect(xml).toContain("<g:price>900.00 EUR</g:price>"); // the artwork price (90000 minor)
+    expect(xml).toContain("<g:price>314.82 EUR</g:price>"); // a shipping price (31482 minor)
+  });
+
+  it("emits shipping in the artwork's own currency (EUR)", () => {
+    const xml = buildMerchantFeed([], BASE, [originals[0]]);
+    // No non-EUR currency leaks into a shipping line.
+    expect(xml).not.toMatch(/<g:price>[\d.]+ USD<\/g:price>\s*<\/g:shipping>/);
+    expect(xml).toContain("<g:country>DE</g:country>");
+  });
+
+  it("PRINTS carry NO per-item g:shipping (their shipping stays account-level, unchanged)", () => {
+    const xml = buildMerchantFeed(items, BASE); // prints only
+    expect(xml).not.toContain("<g:shipping>");
+    expect(xml).not.toContain("<g:country>");
+  });
+
+  it("an original WITHOUT a shipping array emits no g:shipping (never a blank/zero shipping line)", () => {
+    const xml = buildMerchantFeed([], BASE, [{ id: 8, title: "No Ship", path: "/artworks/no-ship-8", typeLabel: "Oil", priceMinor: 50000, currency: "EUR" }]);
+    expect(xml).toContain("<g:id>original-8</g:id>");
+    expect(xml).not.toContain("<g:shipping>");
+  });
+
+  it("remains a valid RSS 2.0 document with prints + originals + shipping all present", () => {
+    const xml = buildMerchantFeed(items, BASE, originals);
+    expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    expect(xml).toContain('<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">');
+    expect((xml.match(/<item>/g) ?? [])).toHaveLength(4);
+    expect((xml.match(/<item>/g) ?? []).length).toBe((xml.match(/<\/item>/g) ?? []).length);
+    expect((xml.match(/<g:shipping>/g) ?? []).length).toBe((xml.match(/<\/g:shipping>/g) ?? []).length);
+    expect(xml).toContain("</rss>");
+    // Safety still holds with shipping present.
+    expect(xml).not.toContain("data:image");
+    expect(xml).not.toContain("master");
+    expect(xml).not.toContain("/api/");
   });
 });

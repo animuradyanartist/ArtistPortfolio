@@ -7,7 +7,13 @@
  * unbuyable painting to Google or prices it wrong.
  */
 import { describe, it, expect } from "vitest";
-import { selectMerchantOriginals, typeLabelFor, type MerchantOriginalArtwork } from "./merchantOriginals";
+import {
+  selectMerchantOriginals,
+  typeLabelFor,
+  MERCHANT_ORIGINAL_SHIP_COUNTRIES,
+  type MerchantOriginalArtwork,
+} from "./merchantOriginals";
+import { estimateShipping } from "./shipping";
 
 function artwork(over: Partial<MerchantOriginalArtwork> = {}): MerchantOriginalArtwork {
   return {
@@ -17,6 +23,7 @@ function artwork(over: Partial<MerchantOriginalArtwork> = {}): MerchantOriginalA
     type: "oil",
     description: "A quiet field of blue.",
     images: ["data:image/jpeg;base64,AAAA", "https://cdn/x.jpg", "https://cdn/y.jpg"],
+    dimensions: "80x100cm", // a standard, quotable size (parcel service, not freight)
     availability: "available",
     directSaleEnabled: true,
     websitePriceMinor: 90000,
@@ -25,6 +32,10 @@ function artwork(over: Partial<MerchantOriginalArtwork> = {}): MerchantOriginalA
     reservedUntil: null,
     hasCommitment: false,
     commitmentUntil: null,
+    shippingOverrideMinor: null,
+    shippingDestinationOverrides: null,
+    packedDepthCm: null,
+    packingMarginCm: null,
     ...over,
   };
 }
@@ -106,5 +117,72 @@ describe("selectMerchantOriginals — serialised shape (matches PDP + checkout)"
   it("counts only real stored images for additional_image_link", () => {
     expect(selectMerchantOriginals([artwork({ images: ["a", "b", "", null, "c"] })])[0].imageCount).toBe(3);
     expect(selectMerchantOriginals([artwork({ images: null })])[0].imageCount).toBeNull();
+  });
+});
+
+describe("selectMerchantOriginals — per-item shipping (reuses the checkout estimator)", () => {
+  it("attaches shipping for EVERY launch country (DE, FR, IT, AT) to an eligible original", () => {
+    const o = selectMerchantOriginals([artwork()])[0];
+    expect(o.shipping?.map((s) => s.country).sort()).toEqual(["AT", "DE", "FR", "IT"]);
+  });
+
+  it("emits the EXACT DE shipping the authoritative checkout estimator returns", () => {
+    const a = artwork();
+    const quote = estimateShipping(a, "DE");
+    expect(quote.ok).toBe(true);
+    const de = selectMerchantOriginals([a])[0].shipping?.find((s) => s.country === "DE");
+    expect(de?.priceMinor).toBe(quote.ok ? quote.amountMinor : -1);
+  });
+
+  it("emits the EXACT FR shipping the authoritative checkout estimator returns", () => {
+    const a = artwork();
+    const quote = estimateShipping(a, "FR");
+    const fr = selectMerchantOriginals([a])[0].shipping?.find((s) => s.country === "FR");
+    expect(fr?.priceMinor).toBe(quote.ok ? quote.amountMinor : -1);
+  });
+
+  it("emits the EXACT IT shipping the authoritative checkout estimator returns", () => {
+    const a = artwork();
+    const quote = estimateShipping(a, "IT");
+    const it = selectMerchantOriginals([a])[0].shipping?.find((s) => s.country === "IT");
+    expect(it?.priceMinor).toBe(quote.ok ? quote.amountMinor : -1);
+  });
+
+  it("emits the EXACT AT shipping the authoritative checkout estimator returns", () => {
+    const a = artwork();
+    const quote = estimateShipping(a, "AT");
+    const at = selectMerchantOriginals([a])[0].shipping?.find((s) => s.country === "AT");
+    expect(at?.priceMinor).toBe(quote.ok ? quote.amountMinor : -1);
+  });
+
+  it("labels every shipping line with the artwork's own currency (EUR)", () => {
+    const o = selectMerchantOriginals([artwork({ websiteCurrency: "EUR" })])[0];
+    expect(o.shipping?.every((s) => s.currency === "EUR")).toBe(true);
+  });
+
+  it("PARITY: every launch-country shipping equals estimateShipping() minor-for-minor (no duplicated logic)", () => {
+    const a = artwork({ id: 41, dimensions: "70x90cm" });
+    const o = selectMerchantOriginals([a])[0];
+    for (const country of MERCHANT_ORIGINAL_SHIP_COUNTRIES) {
+      const quote = estimateShipping(a, country);
+      expect(quote.ok).toBe(true);
+      const line = o.shipping?.find((s) => s.country === country);
+      expect(line?.priceMinor).toBe(quote.ok ? quote.amountMinor : -1);
+    }
+  });
+
+  it("EXCLUDES a freight-only / parcel-too-large original (no usable automatic quote)", () => {
+    // Longest side 300cm > MAX_LONGEST_SIDE_CM (274) → estimateShipping refuses → excluded.
+    // This is the exact mechanism that removes artwork id 79 ("No Measure for Distance",
+    // parcel-too-large in production) from the feed while checkout cannot auto-quote it.
+    const oversized = artwork({ id: 79, dimensions: "300x60cm" });
+    expect(estimateShipping(oversized, "DE").ok).toBe(false);
+    expect(selectMerchantOriginals([oversized])).toHaveLength(0);
+  });
+
+  it("EXCLUDES a work whose dimensions cannot be read (no automatic quote)", () => {
+    const noDims = artwork({ id: 43, dimensions: null });
+    expect(estimateShipping(noDims, "DE").ok).toBe(false);
+    expect(selectMerchantOriginals([noDims])).toHaveLength(0);
   });
 });

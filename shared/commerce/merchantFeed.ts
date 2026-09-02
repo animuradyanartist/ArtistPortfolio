@@ -133,6 +133,16 @@ function feedItemXml(item: MerchantFeedItem, baseUrl: string): string {
 
 const MERCHANT_ORIGINAL_PRODUCT_TYPE = "Original Paintings";
 
+/** One per-destination shipping rate for a feed item — Google's RSS `g:shipping` shape. */
+export interface MerchantShipping {
+  /** ISO-2 destination (e.g. "DE"). */
+  country: string;
+  /** Shipping cost in minor units — the SAME figure the checkout estimator charges for this work. */
+  priceMinor: number;
+  /** ISO 4217 code (e.g. "EUR"). */
+  currency: string;
+}
+
 export interface MerchantOriginalItem {
   /** The artwork's stable database id — the feed id is `original-<id>`. */
   id: number;
@@ -150,6 +160,9 @@ export interface MerchantOriginalItem {
   currency: string;
   /** Total stored images → additional_image_link for 1..N-1 (first-party /img/artwork refs). */
   imageCount?: number | null;
+  /** Per-destination shipping rates, one per launch country — each the checkout estimator's exact
+   *  figure for this work. Emitted as g:shipping so Google shows the true shipping, never a flat guess. */
+  shipping?: MerchantShipping[];
 }
 
 /** "Blue Drift — Original Oil Painting". */
@@ -201,6 +214,14 @@ function originalItemXml(item: MerchantOriginalItem, baseUrl: string): string {
     // once sold it is not passed to this builder at all, so it never advertises as buyable.
     `      <g:availability>in_stock</g:availability>`,
     `      <g:price>${e(merchantPrice(item.priceMinor, item.currency))}</g:price>`,
+    // Exact per-destination shipping — the SAME figure the checkout estimator charges for THIS work,
+    // so Google never shows a shipping cost lower than checkout. One block per launch country.
+    ...(item.shipping ?? []).flatMap((s) => [
+      "      <g:shipping>",
+      `        <g:country>${e(s.country)}</g:country>`,
+      `        <g:price>${e(merchantPrice(s.priceMinor, s.currency))}</g:price>`,
+      "      </g:shipping>",
+    ]),
     `      <g:brand>${e(MERCHANT_BRAND)}</g:brand>`,
     `      <g:condition>new</g:condition>`,
     `      <g:identifier_exists>no</g:identifier_exists>`,
