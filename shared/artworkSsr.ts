@@ -262,7 +262,17 @@ export interface SsrImageSize {
   height: number;
 }
 
-export function renderArtworkHtml(a: SsrArtwork, baseUrl: string, imageSize?: SsrImageSize | null): string {
+export function renderArtworkHtml(
+  a: SsrArtwork,
+  baseUrl: string,
+  imageSize?: SsrImageSize | null,
+  // The slug of a genuinely purchasable fine-art print OF this painting, or null. Passed by the
+  // server from `purchasablePrintSlugForArtwork` (the same gate the client's cross-link uses), so
+  // the original→print relation is factual and deterministic. When set, a crawlable link is added —
+  // completing the internal graph on the ORIGINAL side, where until now only the print PDP linked
+  // back. Non-JS crawlers and text-extracting AI never ran the client component that renders it.
+  relatedPrintSlug?: string | null,
+): string {
   const e = escapeHtml;
   const fact = artworkFactLine(a);
   const image = artworkImageUrl(a, baseUrl);
@@ -298,6 +308,11 @@ export function renderArtworkHtml(a: SsrArtwork, baseUrl: string, imageSize?: Ss
     (isLandscape({ title: a.title, description: a.description }) ?
       ` · <a href="/collections/landscape-paintings" style="color:#1d4ed8;text-decoration:underline">Contemporary Landscape Paintings</a>` : "") +
     ` · <a href="/about" style="color:#1d4ed8;text-decoration:underline">About Ani Muradyan</a></p>` +
+    // Original → print. Only when a real, purchasable print exists; the original stays the premium,
+    // one-of-a-kind work, so the wording keeps that line clear (it does not call the print the work).
+    (relatedPrintSlug
+      ? `<p><a href="/prints/${e(relatedPrintSlug)}" style="color:#1d4ed8;text-decoration:underline">Available as a fine-art print</a></p>`
+      : "") +
     `</article>`
   );
 }

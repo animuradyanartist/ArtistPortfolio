@@ -166,6 +166,22 @@ describe("the page is readable by a crawler", () => {
     expect(html).toContain(`src="${BASE}/img/artwork/42/0"`);
   });
 
+  it("adds a crawlable ORIGINAL→print link only when a purchasable print exists", () => {
+    const withPrint = renderArtworkHtml(artwork(), BASE, null, "road_through_gold");
+    expect(withPrint).toContain('href="/prints/road_through_gold"');
+    expect(withPrint).toContain(">Available as a fine-art print</a>");
+  });
+
+  it("omits the print link when there is no purchasable print (null / undefined)", () => {
+    expect(renderArtworkHtml(artwork(), BASE, null, null)).not.toContain("/prints/");
+    expect(renderArtworkHtml(artwork(), BASE)).not.toContain("Available as a fine-art print");
+  });
+
+  it("escapes the print slug it is handed (no markup break-out)", () => {
+    const html = renderArtworkHtml(artwork(), BASE, null, '"><script>x</script>');
+    expect(html).not.toContain("<script>x</script>");
+  });
+
   it("carries substantially more than the 65 characters production served", () => {
     const text = renderArtworkHtml(artwork(), BASE).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     expect(text.length).toBeGreaterThan(200);

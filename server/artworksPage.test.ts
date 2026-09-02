@@ -127,4 +127,12 @@ describe("the ItemList describes the paintings", () => {
     const canonical = new Set(artworks.map((a) => artworkCanonicalUrl(BASE, a)));
     for (const { item } of list.itemListElement) expect(canonical).toContain(item.url);
   });
+
+  it("every item's artist resolves to the ONE canonical #person entity", async () => {
+    const list = await itemList();
+    expect(list.itemListElement.length).toBeGreaterThan(0);
+    for (const { item } of list.itemListElement) {
+      expect(item.artist).toMatchObject({ "@type": "Person", "@id": `${BASE}/#person`, name: "Ani Muradyan" });
+    }
+  });
 });
