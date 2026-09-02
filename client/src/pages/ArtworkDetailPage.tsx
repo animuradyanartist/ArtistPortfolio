@@ -226,12 +226,14 @@ export default function ArtworkDetailPage() {
                   aria-label="Open full-screen viewer"
                   className="block w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-800 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f5f1ea]"
                 >
+                  {/* No width/height attrs: artworkDimensions is the painting's CENTIMETRES, not the
+                      photo's pixels — stamping "79x71" as px advertised a false intrinsic size/ratio
+                      to the browser and Google. The display box is already reserved by the CSS
+                      `w-full aspect-[4/5]`, so removing them fixes the false ratio without CLS. */}
                   <img
                     src={images[currentImageIndex]}
                     alt={generateArtworkAlt(artwork.title, artwork.medium)}
                     title={`${artwork.title} – ${artwork.medium} by Ani Muradyan`}
-                    width={artworkDimensions(artwork as unknown as SsrArtwork)?.width}
-                    height={artworkDimensions(artwork as unknown as SsrArtwork)?.height}
                     className="w-full object-cover aspect-[4/5]"
                     loading="eager"
                   />

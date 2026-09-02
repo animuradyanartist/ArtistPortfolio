@@ -67,9 +67,55 @@ function newestFirst(list: readonly PrerenderExhibition[]): PrerenderExhibition[
   return [...list].sort((a, b) => (b.year || 0) - (a.year || 0));
 }
 
+/**
+ * The /about page IS the artist's entity hub, but it carried no structured data. This binds the
+ * canonical Person to /about via a ProfilePage, using ONLY facts already stated publicly on the site
+ * (name, role, location, medium) + the same sameAs profiles as the global Person block. Stable @id so
+ * search/AI systems can unify this node with the homepage Person and the artwork `creator` nodes.
+ */
+function aboutProfileJsonLd(): string {
+  const person = {
+    "@type": ["Person", "VisualArtist"],
+    "@id": "https://animuradyan.com/#person",
+    name: "Ani Muradyan",
+    jobTitle: "Artist",
+    description:
+      "Ani Muradyan is an Armenian contemporary oil painter based in Yerevan, known for atmospheric landscape and figurative works. She makes original, one-of-a-kind oil paintings and offers fine-art and canvas prints of selected works.",
+    url: "https://animuradyan.com",
+    mainEntityOfPage: "https://animuradyan.com/about",
+    image: "https://animuradyan.com/ani-portrait.webp",
+    nationality: { "@type": "Country", name: "Armenia" },
+    homeLocation: {
+      "@type": "Place",
+      name: "Yerevan, Armenia",
+      address: { "@type": "PostalAddress", addressLocality: "Yerevan", addressCountry: "AM" },
+    },
+    artform: "Oil painting",
+    artMedium: "Oil on canvas",
+    sameAs: [
+      "https://www.instagram.com/animuradyan.art/",
+      "https://www.singulart.com/en/artist/ani-muradyan-62448",
+      "https://www.saatchiart.com/account/profile/1980379",
+      "https://www.artfinder.com/artist/ani-muradyan/",
+    ],
+    knowsAbout: [
+      "Oil Painting", "Figurative Painting", "Landscape Painting",
+      "Contemporary Landscape Painting", "Armenian Contemporary Art", "Fine Art",
+    ],
+  };
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    url: "https://animuradyan.com/about",
+    mainEntity: person,
+  };
+  return `<script type="application/ld+json" id="about-jsonld">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>`;
+}
+
 export function renderAboutHtml(bio: PrerenderBio | undefined, exhibitions: readonly PrerenderExhibition[]): string {
   const shows = newestFirst(exhibitions);
   return (
+    aboutProfileJsonLd() +
     `<section id="about-ssr" style="${WRAP}">` +
     `<h1 style="${H1}">Ani Muradyan</h1>` +
     `<p style="${LEAD}">Contemporary oil painter working with simplified forms, colour, space, and emotional atmosphere — based in Yerevan, Armenia.</p>` +

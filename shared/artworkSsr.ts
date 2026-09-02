@@ -221,7 +221,9 @@ export function artworkJsonLd(a: SsrArtwork, baseUrl: string): Record<string, un
     artform: "Painting",
     artMedium: a.medium || "oil on canvas",
     artworkSurface: "Canvas",
-    creator: { "@type": "Person", name: "Ani Muradyan", url: baseUrl },
+    // Same @id as the homepage Person and the /about ProfilePage, so search/AI systems unify the
+    // creator of every artwork with the one artist entity instead of minting a new node per page.
+    creator: { "@type": "Person", "@id": `${baseUrl}/#person`, name: "Ani Muradyan", url: baseUrl },
   };
   if (a.year) jsonld.dateCreated = String(a.year);
 

@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { storage } from "./storage";
 import { insertArtworkSchema, insertPrintSchema, insertExhibitionSchema, insertHomepageSettingsSchema, insertArtistBioSchema, insertContactSettingsSchema, insertGalleryPhotoSchema, insertBlogPostSchema, prints } from "@shared/schema";
 import { artworkCanonicalUrl, artworkCanonicalPath, toSlug } from "@shared/canonical";
+import { injectBreadcrumb } from "@shared/breadcrumb";
 import { artworkFigure, figureImageUrl, parseArticle, parseInline } from "@shared/articleMarkdown";
 import { ARTWORKS_TITLE } from "@shared/pageMeta";
 import {
@@ -1989,6 +1990,12 @@ Crawl-delay: 1
                 currency: detail.variants[0]?.currency ?? 'EUR',
               };
               html = injectPrintMeta(html, ssr, SEO_BASE_URL);
+              // Breadcrumb trail (Home → Fine Art Prints → this print) for the rich result + structure.
+              html = injectBreadcrumb(html, [
+                { name: "Home", url: `${SEO_BASE_URL}/` },
+                { name: "Fine Art Prints", url: `${SEO_BASE_URL}/prints` },
+                { name: detail.print.title, url: `${SEO_BASE_URL}/prints/${ssr.slug}` },
+              ]);
               // SOFT-404 FIX. injectPrintMeta only writes the <head> (title/meta/canonical/Product
               // JSON-LD), so a print PDP was served an EMPTY body — `<div id="root"></div>` with no
               // <h1> and no words. When Googlebot does not run/complete the client render, it sees a
@@ -2501,6 +2508,12 @@ Crawl-delay: 1
               // address per image, matching what Google actually indexes.
               const artworkRef = refifyImages("artwork", artwork);
               html = injectArtworkMeta(html, artworkRef);
+              // Breadcrumb trail (Home → Originals → this painting) for the rich result + structure.
+              html = injectBreadcrumb(html, [
+                { name: "Home", url: `${SEO_BASE_URL}/` },
+                { name: "Original Paintings", url: `${SEO_BASE_URL}/artworks` },
+                { name: artwork.title || "Untitled", url: artworkCanonicalUrl(SEO_BASE_URL, artwork) },
+              ]);
               // Measured from the actual bytes, or absent. Never inferred from the physical
               // canvas size — that is centimetres of painting, not pixels of photograph.
               const imageSize = await measurePrimaryImage(artwork.images as (string | null)[] | null);
