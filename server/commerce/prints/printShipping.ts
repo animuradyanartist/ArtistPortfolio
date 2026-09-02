@@ -48,14 +48,24 @@ export type PrintQuoteResult =
   | { ok: false; reason: PrintQuoteFailReason; status?: number; outcome?: string; detail?: string };
 
 /**
- * The v4.0 `/quotes` endpoint returns `outcome: "Created"` on success — NOT "Ok" (that was an
- * unverified assumption that made every real quote fail-closed to "no-quote"). We accept the known
- * success values case-insensitively; `"ok"` is kept as a defensive alias. Anything else (e.g.
- * `NotEnoughInformation`, a country/product problem) is treated as no usable quote.
+ * Whether a Prodigi `/quotes` outcome represents a usable quote.
+ *
+ * v4.0 returns `outcome: "Created"` on a clean success AND `outcome: "CreatedWithIssues"` when a VALID
+ * quote came back but carries a WARNING — a US sales-tax note (`destinationCountryCode.UsSalesTaxWarning`),
+ * or an international import/VAT/customs note. The quote in `quotes[]` is still real and is exactly what
+ * the customer is charged. The old check accepted ONLY {"created","ok"}, so it rejected every
+ * destination that triggers a warning — i.e. all US and international quotes — and returned "no-quote".
+ * Armenia kept working because its quote comes back as a clean "Created". That was the international
+ * checkout outage.
+ *
+ * So ANY "created…" outcome is a success here. Genuine failures — "NotEnoughInformation",
+ * "CountryNotSupported", etc. — do NOT start with "created" and are still rejected, and the caller's
+ * downstream guard (a priced quote must exist in `quotes[]`) keeps a warning-with-no-usable-quote
+ * fail-closed. `"ok"` is retained as a defensive alias.
  */
-const QUOTE_OK_OUTCOMES = new Set(["created", "ok"]);
 export function isQuoteOkOutcome(outcome: unknown): boolean {
-  return QUOTE_OK_OUTCOMES.has(String(outcome ?? "").trim().toLowerCase());
+  const o = String(outcome ?? "").trim().toLowerCase();
+  return o === "ok" || o.startsWith("created");
 }
 
 /** A short, KEY-FREE summary of a Prodigi error body (its `issues`/message), bounded in length. */
@@ -115,7 +125,8 @@ export function costToMinor(amount: string | null | undefined): number | null {
 /**
  * Pick the shipping figure from a quote response. Prefers a quote whose `shipmentMethod` matches the
  * requested method (case-insensitive); otherwise the cheapest shipping. Returns null when the outcome
- * is not a success ("Created"/"Ok") or no quote carries a usable shipping cost — the fail-closed path.
+ * is not a success ("Created"/"CreatedWithIssues"/"Ok") or no quote carries a usable shipping cost —
+ * the fail-closed path.
  */
 export function selectShipping(
   resp: ProdigiQuoteResponse,

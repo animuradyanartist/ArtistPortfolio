@@ -116,6 +116,60 @@ describe("isQuoteOkOutcome", () => {
     expect(isQuoteOkOutcome(null)).toBe(false);
     expect(isQuoteOkOutcome(undefined)).toBe(false);
   });
+
+  it("accepts 'CreatedWithIssues' — a valid quote with a warning is still a success", () => {
+    // The exact outcome the live US quote returns (UsSalesTaxWarning) and international quotes return
+    // (import/VAT/customs warnings). Rejecting it was the international-checkout outage.
+    expect(isQuoteOkOutcome("CreatedWithIssues")).toBe(true);
+    expect(isQuoteOkOutcome("createdwithissues")).toBe(true);
+    expect(isQuoteOkOutcome("  CreatedWithIssues  ")).toBe(true);
+  });
+
+  it("STILL rejects genuine failures that are not a 'created' outcome (fail-closed preserved)", () => {
+    expect(isQuoteOkOutcome("CountryNotSupported")).toBe(false);
+    expect(isQuoteOkOutcome("NotEnoughInformation")).toBe(false);
+    expect(isQuoteOkOutcome("MissingRequiredAttributes")).toBe(false);
+    expect(isQuoteOkOutcome("")).toBe(false);
+  });
+});
+
+describe("CreatedWithIssues — the international shipping regression", () => {
+  // Prodigi returns a VALID quote with outcome "CreatedWithIssues" for US (sales-tax warning) and for
+  // international destinations (customs/VAT warnings). The parser used to reject it, so every non-Armenia
+  // destination fell to "no-quote" and checkout refused. Armenia returned a clean "Created" and worked.
+  const usCanvasQuote = quoteResponse({
+    outcome: "CreatedWithIssues",
+    quotes: [
+      { shipmentMethod: "Standard", costSummary: { items: { amount: "0.00", currency: "USD" }, shipping: { amount: "34.55", currency: "USD" } } },
+    ],
+  });
+
+  it("selectShipping accepts a CreatedWithIssues response that carries a valid priced quote", () => {
+    const picked = selectShipping(usCanvasQuote, "standard");
+    expect(picked).not.toBeNull();
+    expect(picked?.shippingMinor).toBe(3455); // $34.55 — the exact proven live quote
+    expect(picked?.currency).toBe("USD");
+    expect(picked?.method).toBe("Standard");
+  });
+
+  it("quotePrintShipping returns the real shipping (never a fabricated amount) for CreatedWithIssues", async () => {
+    // The exact proven scenario: GLOBAL-CAN-24X36, MirrorWrap injected by the SKU registry, US, USD.
+    const port: ProdigiQuotePort = { getQuote: async () => usCanvasQuote };
+    const r = await quotePrintShipping(
+      { prodigiSku: "GLOBAL-CAN-24X36", copies: 1, country: "US", currency: "USD" },
+      { configured: () => true, prodigi: port },
+    );
+    expect(r).toEqual({ ok: true, shippingMinor: 3455, itemsMinor: 0, currency: "USD", method: "Standard" });
+  });
+
+  it("STILL fails closed when CreatedWithIssues carries NO usable priced quote", () => {
+    // A warning outcome with an empty/unpriced quotes array is NOT a usable quote — it must not proceed.
+    expect(selectShipping(quoteResponse({ outcome: "CreatedWithIssues", quotes: [] }))).toBeNull();
+    expect(selectShipping(quoteResponse({
+      outcome: "CreatedWithIssues",
+      quotes: [{ shipmentMethod: "Standard", costSummary: { items: { amount: "10", currency: "USD" }, shipping: { amount: null as unknown as string, currency: "USD" } } }],
+    }))).toBeNull();
+  });
 });
 
 describe("quotePrintShipping — fails closed", () => {
