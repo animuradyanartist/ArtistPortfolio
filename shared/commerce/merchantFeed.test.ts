@@ -5,12 +5,16 @@
  * sellable master asset — so each is pinned here.
  */
 import { describe, it, expect } from "vitest";
-import { buildMerchantFeed, merchantPrice, merchantAdditionalImageLinks, type MerchantFeedItem } from "./merchantFeed";
+import { buildMerchantFeed, merchantPrice, merchantAdditionalImageLinks, type MerchantFeedItem, type MerchantOriginalItem } from "./merchantFeed";
 
 const BASE = "https://animuradyan.com";
 const items: MerchantFeedItem[] = [
   { id: 19, title: "Road Through Gold", slug: "road_through_gold", priceMinor: 6900, currency: "USD" },
   { id: 20, title: "Beyond Every Limit", slug: "beyond_every_limit", priceMinor: 6900, currency: "USD" },
+];
+const originals: MerchantOriginalItem[] = [
+  { id: 40, title: "Blue Drift", path: "/artworks/blue-drift-40", description: "A quiet field of blue.", typeLabel: "Oil", priceMinor: 90000, currency: "EUR", imageCount: 3 },
+  { id: 42, title: "Sea & <Sky>", path: "/sea-and-sky", typeLabel: "Acrylic", priceMinor: 110000, currency: "EUR", imageCount: 1 },
 ];
 
 describe("buildMerchantFeed — RSS 2.0 envelope", () => {
@@ -119,6 +123,65 @@ describe("buildMerchantFeed — safety invariants", () => {
     const xml = buildMerchantFeed([], BASE);
     expect(xml).toContain("<channel>");
     expect(xml).toContain("</rss>");
+    expect(xml).not.toContain("<item>");
+  });
+});
+
+describe("buildMerchantFeed — original paintings in the same feed", () => {
+  it("PRINT OUTPUT IS UNCHANGED when no originals are passed (byte-for-byte)", () => {
+    expect(buildMerchantFeed(items, BASE, [])).toBe(buildMerchantFeed(items, BASE));
+  });
+
+  it("emits prints AND originals with collision-safe ids that cannot clash", () => {
+    const xml = buildMerchantFeed(items, BASE, originals);
+    expect((xml.match(/<item>/g) ?? [])).toHaveLength(4);
+    expect(xml).toContain("<g:id>print-19</g:id>");
+    expect(xml).toContain("<g:id>print-20</g:id>");
+    expect(xml).toContain("<g:id>original-40</g:id>");
+    expect(xml).toContain("<g:id>original-42</g:id>");
+    // A print id and an original id share the same number but never the same feed id.
+    const printAlso20 = buildMerchantFeed([{ id: 40, title: "P", slug: "p", priceMinor: 5000, currency: "USD" }], BASE, [originals[0]]);
+    expect(printAlso20).toContain("<g:id>print-40</g:id>");
+    expect(printAlso20).toContain("<g:id>original-40</g:id>");
+  });
+
+  it("gives an original its own title, product_type, EUR price and canonical link", () => {
+    const xml = buildMerchantFeed([], BASE, [originals[0]]);
+    expect(xml).toContain("<g:title>Blue Drift — Original Oil Painting</g:title>");
+    expect(xml).toContain("<g:product_type>Original Paintings</g:product_type>");
+    expect(xml).toContain("<g:price>900.00 EUR</g:price>");
+    expect(xml).toContain("<g:link>https://animuradyan.com/artworks/blue-drift-40</g:link>");
+    expect(xml).toContain("<g:availability>in_stock</g:availability>");
+    expect(xml).toContain("<g:brand>Ani Muradyan</g:brand>");
+    expect(xml).toContain("<g:condition>new</g:condition>");
+    expect(xml).toContain("<g:identifier_exists>no</g:identifier_exists>");
+  });
+
+  it("honours a root-level seoSlug link and XML-escapes the title", () => {
+    const xml = buildMerchantFeed([], BASE, [originals[1]]);
+    expect(xml).toContain("<g:link>https://animuradyan.com/sea-and-sky</g:link>");
+    expect(xml).toContain("Sea &amp; &lt;Sky&gt; — Original Acrylic Painting");
+  });
+
+  it("uses first-party /img/artwork images (primary + additional), NEVER a print master or base64", () => {
+    const xml = buildMerchantFeed([], BASE, [originals[0]]);
+    expect(xml).toContain("<g:image_link>https://animuradyan.com/img/artwork/40/0</g:image_link>");
+    expect((xml.match(/<g:additional_image_link>/g) ?? [])).toHaveLength(2); // 3 images → 1..2
+    expect(xml).toContain("<g:additional_image_link>https://animuradyan.com/img/artwork/40/1</g:additional_image_link>");
+    expect(xml).not.toContain("/img/print/");   // never a print image on an original
+    expect(xml).not.toContain("master");
+    expect(xml).not.toContain("data:image");
+    expect(xml).not.toContain("/api/");
+  });
+
+  it("the channel title advertises both product lines only when originals are present", () => {
+    expect(buildMerchantFeed(items, BASE, originals)).toContain("Fine Art Prints &amp; Original Paintings");
+    expect(buildMerchantFeed(items, BASE, [])).toContain("<title>Ani Muradyan — Fine Art Prints</title>");
+  });
+
+  it("drops an unpriced original rather than advertising it", () => {
+    const xml = buildMerchantFeed([], BASE, [{ id: 7, title: "Free?", path: "/artworks/free-7", typeLabel: "Oil", priceMinor: 0, currency: "EUR" }]);
+    expect(xml).not.toContain("original-7");
     expect(xml).not.toContain("<item>");
   });
 });

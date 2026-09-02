@@ -117,22 +117,128 @@ function feedItemXml(item: MerchantFeedItem, baseUrl: string): string {
   ].join("\n");
 }
 
-/**
- * Build the RSS 2.0 product feed. ONLY genuinely purchasable, priced prints become items — an item
- * with no positive price is dropped rather than advertised as buyable. The caller passes the
- * purchasable-print collection; this function never decides purchasability itself.
- */
-export function buildMerchantFeed(items: MerchantFeedItem[], baseUrl: string): string {
+// ── ORIGINAL PAINTINGS ─────────────────────────────────────────────────────────────────────────
+//
+// The SAME feed also carries genuinely purchasable ORIGINAL paintings. Eligibility is decided ONCE
+// upstream by the canonical `isPurchasableArtwork` gate (directSale on + a positive website price +
+// a currency + availability exactly "available" + not reserved/committed + shipping enabled) — the
+// same gate the artwork page, cart revalidation and Stripe checkout use, so the feed can never
+// advertise a work the site will not sell. A sold or de-listed original simply stops being passed in
+// and drops out on the next feed refresh (unique quantity: one work, in_stock while available).
+//
+// IDs are collision-safe: prints are `print-<id>`, originals are `original-<id>`. An original's price
+// is its OWN website price (websitePriceMinor/websiteCurrency) — the exact figure the PDP shows and
+// Stripe charges — NOT the marketplace `price`. Images are the first-party /img/artwork route (no
+// print master exists for an artwork; nothing private is ever referenced).
+
+const MERCHANT_ORIGINAL_PRODUCT_TYPE = "Original Paintings";
+
+export interface MerchantOriginalItem {
+  /** The artwork's stable database id — the feed id is `original-<id>`. */
+  id: number;
+  title: string;
+  /** The FULL canonical PDP path, already leading-slashed — `/{seoSlug}` or `/artworks/{slug}-{id}`
+   *  (from artworkCanonicalPath). Used verbatim as the landing page, so it always matches the site. */
+  path: string;
+  /** The artist's own published description for the work, already plain text. Optional. */
+  description?: string | null;
+  /** "Oil" | "Acrylic" | "Mixed-Media" — the medium word placed in the title. */
+  typeLabel: string;
+  /** The WEBSITE sale price in minor units — what the PDP shows and Stripe charges. */
+  priceMinor: number;
+  /** ISO 4217 code of the website price (e.g. "EUR"). */
+  currency: string;
+  /** Total stored images → additional_image_link for 1..N-1 (first-party /img/artwork refs). */
+  imageCount?: number | null;
+}
+
+/** "Blue Drift — Original Oil Painting". */
+export function merchantOriginalTitle(title: string, typeLabel: string): string {
+  const label = typeLabel.trim();
+  return label ? `${title} — Original ${label} Painting` : `${title} — Original Painting`;
+}
+
+/** A factual description — never invented visual detail. Uses the artist's own copy when present. */
+export function merchantOriginalDescription(item: MerchantOriginalItem): string {
+  const own = (item.description ?? "").replace(/\s+/g, " ").trim();
+  if (own) return own;
+  const label = item.typeLabel.trim().toLowerCase();
+  return `Original ${label ? `${label} ` : ""}painting "${item.title}" by ${MERCHANT_BRAND} — a unique, one-of-a-kind work.`;
+}
+
+/** The public canonical artwork PDP URL — the landing page that states the same website price.
+ *  `path` is the full canonical path (`/{seoSlug}` or `/artworks/{slug}-{id}`), used verbatim. */
+export function merchantOriginalLink(baseUrl: string, path: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+}
+
+/** First-party artwork display image. Never a print master (artworks have none) or a private asset. */
+export function merchantOriginalImageLink(baseUrl: string, artworkId: number): string {
+  return `${baseUrl.replace(/\/+$/, "")}/img/artwork/${artworkId}/0`;
+}
+
+/** Additional first-party artwork images (indexes 1..N-1), capped at Google's limit of 10. */
+export function merchantOriginalAdditionalImageLinks(baseUrl: string, artworkId: number, imageCount?: number | null): string[] {
+  if (typeof imageCount !== "number" || imageCount <= 1) return [];
   const base = baseUrl.replace(/\/+$/, "");
-  const sellable = items.filter((i) => Number.isFinite(i.priceMinor) && i.priceMinor > 0 && i.slug);
-  const body = sellable.map((i) => feedItemXml(i, base)).join("\n");
+  const extra = Math.min(imageCount - 1, MAX_ADDITIONAL_IMAGES);
+  return Array.from({ length: extra }, (_unused, i) => `${base}/img/artwork/${artworkId}/${i + 1}`);
+}
+
+function originalItemXml(item: MerchantOriginalItem, baseUrl: string): string {
+  const e = xmlEscape;
+  return [
+    "    <item>",
+    `      <g:id>original-${item.id}</g:id>`,
+    `      <g:title>${e(merchantOriginalTitle(item.title, item.typeLabel))}</g:title>`,
+    `      <g:description>${e(merchantOriginalDescription(item))}</g:description>`,
+    `      <g:link>${e(merchantOriginalLink(baseUrl, item.path))}</g:link>`,
+    `      <g:image_link>${e(merchantOriginalImageLink(baseUrl, item.id))}</g:image_link>`,
+    ...merchantOriginalAdditionalImageLinks(baseUrl, item.id, item.imageCount).map(
+      (u) => `      <g:additional_image_link>${e(u)}</g:additional_image_link>`,
+    ),
+    // A unique original is a single, brand-new work by the artist. It is in_stock while available;
+    // once sold it is not passed to this builder at all, so it never advertises as buyable.
+    `      <g:availability>in_stock</g:availability>`,
+    `      <g:price>${e(merchantPrice(item.priceMinor, item.currency))}</g:price>`,
+    `      <g:brand>${e(MERCHANT_BRAND)}</g:brand>`,
+    `      <g:condition>new</g:condition>`,
+    `      <g:identifier_exists>no</g:identifier_exists>`,
+    `      <g:google_product_category>${e(MERCHANT_GOOGLE_CATEGORY)}</g:google_product_category>`,
+    `      <g:product_type>${e(MERCHANT_ORIGINAL_PRODUCT_TYPE)}</g:product_type>`,
+    "    </item>",
+  ].join("\n");
+}
+
+/**
+ * Build the RSS 2.0 product feed. ONLY genuinely purchasable, priced items become entries — anything
+ * without a positive price or slug is dropped rather than advertised as buyable. The caller passes the
+ * already-filtered purchasable print collection and (optionally) the already-filtered purchasable
+ * originals; this function never decides purchasability itself. Prints and originals share ONE feed
+ * with collision-safe ids (`print-<id>` / `original-<id>`); the print output is byte-for-byte
+ * unchanged when no originals are passed.
+ */
+export function buildMerchantFeed(
+  items: MerchantFeedItem[],
+  baseUrl: string,
+  originals: MerchantOriginalItem[] = [],
+): string {
+  const base = baseUrl.replace(/\/+$/, "");
+  const sellablePrints = items.filter((i) => Number.isFinite(i.priceMinor) && i.priceMinor > 0 && i.slug);
+  const sellableOriginals = originals.filter((i) => Number.isFinite(i.priceMinor) && i.priceMinor > 0 && i.path);
+  const printBody = sellablePrints.map((i) => feedItemXml(i, base)).join("\n");
+  const originalBody = sellableOriginals.map((i) => originalItemXml(i, base)).join("\n");
+  const body = [printBody, originalBody].filter(Boolean).join("\n");
+  const hasOriginals = sellableOriginals.length > 0;
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">\n` +
     `  <channel>\n` +
-    `    <title>Ani Muradyan — Fine Art Prints</title>\n` +
+    `    <title>Ani Muradyan — ${hasOriginals ? "Fine Art Prints &amp; Original Paintings" : "Fine Art Prints"}</title>\n` +
     `    <link>${xmlEscape(base)}/prints</link>\n` +
-    `    <description>Museum-quality giclée fine-art prints of original oil paintings by Ani Muradyan.</description>\n` +
+    `    <description>${hasOriginals
+      ? "Original oil paintings and museum-quality giclée fine-art prints by Armenian contemporary artist Ani Muradyan."
+      : "Museum-quality giclée fine-art prints of original oil paintings by Ani Muradyan."}</description>\n` +
     (body ? `${body}\n` : "") +
     `  </channel>\n` +
     `</rss>\n`
