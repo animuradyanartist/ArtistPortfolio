@@ -28,6 +28,7 @@ import { MATERIAL_CATEGORY, CATEGORY_LABEL, type PrintMaterial } from "@shared/c
 import { isCheckoutConfigured } from "../stripeClient";
 import { resolvePromoForOrder } from "../promoCheckout";
 import { cropExtractPx } from "@shared/commerce/printCrop";
+import { toImageRef } from "../../images";
 import sharp from "sharp";
 
 function baseUrlOf(req: Request): string {
@@ -326,14 +327,23 @@ export function registerPrintRoutes(app: Express): void {
       // Purchasability + starting price are judged on the SAME publicly-selectable set the customer sees.
       const purchasable = selectable.some((v) => isPubliclyPurchasable(v, detail.master));
 
+      // Swap any base64-in-DB image for a small first-party `/img/print/:id/:idx` ref (the SAME
+      // helper the legacy /api routes use). Sending the raw base64 array here made this response
+      // ~6–8 MB and left the hydrated gallery/lightbox DOM carrying multi-MB data: URIs. The
+      // `/img/print/...` route resolves each ref back to storage.getPrint(id).images[idx] and serves
+      // a cached WebP — no DB/schema change, and non-data values (external URLs) pass through untouched.
+      const displayImages = detail.print.images.map((img, i) =>
+        toImageRef("print", detail.print.id, i, img),
+      );
+
       res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
       return res.json({
         id: detail.print.id,
         slug: printSlugOf(detail.print),
         title: detail.print.title,
         description: detail.print.description,
-        images: detail.print.images,
-        image: detail.print.images[0] ?? null,
+        images: displayImages,
+        image: displayImages[0] ?? null,
         artworkId: detail.print.artworkId,
         purchasable,
         startingPriceMinor: startingPriceMinor(selectable, detail.master),
