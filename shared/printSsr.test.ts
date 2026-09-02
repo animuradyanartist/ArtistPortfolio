@@ -154,3 +154,26 @@ describe("injectPrintsIndexMeta — the /prints listing gets its OWN SEO", () =>
     expect(out).toContain('"numberOfItems":2');
   });
 });
+
+describe("print PDP body — anti Soft-404 (route injects renderPrintHtml into #root)", () => {
+  // Mirrors exactly what server/routes.ts now does for /prints/:slug: injectPrintMeta (head) THEN
+  // the body injected inside #root. Guards against the regression where a PDP shipped an empty
+  // `<div id="root"></div>` and Google classified it Soft 404.
+  const SHELL = `<!doctype html><html><head><title>old</title><meta name="description" content="old"><link rel="canonical" href="https://x/old"></head><body><div id="root"></div></body></html>`;
+  const d = detail({ title: "Road Through Gold", description: "A contemporary landscape print of a winding road through a golden field.", startingPriceMinor: 6900, currency: "EUR", artworkId: 59 });
+
+  const withHead = injectPrintMeta(SHELL, d, BASE);
+  const full = withHead.replace('<div id="root"></div>', `<div id="root">${renderPrintHtml(d, BASE)}</div>`);
+
+  it("no longer serves an EMPTY #root shell", () => {
+    expect(withHead).toContain('<div id="root"></div>');       // meta-only would leave it empty
+    expect(full).not.toContain('<div id="root"></div>');       // body injected → not empty
+  });
+  it("gives Google a real heading + description + price + link to the original inside #root", () => {
+    expect(full).toContain('<div id="root"><article>');
+    expect(full).toContain("Road Through Gold — Fine-Art Print</h1>");
+    expect(full).toContain("winding road through a golden field");
+    expect(full).toContain("From EUR 69.00");
+    expect(full).toContain(`${BASE}/artworks/59`);
+  });
+});

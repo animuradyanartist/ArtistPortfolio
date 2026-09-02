@@ -1948,7 +1948,7 @@ Crawl-delay: 1
           try {
             const { getPrintDetailBySlug, getPurchasablePrintCollection, printSlugOf } = await import('./commerce/prints/printRepo');
             const { isPubliclyPurchasable, startingPriceMinor } = await import('@shared/commerce/printProduct');
-            const { injectPrintMeta } = await import('@shared/printSsr');
+            const { injectPrintMeta, renderPrintHtml } = await import('@shared/printSsr');
 
             if (req.path === '/prints') {
               const cards = await getPurchasablePrintCollection();
@@ -1982,6 +1982,14 @@ Crawl-delay: 1
                 currency: detail.variants[0]?.currency ?? 'EUR',
               };
               html = injectPrintMeta(html, ssr, SEO_BASE_URL);
+              // SOFT-404 FIX. injectPrintMeta only writes the <head> (title/meta/canonical/Product
+              // JSON-LD), so a print PDP was served an EMPTY body — `<div id="root"></div>` with no
+              // <h1> and no words. When Googlebot does not run/complete the client render, it sees a
+              // page with zero visible content and classifies it Soft 404 (even with valid head
+              // metadata). Inject the real body (heading, image, description, price, link to the
+              // original) INSIDE #root, exactly like /artworks/:slug and /blog/:slug do — createRoot()
+              // replaces it on mount, so there is no duplicate content and no hydration mismatch.
+              html = html.replace('<div id="root"></div>', `<div id="root">${renderPrintHtml(ssr, SEO_BASE_URL)}</div>`);
               return res.status(200).set('Content-Type', 'text/html').send(html);
             }
             // Unknown print slug — never an indexable soft-404.
