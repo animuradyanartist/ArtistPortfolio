@@ -77,6 +77,9 @@ export function printJsonLd(d: PrintSsrDetail, baseUrl: string): Record<string, 
     description: printMetaDescription(d),
     brand: { "@type": "Brand", name: PRINT_BRAND },
     category: "Fine-Art Prints",
+    // A print is a new, made-to-order reproduction. Stated for the Google merchant listing so the
+    // structured data and the product feed agree on condition; it matches g:condition=new in the feed.
+    itemCondition: "https://schema.org/NewCondition",
     url,
   };
   const image = printImageUrl(d, baseUrl);

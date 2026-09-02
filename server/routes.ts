@@ -34,7 +34,7 @@ import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "
 import { checkLoginAllowed, recordLoginFailure, recordLoginSuccess, clientIpOf } from "./loginRateLimit";
 import { requireBlogAgent, agentFields, agentReadable, agentMayEdit, blogAgentConfigured } from "./blogAgent";
 import { PATH_NARRATIVE } from "@shared/pathNarrative";
-import { renderAboutHtml, renderExhibitionsHtml, renderGalleryHtml, renderContactHtml } from "./staticPagePrerender";
+import { renderAboutHtml, renderExhibitionsHtml, renderGalleryHtml, renderContactHtml, renderShippingHtml, renderReturnsHtml, renderPrivacyHtml } from "./staticPagePrerender";
 import { buildInfo } from "./buildInfo";
 import { registerCommerceRoutes } from "./commerce/routes";
 import { registerTestCheckoutRoutes } from "./commerce/testCheckout";
@@ -1453,6 +1453,9 @@ Allow: /prints/*
 Allow: /gallery
 Allow: /exhibitions
 Allow: /contact
+Allow: /shipping
+Allow: /returns
+Allow: /privacy
 
 Disallow: /admin
 Disallow: /api
@@ -1547,6 +1550,10 @@ Crawl-delay: 1
         { url: '/exhibitions', priority: '0.8', changefreq: 'monthly' },
         { url: '/gallery', priority: '0.8', changefreq: 'monthly' },
         { url: '/contact', priority: '0.7', changefreq: 'monthly' },
+        // Trust & policy pages — buyer confidence + Google Merchant Center site check.
+        { url: '/shipping', priority: '0.5', changefreq: 'yearly' },
+        { url: '/returns', priority: '0.5', changefreq: 'yearly' },
+        { url: '/privacy', priority: '0.4', changefreq: 'yearly' },
         // Buyer-intent collection landing pages — commercial-intent surfaces, high priority.
         ...COLLECTIONS.map((c) => ({ url: `/collections/${c.slug}`, priority: '0.9', changefreq: 'weekly' as const })),
       ];
@@ -1988,7 +1995,13 @@ Crawl-delay: 1
                 artworkId: detail.print.artworkId,
                 purchasable: detail.variants.some((v) => isPubliclyPurchasable(v, detail.master)),
                 startingPriceMinor: startingPriceMinor(detail.variants, detail.master),
-                currency: detail.variants[0]?.currency ?? 'EUR',
+                // Currency of the PUBLICLY PURCHASABLE variant — the SAME one getPurchasablePrintCollection
+                // (and therefore the Google Merchant feed) uses — so the Product JSON-LD Offer currency
+                // provably matches the feed price currency. Falls back to the first variant, then EUR.
+                currency:
+                  detail.variants.find((v) => isPubliclyPurchasable(v, detail.master))?.currency ??
+                  detail.variants[0]?.currency ??
+                  'EUR',
               };
               html = injectPrintMeta(html, ssr, SEO_BASE_URL);
               // Breadcrumb trail (Home → Fine Art Prints → this print) for the rich result + structure.
@@ -2131,6 +2144,18 @@ Crawl-delay: 1
             title: "Contact & Commissions \u2014 Ani Muradyan",
             description: "Enquire about an original painting, a commission, or an exhibition. Contact Armenian contemporary oil painter Ani Muradyan.",
           },
+          "/shipping": {
+            title: "Shipping \u2014 Ani Muradyan",
+            description: "How fine-art prints and original paintings by Ani Muradyan are shipped worldwide. Prints are made to order; shipping is calculated at checkout by destination.",
+          },
+          "/returns": {
+            title: "Returns & Refunds \u2014 Ani Muradyan",
+            description: "Returns and refunds for made-to-order fine-art prints by Ani Muradyan. Damaged or defective items are replaced or refunded within 14 days.",
+          },
+          "/privacy": {
+            title: "Privacy \u2014 Ani Muradyan",
+            description: "How animuradyan.com handles your personal information: order and contact data only, Stripe for payments, and never sold.",
+          },
         };
         const pageMeta = PAGE_META[req.path.replace(/\/+$/, "") || "/"];
         if (pageMeta) {
@@ -2195,7 +2220,7 @@ Crawl-delay: 1
         // The markup lives in ./staticPagePrerender as pure functions, because the local
         // sample store has no gallery photographs: the branch that emits <img> and its alt
         // text cannot be reached by running the server, so it is covered by tests instead.
-        if (['/about', '/exhibitions', '/gallery', '/contact'].includes(req.path)) {
+        if (['/about', '/exhibitions', '/gallery', '/contact', '/shipping', '/returns', '/privacy'].includes(req.path)) {
           try {
             let ssr = '';
             if (req.path === '/about') {
@@ -2212,6 +2237,12 @@ Crawl-delay: 1
               ssr = renderGalleryHtml(
                 refifyImageFieldList('gallery', await storage.getAllGalleryPhotos(), 'image'),
               );
+            } else if (req.path === '/shipping') {
+              ssr = renderShippingHtml();
+            } else if (req.path === '/returns') {
+              ssr = renderReturnsHtml();
+            } else if (req.path === '/privacy') {
+              ssr = renderPrivacyHtml();
             } else {
               ssr = renderContactHtml();
             }

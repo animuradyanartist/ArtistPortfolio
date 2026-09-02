@@ -535,6 +535,14 @@ function Shell({ children }: { children: React.ReactNode }) {
           <Link href="/prints" className="hover:text-stone-800">Prints</Link>
         </Eyebrow>
         {children}
+        {/* Buyer trust links — shipping & returns are one tap away from every print, and give
+            Google Merchant Center's site check the policy pages it looks for. */}
+        <div className="mt-16 pt-6 border-t border-stone-300 flex flex-wrap gap-x-5 gap-y-2 text-xs text-stone-500">
+          <Link href="/shipping" className="hover:text-stone-800">Shipping</Link>
+          <Link href="/returns" className="hover:text-stone-800">Returns &amp; refunds</Link>
+          <Link href="/contact" className="hover:text-stone-800">Contact</Link>
+          <Link href="/privacy" className="hover:text-stone-800">Privacy</Link>
+        </div>
       </div>
     </div>
   );

@@ -151,6 +151,9 @@ export interface PrintCollectionCard {
   artworkId: number | null;
   startingPriceMinor: number | null;
   currency: string;
+  /** How many stored display images the print has — drives additional_image_link in the Merchant feed
+   *  (each served first-party via /img/print/:id/:idx). Null when unknown. */
+  imageCount: number | null;
 }
 
 /**
@@ -178,6 +181,7 @@ export async function getPurchasablePrintCollection(): Promise<PrintCollectionCa
   const { rows } = await pool.query(
     `SELECT id, title, slug, artwork_id,
             images[1] AS primary_image,
+            array_length(images, 1) AS image_count,
             master_asset_key, master_status, master_width_px, master_height_px, master_checksum_md5
        FROM prints
       WHERE status = 'active'
@@ -200,6 +204,7 @@ export async function getPurchasablePrintCollection(): Promise<PrintCollectionCa
       artworkId: r.artwork_id ?? null,
       startingPriceMinor: startingPriceMinor(variants, master),
       currency,
+      imageCount: typeof r.image_count === "number" ? r.image_count : null,
     });
   }
   return cards;

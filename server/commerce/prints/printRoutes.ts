@@ -18,6 +18,7 @@ import {
 } from "./printRepo";
 import { assessVariant, startingPriceMinor, resolveVariantPrice } from "@shared/commerce/printProduct";
 import { buildFeedTsv } from "@shared/commerce/printFeed";
+import { buildMerchantFeed } from "@shared/commerce/merchantFeed";
 import { isPrintPreviewMode, getPreviewCatalogue, getPreviewDetail, getPreviewSlugForArtwork } from "./previewProducts";
 import { quotePrintShipping } from "./printShipping";
 import { getPrintMasterRef, getVariant, getPrintMaster, cropFromRow } from "./adminPrintRepo";
@@ -309,6 +310,33 @@ export function registerPrintRoutes(app: Express): void {
       res.set("Cache-Control", "public, max-age=300");
       res.type("text/tab-separated-values; charset=utf-8");
       return res.send(tsv);
+    } catch {
+      return res.status(500).type("text/plain").send("Could not build feed.");
+    }
+  });
+
+  // ── GOOGLE MERCHANT CENTER product data source (RSS 2.0). Public + crawlable (robots.txt does NOT
+  //    disallow it), so it never depends on the blocked /api the way the PDP client once did. Built
+  //    product-level from the SAME purchasable-print collection the storefront reads, so feed price =
+  //    PDP price = Product JSON-LD price. First-party /img/print images only — never base64, never the
+  //    master. May be empty (channel only) when nothing is sellable — a route, not a submission. ──
+  app.get("/google-merchant.xml", async (req, res) => {
+    try {
+      const cards = await getPurchasablePrintCollection();
+      const items = cards
+        .filter((c) => c.startingPriceMinor != null && c.startingPriceMinor > 0)
+        .map((c) => ({
+          id: c.id,
+          title: c.title,
+          slug: c.slug,
+          priceMinor: c.startingPriceMinor as number,
+          currency: c.currency,
+          imageCount: c.imageCount,
+        }));
+      const xml = buildMerchantFeed(items, baseUrlOf(req));
+      res.set("Cache-Control", "public, max-age=300");
+      res.type("application/xml; charset=utf-8");
+      return res.send(xml);
     } catch {
       return res.status(500).type("text/plain").send("Could not build feed.");
     }

@@ -23,6 +23,9 @@ import {
   renderExhibitionsHtml,
   renderGalleryHtml,
   renderContactHtml,
+  renderShippingHtml,
+  renderReturnsHtml,
+  renderPrivacyHtml,
   type PrerenderExhibition,
   type PrerenderPhoto,
 } from './staticPagePrerender';
@@ -61,6 +64,51 @@ describe('every page carries a heading and real words', () => {
 
   it.each(pages)('%s links onward into the site', (_name, html) => {
     expect(html).toContain('href="/artworks"');
+  });
+});
+
+describe('trust & policy pages (shipping / returns / privacy) are crawlable and truthful', () => {
+  const policy: Array<[string, string]> = [
+    ['shipping', renderShippingHtml()],
+    ['returns', renderReturnsHtml()],
+    ['privacy', renderPrivacyHtml()],
+  ];
+
+  it.each(policy)('%s has one <h1> and substantive text', (_name, html) => {
+    expect(html.match(/<h1/g) ?? []).toHaveLength(1);
+    expect(readable(html).length).toBeGreaterThan(200);
+  });
+
+  it.each(policy)('%s exposes the real contact email', (_name, html) => {
+    expect(html).toContain('animuradyan.artist@gmail.com');
+  });
+
+  it('shipping states the made-to-order + calculated-at-checkout model', () => {
+    const t = readable(renderShippingHtml()).toLowerCase();
+    expect(t).toContain('made to order');
+    expect(t).toContain('calculated at checkout');
+  });
+
+  it('returns covers damaged/defective replacement AND the made-to-order limit on change-of-mind', () => {
+    const t = readable(renderReturnsHtml()).toLowerCase();
+    expect(t).toContain('replacement');
+    expect(t).toMatch(/refund/);
+    expect(t).toContain('made to order');
+  });
+
+  it('privacy names only processors the site actually uses, and never claims to sell data', () => {
+    const t = readable(renderPrivacyHtml());
+    expect(t).toContain('Stripe');
+    expect(t).toContain('Google Analytics');
+    expect(t).toContain('Microsoft Clarity');
+    expect(t.toLowerCase()).toContain('never sells');
+  });
+
+  it('no policy page invents a company registration, tax id, or phone number', () => {
+    for (const [, html] of policy) {
+      expect(html.toLowerCase()).not.toMatch(/\bvat\b|tax id|company (number|registration)|reg\. no/);
+      expect(html).not.toMatch(/\+\d[\d\s()-]{7,}/); // no phone number
+    }
   });
 });
 

@@ -224,3 +224,74 @@ export function renderContactHtml(): string {
     `</section>`
   );
 }
+
+/**
+ * TRUST & POLICY PAGES — Shipping, Returns, Privacy.
+ *
+ * Every claim here is grounded in how the site actually behaves: prints are made to order and
+ * printed by fulfilment partners; shipping is a real per-destination quote shown at checkout;
+ * payments go through Stripe (the site never sees card numbers); analytics is Google Analytics +
+ * Microsoft Clarity (both declared in index.html); orders can be refunded/cancelled (the order
+ * lifecycle has those phases). NOTHING here invents a company registration, tax number, phone, or
+ * legal guarantee. These render server-side so a crawler (and Google Merchant Center's site check)
+ * reads real policy text, and the same wording should be kept consistent with Merchant Center.
+ */
+const CONTACT_EMAIL = "animuradyan.artist@gmail.com";
+const mailto = `<a href="mailto:${CONTACT_EMAIL}" style="${LINK}">${CONTACT_EMAIL}</a>`;
+
+export function renderShippingHtml(): string {
+  return (
+    `<section id="shipping-ssr" style="${WRAP}">` +
+    `<h1 style="${H1}">Shipping</h1>` +
+    `<p style="${LEAD}">Fine-art prints and original paintings by Ani Muradyan ship worldwide.</p>` +
+    `<h2>Fine-art prints</h2>` +
+    `<p style="${BODY}">Every print is <strong>made to order</strong> — produced individually for you on archival Hahnemühle fine-art paper or stretched canvas with archival pigment inks. Nothing is held in stock.</p>` +
+    `<p style="${BODY}">Prints are usually produced within a few business days and then shipped with tracked delivery. Total delivery time depends on your destination.</p>` +
+    `<p style="${BODY}">Shipping is <strong>calculated at checkout</strong> for your specific destination, so the exact cost is shown before you pay.</p>` +
+    `<h2>Original paintings</h2>` +
+    `<p style="${BODY}">Original works ship from the artist's studio in Yerevan, Armenia, carefully packed. For an original, please <a href="/contact" style="${LINK}">contact the artist</a> to arrange shipping to your country.</p>` +
+    `<h2>Questions about an order</h2>` +
+    `<p style="${BODY}">Email ${mailto} with your order number and we'll help.</p>` +
+    `<p><a href="/prints" style="${LINK}">Browse fine-art prints</a> · <a href="/returns" style="${LINK}">Returns &amp; refunds</a></p>` +
+    `</section>`
+  );
+}
+
+export function renderReturnsHtml(): string {
+  return (
+    `<section id="returns-ssr" style="${WRAP}">` +
+    `<h1 style="${H1}">Returns &amp; Refunds</h1>` +
+    `<p style="${LEAD}">Because each print is made to order specifically for you, please choose carefully. We stand behind the quality of every piece.</p>` +
+    `<h2>Damaged, defective, or not as described</h2>` +
+    `<p style="${BODY}">If your print arrives damaged, defective, or materially different from what was ordered, we will make it right with a <strong>free replacement or a full refund</strong>. Email ${mailto} within 14 days of delivery with your order number and a photo of the issue.</p>` +
+    `<h2>Change-of-mind returns</h2>` +
+    `<p style="${BODY}">Prints are produced individually to order and are not held in stock, so we are generally unable to accept change-of-mind returns or exchanges once production has begun. If you need to change or cancel an order, contact us as soon as possible and we will do our best before it goes to production.</p>` +
+    `<h2>Original paintings</h2>` +
+    `<p style="${BODY}">Original artworks are unique, one-of-a-kind pieces. Please <a href="/contact" style="${LINK}">contact the artist</a> before purchase with any questions about a specific work.</p>` +
+    `<h2>How refunds are issued</h2>` +
+    `<p style="${BODY}">Approved refunds are returned to your original payment method.</p>` +
+    `<p><a href="/shipping" style="${LINK}">Shipping</a> · <a href="/contact" style="${LINK}">Contact</a></p>` +
+    `</section>`
+  );
+}
+
+export function renderPrivacyHtml(): string {
+  return (
+    `<section id="privacy-ssr" style="${WRAP}">` +
+    `<h1 style="${H1}">Privacy</h1>` +
+    `<p style="${LEAD}">This site collects the minimum needed to fulfil your order and answer your messages, and never sells your personal information.</p>` +
+    `<h2>What we collect</h2>` +
+    `<p style="${BODY}">When you place an order: your name, email address, shipping address, and the items ordered. When you use the contact form: your name, email address, and message.</p>` +
+    `<h2>Payments</h2>` +
+    `<p style="${BODY}">Payments are processed securely by <strong>Stripe</strong>. Your full card details are entered on Stripe's systems and are never seen or stored by this site.</p>` +
+    `<h2>Fulfilment</h2>` +
+    `<p style="${BODY}">To make and deliver a print, your name and shipping address are shared with the printing and shipping partners who produce and post your order. They use this information only to fulfil your order.</p>` +
+    `<h2>Analytics</h2>` +
+    `<p style="${BODY}">This site uses Google Analytics and Microsoft Clarity to understand how the site is used and to improve it. These services may set cookies in your browser.</p>` +
+    `<h2>Your choices</h2>` +
+    `<p style="${BODY}">To ask what personal data we hold, or to have it corrected or deleted, email ${mailto}.</p>` +
+    `<h2>Contact</h2>` +
+    `<p style="${BODY}">Ani Muradyan · Yerevan, Armenia · ${mailto}</p>` +
+    `</section>`
+  );
+}
