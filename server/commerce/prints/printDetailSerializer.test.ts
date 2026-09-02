@@ -8,6 +8,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { serializePrintDetail } from "./printDetailSerializer";
+import { merchantPrice } from "@shared/commerce/merchantFeed";
 import type { PrintProductDetail } from "./printRepo";
 import type { PrintVariantView, PrintMasterView } from "@shared/commerce/printProduct";
 
@@ -82,5 +83,13 @@ describe("serializePrintDetail — the print-detail contract", () => {
     expect(r.id).toBe(19);            // still a real, resolvable print (no Soft 404)
     expect(r.purchasable).toBe(false); // but honestly not for sale
     expect(JSON.stringify(r)).not.toContain(MASTER_SECRET_URL);
+  });
+
+  it("PRICE CONSISTENCY: the Merchant feed price equals the print-detail starting price (one source)", () => {
+    // The PDP + Product JSON-LD show serializePrintDetail's startingPriceMinor; the feed formats the
+    // SAME value + currency. Google rejects a feed price the landing page cannot confirm, so pin them.
+    const r = serializePrintDetail(detail());
+    const currency = r.options[0].currency;
+    expect(merchantPrice(r.startingPriceMinor!, currency)).toBe("69.00 USD");
   });
 });

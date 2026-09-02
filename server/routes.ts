@@ -1988,7 +1988,13 @@ Crawl-delay: 1
                 artworkId: detail.print.artworkId,
                 purchasable: detail.variants.some((v) => isPubliclyPurchasable(v, detail.master)),
                 startingPriceMinor: startingPriceMinor(detail.variants, detail.master),
-                currency: detail.variants[0]?.currency ?? 'EUR',
+                // Currency of the PUBLICLY PURCHASABLE variant — the SAME one getPurchasablePrintCollection
+                // (and therefore the Google Merchant feed) uses — so the Product JSON-LD Offer currency
+                // provably matches the feed price currency. Falls back to the first variant, then EUR.
+                currency:
+                  detail.variants.find((v) => isPubliclyPurchasable(v, detail.master))?.currency ??
+                  detail.variants[0]?.currency ??
+                  'EUR',
               };
               html = injectPrintMeta(html, ssr, SEO_BASE_URL);
               // Breadcrumb trail (Home → Fine Art Prints → this print) for the rich result + structure.
