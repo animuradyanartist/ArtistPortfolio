@@ -51,9 +51,9 @@ export default function PrintsPage() {
   useEffect(() => {
     // Kept in step with the server SSR title/description for /prints (server/routes.ts) so the
     // served and hydrated pages cannot drift on this money page.
-    document.title = "Fine Art Prints — Giclée Prints of Contemporary Paintings | Ani Muradyan";
+    document.title = "Fine Art Prints & Canvas Prints of Contemporary Paintings | Ani Muradyan";
     updateMetaDescription(
-      "Museum-quality giclée fine art prints of Ani Muradyan's contemporary oil paintings — landscapes and seascapes, printed to order on archival Hahnemühle paper. Each original remains a unique work.",
+      "Museum-quality giclée fine art prints and canvas prints of Ani Muradyan's contemporary oil paintings — landscapes and seascapes on archival Hahnemühle paper or stretched canvas, printed to order. Each original remains a unique work.",
     );
     updateCanonicalUrl("/prints");
   }, []);
@@ -80,8 +80,8 @@ export default function PrintsPage() {
           </div>
         )}
         <p className="text-stone-700 max-w-2xl leading-relaxed mb-12">
-          Museum-quality giclée reproductions on archival Hahnemühle paper, printed to order. A print
-          lets a painting live on more walls — the{" "}
+          Museum-quality giclée reproductions on archival Hahnemühle paper or stretched canvas, printed
+          to order. A fine-art print or canvas lets a painting live on more walls — the{" "}
           <Link href="/artworks" className="border-b border-stone-400 hover:border-stone-800">original works</Link>{" "}
           remain unique and one of a kind.
         </p>

@@ -131,7 +131,7 @@ describe("injectPrintsIndexMeta — the /prints listing gets its OWN SEO", () =>
   const out = injectPrintsIndexMeta(SHELL, cards, BASE);
 
   it("replaces the inherited homepage title with a fine-art-prints title", () => {
-    expect(out).toContain("<title>Fine Art Prints — Giclée Prints of Contemporary Paintings | Ani Muradyan</title>");
+    expect(out).toContain("<title>Fine Art Prints &amp; Canvas Prints of Contemporary Paintings | Ani Muradyan</title>");
     expect(out).not.toContain("Ani Muradyan – Contemporary Oil Painter</title>");
   });
   it("sets a prints-specific description + canonical + og:url + index,follow", () => {

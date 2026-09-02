@@ -178,9 +178,9 @@ export interface PrintIndexCard {
 }
 
 export const PRINTS_INDEX_TITLE =
-  "Fine Art Prints — Giclée Prints of Contemporary Paintings | Ani Muradyan";
+  "Fine Art Prints & Canvas Prints of Contemporary Paintings | Ani Muradyan";
 export const PRINTS_INDEX_DESCRIPTION =
-  "Museum-quality giclée fine art prints of Ani Muradyan's contemporary oil paintings — landscapes and seascapes, printed to order on archival Hahnemühle paper. Each original remains a unique work.";
+  "Museum-quality giclée fine art prints and canvas prints of Ani Muradyan's contemporary oil paintings — landscapes and seascapes on archival Hahnemühle paper or stretched canvas, printed to order. Each original remains a unique work.";
 
 /**
  * Give the /prints LISTING its own SEO instead of inheriting the homepage <title>/meta. Sets the
@@ -227,7 +227,7 @@ export function injectPrintsIndexMeta(html: string, cards: PrintIndexCard[], bas
   const ssr =
     `<section id="prints-ssr" style="padding:3rem 1.5rem;max-width:1200px;margin:0 auto;font-family:system-ui,sans-serif">` +
     `<h1 style="font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem">Fine Art Prints</h1>` +
-    `<p style="font-size:1.1rem;color:#475569;margin-bottom:1.5rem">Museum-quality giclée fine-art prints of contemporary oil paintings and landscapes by Armenian artist Ani Muradyan, printed to order on archival Hahnemühle paper. The original paintings remain unique works — <a href="${escapeHtml(base)}/artworks" style="color:#1d4ed8;text-decoration:underline">browse the originals</a>.</p>` +
+    `<p style="font-size:1.1rem;color:#475569;margin-bottom:1.5rem">Museum-quality giclée fine-art prints and canvas prints of contemporary oil paintings and landscapes by Armenian artist Ani Muradyan — printed to order on archival Hahnemühle paper or stretched canvas. The original paintings remain unique works — <a href="${escapeHtml(base)}/artworks" style="color:#1d4ed8;text-decoration:underline">browse the originals</a>.</p>` +
     `<ul style="list-style:disc;padding-left:1.5rem;color:#334155">${items}</ul>` +
     `</section>`;
   out = out.replace('<div id="root">', ssr + '<div id="root">');
