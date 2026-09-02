@@ -49,28 +49,39 @@ export default function PrintsPage() {
   const previewMode = Boolean(data?.previewMode);
 
   useEffect(() => {
-    document.title = "Fine-Art Prints · Ani Muradyan";
+    // Kept in step with the server SSR title/description for /prints (server/routes.ts) so the
+    // served and hydrated pages cannot drift on this money page.
+    document.title = "Fine Art Prints & Canvas Prints of Contemporary Paintings | Ani Muradyan";
     updateMetaDescription(
-      "Museum-quality giclée fine-art prints of paintings by Ani Muradyan, on archival Hahnemühle paper. The originals remain unique, one-of-a-kind works.",
+      "Museum-quality giclée fine art prints and canvas prints of Ani Muradyan's contemporary oil paintings — landscapes and seascapes on archival Hahnemühle paper or stretched canvas, printed to order. Each original remains a unique work.",
     );
     updateCanonicalUrl("/prints");
   }, []);
 
   const prints = data?.prints ?? [];
 
+  // Remove the server-prerendered #prints-ssr block once the real React grid is populated, so the
+  // page has exactly one <h1> (the prerendered one before hydration, this one after). Mirrors /artworks.
+  useEffect(() => {
+    const ssr = document.getElementById("prints-ssr");
+    if (!ssr) return;
+    if (!isLoading && prints.length > 0) ssr.remove();
+    else ssr.style.display = "";
+  }, [isLoading, prints.length]);
+
   return (
     <div className="min-h-screen bg-[#f5f1ea]">
       <div className="mx-auto max-w-7xl px-6 md:px-10 py-16 md:py-24">
         <Eyebrow>Fine-Art Prints</Eyebrow>
-        <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">Prints</h1>
+        <h1 className="font-playfair text-4xl md:text-5xl text-stone-900 mb-4">Fine Art Prints</h1>
         {previewMode && (
           <div className="mb-8 border border-amber-300/70 bg-amber-50 text-amber-800 px-4 py-2.5 text-sm rounded max-w-2xl">
             <strong className="font-medium">Preview mode.</strong> These are demo products for design testing — purchasing is not yet available and prices are placeholders.
           </div>
         )}
         <p className="text-stone-700 max-w-2xl leading-relaxed mb-12">
-          Museum-quality giclée reproductions on archival Hahnemühle paper, printed to order. A print
-          lets a painting live on more walls — the{" "}
+          Museum-quality giclée reproductions on archival Hahnemühle paper or stretched canvas, printed
+          to order. A fine-art print or canvas lets a painting live on more walls — the{" "}
           <Link href="/artworks" className="border-b border-stone-400 hover:border-stone-800">original works</Link>{" "}
           remain unique and one of a kind.
         </p>
