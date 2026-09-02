@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { printViewState } from "@shared/printAvailability";
 import { Eyebrow } from "@/components/editorial";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
@@ -69,6 +70,22 @@ interface PrintDetail {
 }
 
 
+/**
+ * The server's own copy of this print, embedded in the initial HTML (window.__PRELOADED_PRINT__ =
+ * serializePrintDetail(detail), the SAME shape /api/commerce/prints/:slug returns). It exists so the
+ * page never depends on a runtime fetch of /api to know the print is real — Googlebot's renderer
+ * obeys robots.txt, which disallows /api, so that fetch is blocked and the naive `isError → not
+ * found` path turned a valid product into a Soft 404. Gated by slug (like the artwork PDP's address
+ * check) so a stale preload from a previous client-side navigation is never used for another print.
+ */
+const _preloadedPrint: PrintDetail | undefined =
+  typeof window !== "undefined" ? (window as { __PRELOADED_PRINT__?: PrintDetail }).__PRELOADED_PRINT__ : undefined;
+
+function preloadedPrintFor(slug: string): PrintDetail | undefined {
+  const p = _preloadedPrint;
+  return p && typeof p.id === "number" && p.slug === slug ? p : undefined;
+}
+
 function money(minor: number, currency: string): string {
   try {
     return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(minor / 100);
@@ -89,7 +106,9 @@ export default function PrintDetailPage() {
   const slug = String(params.slug ?? "");
   const [, navigate] = useLocation();
 
-  const { data, isLoading, isError } = useQuery<PrintDetail>({
+  const preloaded = preloadedPrintFor(slug);
+
+  const { data: fetched, isLoading } = useQuery<PrintDetail>({
     queryKey: [`/api/commerce/prints/${slug}`],
     queryFn: async () => {
       const r = await fetch(`/api/commerce/prints/${encodeURIComponent(slug)}`);
@@ -98,7 +117,16 @@ export default function PrintDetailPage() {
       return r.json();
     },
     enabled: Boolean(slug),
+    // Paint immediately from the server's embedded copy; the fetch still runs and replaces it.
+    ...(preloaded ? { placeholderData: preloaded } : {}),
   });
+
+  // The print this page shows: the freshly fetched row when there is one, otherwise the server's
+  // own preload. A blocked or failed fetch is NOT proof the print is absent — Google's renderer
+  // blocks /api, so relying on the fetch alone rendered a Soft 404 over a print the server resolved.
+  // The decision lives in a shared, tested helper so the page and its tests cannot disagree.
+  const view = printViewState<PrintDetail>({ fetched, preloaded, isLoading });
+  const data = view.show;
 
   const options = data?.options ?? [];
   // Public selector: Material (CATEGORY) → Size. The stock/SKU/wrap are never a customer choice.
@@ -192,8 +220,12 @@ export default function PrintDetailPage() {
     });
   }, [data, selected]);
 
-  if (isLoading) return <Shell><p className="text-stone-500">Loading…</p></Shell>;
-  if (isError || !data) {
+  // "Loading" only while we have nothing to show yet. With a preload, the print is already `data`,
+  // so the product renders on the first paint and never flashes Loading or Not-Found.
+  if (view.state === "loading") return <Shell><p className="text-stone-500">Loading…</p></Shell>;
+  // Genuinely absent: no fetched row AND no server preload for this slug. A failed fetch alone is
+  // NOT enough — that was the Soft-404 bug (robots-blocked /api fetch reported as "not found").
+  if (view.state === "missing" || !data) {
     return (
       <Shell>
         <p className="text-stone-700">

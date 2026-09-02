@@ -1950,6 +1950,7 @@ Crawl-delay: 1
             const { getPrintDetailBySlug, getPurchasablePrintCollection, printSlugOf } = await import('./commerce/prints/printRepo');
             const { isPubliclyPurchasable, startingPriceMinor } = await import('@shared/commerce/printProduct');
             const { injectPrintMeta, renderPrintHtml } = await import('@shared/printSsr');
+            const { serializePrintDetail } = await import('./commerce/prints/printDetailSerializer');
 
             if (req.path === '/prints') {
               const cards = await getPurchasablePrintCollection();
@@ -2004,6 +2005,17 @@ Crawl-delay: 1
               // original) INSIDE #root, exactly like /artworks/:slug and /blog/:slug do — createRoot()
               // replaces it on mount, so there is no duplicate content and no hydration mismatch.
               html = html.replace('<div id="root"></div>', `<div id="root">${renderPrintHtml(ssr, SEO_BASE_URL)}</div>`);
+
+              // HYDRATION SOFT-404 FIX. The React PDP resolves the print by fetching
+              // /api/commerce/prints/:slug at runtime — but robots.txt disallows /api, and Google's
+              // renderer obeys robots for subresource fetches, so that fetch is BLOCKED during Google's
+              // render. The client then hit `isError` and replaced this correct SSR body with
+              // "This print could not be found." — a Soft 404 on a page whose head already had a valid
+              // Product + Offer. Seeding the EXACT /api response shape here (serializePrintDetail — one
+              // contract) lets the client render from the server's own copy with no fetch, exactly as
+              // the artwork PDP does via __PRELOADED_ARTWORK__. Never carries base64 or the master.
+              const preloadJson = JSON.stringify(serializePrintDetail(detail)).replace(/</g, '\\u003c');
+              html = html.replace('</head>', `  <script>window.__PRELOADED_PRINT__=${preloadJson};</script>\n</head>`);
               return res.status(200).set('Content-Type', 'text/html').send(html);
             }
             // Unknown print slug — never an indexable soft-404.
