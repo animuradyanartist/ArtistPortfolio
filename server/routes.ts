@@ -2376,8 +2376,11 @@ Crawl-delay: 1
                 const jsonld = {
                   '@context': 'https://schema.org', '@type': 'Article',
                   headline: post.title, description: post.excerpt,
-                  author: { '@type': 'Person', name: 'Ani Muradyan', url: SEO_BASE_URL },
-                  publisher: { '@type': 'Person', name: 'Ani Muradyan' },
+                  // Same canonical artist entity that authors the paintings — so an article's
+                  // authorship resolves to the ONE #person node (the author IS the subject), an
+                  // authorship signal for search/AI rather than a fresh, disconnected Person.
+                  author: { '@type': 'Person', '@id': `${SEO_BASE_URL}/#person`, name: 'Ani Muradyan', url: SEO_BASE_URL },
+                  publisher: { '@type': 'Person', '@id': `${SEO_BASE_URL}/#person`, name: 'Ani Muradyan' },
                   datePublished: (post.publishedAt ?? post.createdAt)?.toISOString?.() ?? undefined,
                   dateModified: post.updatedAt?.toISOString?.() ?? undefined,
                   mainEntityOfPage: url,
