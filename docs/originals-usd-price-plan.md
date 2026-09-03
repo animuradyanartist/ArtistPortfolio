@@ -2,10 +2,12 @@
 
 **Status: PROPOSAL. Nothing here is written to the database by this PR.**
 
-This PR standardises direct-sale commerce on **USD** in code (defaults, structured data, checkout,
+This standardises direct-sale commerce on **USD** in code (defaults, structured data, checkout,
 Merchant feed, shipping conversion). It does **not** change any artwork's stored price or currency.
-The 21 currently Merchant-eligible originals still hold their EUR values in production until you
-approve the USD retail prices below and set them yourself in the admin editor.
+**All 22 direct-sale originals** still hold their EUR values in production until you approve the USD
+retail prices below and apply them. That is the 21 Merchant-eligible originals **plus id 79**, which
+migrates to USD too so the whole site is one currency — id 79 stays **freight-only and excluded from
+the Google Merchant feed** (currency does not change its shipping/eligibility).
 
 ## How the proposed USD prices were derived
 
@@ -40,9 +42,11 @@ approve the USD retail prices below and set them yourself in the admin editor.
 | 73 | Observer | €1200 | $1320 | **$1300** |
 | 51 | Inner Direction | €1400 | $1540 | **$1550** |
 | 62 | Silent Bliss | €1500 | $1650 | **$1650** |
+| 79 | No Measure for Distance | €3000 | $3300 | **$3300** |
 
-*(id 79 "No Measure for Distance" is intentionally absent — it is freight-only / parcel-too-large
-and remains excluded from the Merchant feed.)*
+*(id 79 "No Measure for Distance" is included for currency consistency only. It is **freight-only /
+parcel-too-large**, so it remains **excluded from the Google Merchant feed** and continues to route to
+a manual/freight shipping quote at checkout — migrating its price to USD changes none of that.)*
 
 ## Owner action (when you approve the prices)
 
