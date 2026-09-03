@@ -73,8 +73,8 @@ export const artworks = pgTable("artworks", {
   directSaleEnabled: boolean("direct_sale_enabled").default(false),
   /** What she charges on her own site, in minor units. Null means unpriced, never free. */
   websitePriceMinor: integer("website_price_minor"),
-  /** ISO-4217. EUR unless she chooses otherwise per work. */
-  websiteCurrency: text("website_currency").default("EUR"),
+  /** ISO-4217. USD unless she chooses otherwise per work (direct sale is standardised on USD). */
+  websiteCurrency: text("website_currency").default("USD"),
   /** Whether this work may be shipped at all. A work she will only hand over in person
    *  can be priced and still not shippable. */
   shippingEnabled: boolean("shipping_enabled").default(true),

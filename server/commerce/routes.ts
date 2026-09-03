@@ -14,6 +14,7 @@ import { purchasability, REASON_LABEL } from "@shared/commerce/purchasable";
 import { formatMoney, type Currency } from "@shared/commerce/money";
 import { zoneFor, ZONE_LABEL, supportedCountries, isLikelyImportDutiable } from "@shared/commerce/zones";
 import { priceOrder, toShippable, currencyOf } from "./pricing";
+import { shippingMinorInCurrency } from "@shared/commerce/shipping";
 import { shippingProvider } from "./providers";
 import { validateBuyer, validateArtworkIds, sanitiseAttribution } from "./validate";
 import { stripeClient, stripeMode, isCheckoutConfigured, checkoutBlockedReason } from "./stripeClient";
@@ -326,16 +327,20 @@ export function registerCommerceRoutes(app: Express): void {
 
       const quote = await shippingProvider().quote(toShippable(artwork), country);
       const zone = zoneFor(country);
+      // The estimator is EUR; the public price line is in the work's own currency. Convert the
+      // shipping figure through the SAME shared helper the checkout pricer and the Merchant feed
+      // use, so this quoted shipping equals what checkout charges and what the feed advertises.
+      const shipMinor = quote.ok ? shippingMinorInCurrency(quote.amountMinor, currency) : 0;
       return res.json({
         ...base,
         shipping: quote.ok
           ? {
-              ok: true, amountMinor: quote.amountMinor,
-              amountFormatted: formatMoney(quote.amountMinor, currency),
+              ok: true, amountMinor: shipMinor,
+              amountFormatted: formatMoney(shipMinor, currency),
               estimated: quote.estimated, zone: quote.zone, zoneLabel: zone ? ZONE_LABEL[zone] : null,
-              totalMinor: (artwork.websitePriceMinor ?? 0) + quote.amountMinor,
+              totalMinor: (artwork.websitePriceMinor ?? 0) + shipMinor,
               totalFormatted: artwork.websitePriceMinor
-                ? formatMoney(artwork.websitePriceMinor + quote.amountMinor, currency) : null,
+                ? formatMoney(artwork.websitePriceMinor + shipMinor, currency) : null,
               dutiesMayApply: zone ? isLikelyImportDutiable(zone) : true,
             }
           : { ok: false, reason: quote.reason, detail: quote.detail },

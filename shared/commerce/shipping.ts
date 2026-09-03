@@ -72,6 +72,27 @@ export interface EstimateOptions {
   packingConfig?: PackingConfig;
 }
 
+/**
+ * FROM THE EUR TARIFF TO THE ORDER'S CURRENCY — deterministically, never live FX.
+ *
+ * `estimateShipping` and every manual override are denominated in EUR (see tariff.ts and the
+ * `ShippableArtwork` comments) — that table is fitted to a real EUR invoice and is guarded by
+ * calibration.test.ts, so it stays EUR and is NOT rewritten. A USD-priced work must still charge
+ * and advertise shipping in USD, so its EUR figure is converted here at ONE fixed, owner-approved
+ * rate. The SAME function is called by the checkout pricer and the Merchant feed, so the amount a
+ * buyer is charged and the amount advertised can never disagree (parity by construction). Rounded
+ * UP, so rate drift is never silently in the buyer's favour — the asymmetry the tariff already uses.
+ *
+ * EUR passes through untouched. A currency with no configured rate keeps today's behaviour (the raw
+ * figure) rather than crashing a live checkout; no such work exists, and adding a rate is one line.
+ */
+export const SHIPPING_TARIFF_CURRENCY = "EUR";
+export const SHIPPING_EUR_TO_USD = 1.1;
+export function shippingMinorInCurrency(eurMinor: number, currency: string): number {
+  if (currency === "USD") return Math.ceil(eurMinor * SHIPPING_EUR_TO_USD);
+  return eurMinor;
+}
+
 export function estimateShipping(
   artwork: ShippableArtwork,
   countryCodeRaw: string,

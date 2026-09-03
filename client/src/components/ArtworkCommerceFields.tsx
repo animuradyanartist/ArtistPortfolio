@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SUPPORTED_CURRENCIES, parseMajorToMinor, minorToMajorString, type Currency } from "@shared/commerce/money";
 import { purchasability, REASON_LABEL } from "@shared/commerce/purchasable";
-import { estimateShipping } from "@shared/commerce/shipping";
+import { estimateShipping, shippingMinorInCurrency } from "@shared/commerce/shipping";
 import { formatMoney } from "@shared/commerce/money";
 
 interface Props {
@@ -36,7 +36,7 @@ interface Props {
 export function ArtworkCommerceFields({ form, dimensions, availability, artworkId }: Props) {
   const v = form.watch();
   const directSaleEnabled: boolean = v.directSaleEnabled ?? false;
-  const currency: Currency = (v.websiteCurrency as Currency) ?? "EUR";
+  const currency: Currency = (v.websiteCurrency as Currency) ?? "USD";
 
   // Major-unit text the field actually shows, kept in local state so a half-typed "24" does
   // not round-trip through minor units and fight the person typing it.
@@ -184,7 +184,7 @@ export function ArtworkCommerceFields({ form, dimensions, availability, artworkI
           <span className="text-stone-500">Shipping to Germany would be quoted as </span>
           {preview.ok
             ? <>
-                <strong>{formatMoney(preview.amountMinor, currency)}</strong>
+                <strong>{formatMoney(shippingMinorInCurrency(preview.amountMinor, currency), currency)}</strong>
                 {preview.estimated && preview.breakdown
                   ? <span className="text-stone-500"> — estimated, {preview.breakdown.chargeableWeightKg}kg volumetric
                       {preview.parcel ? ` (${preview.parcel.packedWidthCm}×${preview.parcel.packedHeightCm}×${preview.parcel.packedDepthCm}cm)` : ""}</span>

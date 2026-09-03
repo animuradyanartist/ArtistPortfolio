@@ -13,7 +13,7 @@ import {
   MERCHANT_ORIGINAL_SHIP_COUNTRIES,
   type MerchantOriginalArtwork,
 } from "./merchantOriginals";
-import { estimateShipping } from "./shipping";
+import { estimateShipping, shippingMinorInCurrency } from "./shipping";
 
 function artwork(over: Partial<MerchantOriginalArtwork> = {}): MerchantOriginalArtwork {
   return {
@@ -121,9 +121,17 @@ describe("selectMerchantOriginals — serialised shape (matches PDP + checkout)"
 });
 
 describe("selectMerchantOriginals — per-item shipping (reuses the checkout estimator)", () => {
-  it("attaches shipping for EVERY launch country (DE, FR, IT, AT) to an eligible original", () => {
+  it("attaches shipping for EVERY launch country (US, DE, FR, IT, AT) to an eligible original", () => {
     const o = selectMerchantOriginals([artwork()])[0];
-    expect(o.shipping?.map((s) => s.country).sort()).toEqual(["AT", "DE", "FR", "IT"]);
+    expect(o.shipping?.map((s) => s.country).sort()).toEqual(["AT", "DE", "FR", "IT", "US"]);
+  });
+
+  it("emits the EXACT US shipping the authoritative checkout estimator returns", () => {
+    const a = artwork();
+    const quote = estimateShipping(a, "US");
+    expect(quote.ok).toBe(true);
+    const us = selectMerchantOriginals([a])[0].shipping?.find((s) => s.country === "US");
+    expect(us?.priceMinor).toBe(quote.ok ? quote.amountMinor : -1);
   });
 
   it("emits the EXACT DE shipping the authoritative checkout estimator returns", () => {
@@ -184,5 +192,31 @@ describe("selectMerchantOriginals — per-item shipping (reuses the checkout est
     const noDims = artwork({ id: 43, dimensions: null });
     expect(estimateShipping(noDims, "DE").ok).toBe(false);
     expect(selectMerchantOriginals([noDims])).toHaveLength(0);
+  });
+});
+
+describe("selectMerchantOriginals — USD works ship in USD (converted from the EUR tariff)", () => {
+  it("labels a USD work's price AND shipping in USD", () => {
+    const o = selectMerchantOriginals([artwork({ websiteCurrency: "USD" })])[0];
+    expect(o.currency).toBe("USD");
+    expect(o.shipping?.every((s) => s.currency === "USD")).toBe(true);
+  });
+
+  it("converts the EUR estimate to USD at the fixed rate for every launch country", () => {
+    const a = artwork({ websiteCurrency: "USD", dimensions: "70x90cm" });
+    const o = selectMerchantOriginals([a])[0];
+    for (const country of ["US", "DE", "FR", "IT", "AT"] as const) {
+      const eur = estimateShipping(a, country);
+      expect(eur.ok).toBe(true);
+      const line = o.shipping?.find((s) => s.country === country);
+      expect(line?.priceMinor).toBe(shippingMinorInCurrency(eur.ok ? eur.amountMinor : -1, "USD"));
+    }
+  });
+
+  it("an EUR work is unchanged — shipping stays the raw EUR estimate (identity)", () => {
+    const a = artwork({ websiteCurrency: "EUR" });
+    const de = selectMerchantOriginals([a])[0].shipping?.find((s) => s.country === "DE");
+    const eur = estimateShipping(a, "DE");
+    expect(de?.priceMinor).toBe(eur.ok ? eur.amountMinor : -1);
   });
 });

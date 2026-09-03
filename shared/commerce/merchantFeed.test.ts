@@ -12,15 +12,18 @@ const items: MerchantFeedItem[] = [
   { id: 19, title: "Road Through Gold", slug: "road_through_gold", priceMinor: 6900, currency: "USD" },
   { id: 20, title: "Beyond Every Limit", slug: "beyond_every_limit", priceMinor: 6900, currency: "USD" },
 ];
-const EU_SHIP = [
-  { country: "DE", priceMinor: 31482, currency: "EUR" },
-  { country: "FR", priceMinor: 31482, currency: "EUR" },
-  { country: "IT", priceMinor: 31482, currency: "EUR" },
-  { country: "AT", priceMinor: 31482, currency: "EUR" },
+// The single USD source ships originals to US + DE/FR/IT/AT; EU amounts are the EUR estimate
+// converted to USD, US is its own (higher, NA-zone) figure. All USD.
+const LAUNCH_SHIP = [
+  { country: "US", priceMinor: 46154, currency: "USD" },
+  { country: "DE", priceMinor: 34631, currency: "USD" },
+  { country: "FR", priceMinor: 34631, currency: "USD" },
+  { country: "IT", priceMinor: 34631, currency: "USD" },
+  { country: "AT", priceMinor: 34631, currency: "USD" },
 ];
 const originals: MerchantOriginalItem[] = [
-  { id: 40, title: "Blue Drift", path: "/artworks/blue-drift-40", description: "A quiet field of blue.", typeLabel: "Oil", priceMinor: 90000, currency: "EUR", imageCount: 3, shipping: EU_SHIP },
-  { id: 42, title: "Sea & <Sky>", path: "/sea-and-sky", typeLabel: "Acrylic", priceMinor: 110000, currency: "EUR", imageCount: 1, shipping: EU_SHIP },
+  { id: 40, title: "Blue Drift", path: "/artworks/blue-drift-40", description: "A quiet field of blue.", typeLabel: "Oil", priceMinor: 110000, currency: "USD", imageCount: 3, shipping: LAUNCH_SHIP },
+  { id: 42, title: "Sea & <Sky>", path: "/sea-and-sky", typeLabel: "Acrylic", priceMinor: 130000, currency: "USD", imageCount: 1, shipping: LAUNCH_SHIP },
 ];
 
 describe("buildMerchantFeed — RSS 2.0 envelope", () => {
@@ -151,11 +154,11 @@ describe("buildMerchantFeed — original paintings in the same feed", () => {
     expect(printAlso20).toContain("<g:id>original-40</g:id>");
   });
 
-  it("gives an original its own title, product_type, EUR price and canonical link", () => {
+  it("gives an original its own title, product_type, USD price and canonical link", () => {
     const xml = buildMerchantFeed([], BASE, [originals[0]]);
     expect(xml).toContain("<g:title>Blue Drift — Original Oil Painting</g:title>");
     expect(xml).toContain("<g:product_type>Original Paintings</g:product_type>");
-    expect(xml).toContain("<g:price>900.00 EUR</g:price>");
+    expect(xml).toContain("<g:price>1100.00 USD</g:price>");
     expect(xml).toContain("<g:link>https://animuradyan.com/artworks/blue-drift-40</g:link>");
     expect(xml).toContain("<g:availability>in_stock</g:availability>");
     expect(xml).toContain("<g:brand>Ani Muradyan</g:brand>");
@@ -192,28 +195,29 @@ describe("buildMerchantFeed — original paintings in the same feed", () => {
   });
 });
 
-describe("buildMerchantFeed — per-item g:shipping on originals (launch market DE/FR/IT/AT, EUR)", () => {
-  it("emits a g:shipping block for EACH launch country with the exact amount + EUR", () => {
+describe("buildMerchantFeed — per-item g:shipping on originals (launch market US/DE/FR/IT/AT, USD)", () => {
+  it("emits a g:shipping block for EACH launch country (US + DE/FR/IT/AT) in USD", () => {
     const xml = buildMerchantFeed([], BASE, [originals[0]]);
-    expect((xml.match(/<g:shipping>/g) ?? [])).toHaveLength(4);
-    for (const c of ["DE", "FR", "IT", "AT"]) {
+    expect((xml.match(/<g:shipping>/g) ?? [])).toHaveLength(5);
+    for (const c of ["US", "DE", "FR", "IT", "AT"]) {
       expect(xml).toContain(`<g:country>${c}</g:country>`);
     }
-    // Each country carries its price as a nested <g:price> inside <g:shipping>, in Google's format.
-    expect((xml.match(/<g:price>314\.82 EUR<\/g:price>/g) ?? [])).toHaveLength(4);
+    // The four EU countries share the converted EU-zone amount; the US carries its own.
+    expect((xml.match(/<g:price>346\.31 USD<\/g:price>/g) ?? [])).toHaveLength(4);
+    expect(xml).toContain("<g:country>US</g:country>");
+    expect(xml).toContain("<g:price>461.54 USD</g:price>");
   });
 
   it("keeps the item's own <g:price> distinct from its shipping prices", () => {
     const xml = buildMerchantFeed([], BASE, [originals[0]]);
-    expect(xml).toContain("<g:price>900.00 EUR</g:price>"); // the artwork price (90000 minor)
-    expect(xml).toContain("<g:price>314.82 EUR</g:price>"); // a shipping price (31482 minor)
+    expect(xml).toContain("<g:price>1100.00 USD</g:price>"); // the artwork price (110000 minor)
+    expect(xml).toContain("<g:price>346.31 USD</g:price>"); // an EU shipping price (34631 minor)
   });
 
-  it("emits shipping in the artwork's own currency (EUR)", () => {
+  it("emits shipping in the artwork's own currency (USD) — no EUR leaks into a shipping line", () => {
     const xml = buildMerchantFeed([], BASE, [originals[0]]);
-    // No non-EUR currency leaks into a shipping line.
-    expect(xml).not.toMatch(/<g:price>[\d.]+ USD<\/g:price>\s*<\/g:shipping>/);
-    expect(xml).toContain("<g:country>DE</g:country>");
+    expect(xml).not.toMatch(/<g:price>[\d.]+ EUR<\/g:price>/);
+    expect(xml).toContain("<g:country>US</g:country>");
   });
 
   it("PRINTS carry NO per-item g:shipping (their shipping stays account-level, unchanged)", () => {
@@ -223,7 +227,7 @@ describe("buildMerchantFeed — per-item g:shipping on originals (launch market 
   });
 
   it("an original WITHOUT a shipping array emits no g:shipping (never a blank/zero shipping line)", () => {
-    const xml = buildMerchantFeed([], BASE, [{ id: 8, title: "No Ship", path: "/artworks/no-ship-8", typeLabel: "Oil", priceMinor: 50000, currency: "EUR" }]);
+    const xml = buildMerchantFeed([], BASE, [{ id: 8, title: "No Ship", path: "/artworks/no-ship-8", typeLabel: "Oil", priceMinor: 50000, currency: "USD" }]);
     expect(xml).toContain("<g:id>original-8</g:id>");
     expect(xml).not.toContain("<g:shipping>");
   });
@@ -240,5 +244,21 @@ describe("buildMerchantFeed — per-item g:shipping on originals (launch market 
     expect(xml).not.toContain("data:image");
     expect(xml).not.toContain("master");
     expect(xml).not.toContain("/api/");
+  });
+});
+
+describe("buildMerchantFeed — optional g:return_policy_label on originals", () => {
+  it("emits g:return_policy_label ONLY when a real label is set", () => {
+    const withLabel = buildMerchantFeed([], BASE, [{ ...originals[0], returnPolicyLabel: "original-art-eu" }]);
+    expect(withLabel).toContain("<g:return_policy_label>original-art-eu</g:return_policy_label>");
+  });
+
+  it("emits NOTHING when the label is unset/empty (account default policy applies) — no speculative value", () => {
+    for (const label of [undefined, null, "", "   "]) {
+      const xml = buildMerchantFeed([], BASE, [{ ...originals[0], returnPolicyLabel: label as string | null | undefined }]);
+      expect(xml).not.toContain("<g:return_policy_label>");
+    }
+    // The default fixtures carry no label, so the standard feed never emits one.
+    expect(buildMerchantFeed(items, BASE, originals)).not.toContain("return_policy_label");
   });
 });

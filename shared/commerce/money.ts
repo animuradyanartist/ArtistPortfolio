@@ -11,11 +11,14 @@
  * in minor units. The two never convert into one another.
  */
 
-/** Currencies this system will price a painting in. EUR is the default. */
+/** Currencies this system will price a painting in. USD is the default (site-wide direct sale). */
 export const SUPPORTED_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
 
-export const DEFAULT_CURRENCY: Currency = "EUR";
+// Direct-sale commerce (prints AND originals) is standardised on USD. This is the currency a
+// work resolves to when its own `websiteCurrency` is unset or invalid; existing rows that state
+// a currency explicitly are unaffected. Was EUR before the originals→USD standardisation.
+export const DEFAULT_CURRENCY: Currency = "USD";
 
 /** Every supported currency happens to have 2 decimal places; stated rather than assumed. */
 const MINOR_UNITS_PER_MAJOR: Record<Currency, number> = { EUR: 100, USD: 100, GBP: 100 };

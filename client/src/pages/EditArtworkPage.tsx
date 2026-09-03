@@ -93,7 +93,7 @@ export default function EditArtworkPage() {
       // from these defaults and then refuses the real values on reset().
       directSaleEnabled: false,
       websitePriceMinor: null as number | null,
-      websiteCurrency: "EUR",
+      websiteCurrency: "USD",
       shippingEnabled: true,
       shippingOverrideMinor: null as number | null,
       shippingDestinationOverrides: null as string | null,
@@ -135,7 +135,7 @@ export default function EditArtworkPage() {
         // and `|| ` would quietly turn "shipping disabled" back on every time she opened a work.
         directSaleEnabled: artwork.directSaleEnabled ?? false,
         websitePriceMinor: artwork.websitePriceMinor ?? null,
-        websiteCurrency: artwork.websiteCurrency ?? "EUR",
+        websiteCurrency: artwork.websiteCurrency ?? "USD",
         shippingEnabled: artwork.shippingEnabled ?? true,
         shippingOverrideMinor: artwork.shippingOverrideMinor ?? null,
         shippingDestinationOverrides: artwork.shippingDestinationOverrides ?? null,
