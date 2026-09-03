@@ -46,13 +46,28 @@ and remains excluded from the Merchant feed.)*
 
 ## Owner action (when you approve the prices)
 
-For each work above, in the admin artwork editor:
+Two equivalent ways — **nothing runs until you do it**:
 
-1. Set **Currency = USD**.
-2. Set the **website price** to the approved USD amount.
+**A. By hand, in the admin artwork editor** (per work): set **Currency = USD** and the **website price**
+to the approved USD amount.
 
-Nothing else changes: `directSaleEnabled`, dimensions, shipping settings, and the marketplace
-`price` field are untouched. Historical orders keep their own EUR snapshots and are never rewritten.
+**B. Auditable batch script** (preferred for all 21 at once) — `scripts/migrate-originals-usd.ts`:
+
+```bash
+# 1. Confirm/edit the approved prices in APPROVED_USD_MAJOR at the top of the script.
+# 2. Dry run — prints the exact before → after for every row, writes NOTHING:
+tsx scripts/migrate-originals-usd.ts
+# 3. When the plan looks right, apply it (writes websitePriceMinor + websiteCurrency only):
+tsx scripts/migrate-originals-usd.ts --apply
+```
+
+The script connects to whatever `DATABASE_URL` is set when you run it — point it at production
+deliberately. It is **idempotent** (a row already USD is skipped) and **refuses to overwrite** a row
+whose currency is not EUR, so a hand-edit is never clobbered.
+
+Either way, nothing else changes: `directSaleEnabled`, dimensions, shipping settings, and the
+marketplace `price` field are untouched. Historical orders keep their own currency snapshots and are
+never rewritten (the order view reads `order.currency`, not the artwork's current currency).
 
 ## Shipping (handled in code — no per-work action)
 

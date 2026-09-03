@@ -20,12 +20,14 @@ import { artworkCanonicalPath, type CanonicalArtwork } from "../canonical";
 import type { MerchantOriginalItem, MerchantShipping } from "./merchantFeed";
 
 /**
- * The originals launch market: Germany, France, Italy, Austria — all EUR, and the destinations the
- * checkout estimator quotes for these works (they resolve to one EU zone, so the amounts match). An
- * original must have a usable automatic quote to EVERY one of these to enter the feed, so a work whose
- * shipping refuses (e.g. a freight-only oversized canvas) is excluded rather than advertised as buyable.
+ * The originals launch market for the single USD Merchant source: the United States plus Germany,
+ * France, Italy and Austria. All are priced and shipped in USD (the EU amounts are converted from the
+ * EUR estimator at the fixed rate, and Google shows EU shoppers their local currency automatically).
+ * An original must have a usable automatic quote to EVERY one of these to enter the feed, so a work
+ * whose shipping refuses (e.g. a freight-only oversized canvas) is excluded rather than advertised as
+ * buyable — US is included, so a work must also be automatically quotable to the US.
  */
-export const MERCHANT_ORIGINAL_SHIP_COUNTRIES = ["DE", "FR", "IT", "AT"] as const;
+export const MERCHANT_ORIGINAL_SHIP_COUNTRIES = ["US", "DE", "FR", "IT", "AT"] as const;
 
 /** Everything the selector needs from an artwork row (purchasability + canonical + shipping inputs). */
 export interface MerchantOriginalArtwork extends PurchasableArtwork, CanonicalArtwork, ShippableArtwork {
@@ -70,10 +72,19 @@ function shippingForLaunchCountries(a: MerchantOriginalArtwork): MerchantShippin
  * launch country; each included work carries its exact per-country shipping. `now` is injectable so
  * reservation/commitment expiry is testable.
  */
+export interface SelectMerchantOriginalsOptions {
+  /** The exact existing Merchant Center return-policy label for originals. Emitted as
+   *  g:return_policy_label ONLY when a non-empty value is passed; otherwise the account default
+   *  policy applies. Never a hard-coded default — the route supplies it from config/env. */
+  returnPolicyLabel?: string | null;
+}
+
 export function selectMerchantOriginals(
   artworks: MerchantOriginalArtwork[],
   now?: Date,
+  opts: SelectMerchantOriginalsOptions = {},
 ): MerchantOriginalItem[] {
+  const returnPolicyLabel = (opts.returnPolicyLabel ?? "").trim() || undefined;
   const out: MerchantOriginalItem[] = [];
   for (const a of artworks) {
     if (!isPurchasableArtwork(a, now)) continue;
@@ -92,6 +103,7 @@ export function selectMerchantOriginals(
         ? a.images.filter((i) => typeof i === "string" && i.trim()).length
         : null,
       shipping,
+      returnPolicyLabel,
     });
   }
   return out;

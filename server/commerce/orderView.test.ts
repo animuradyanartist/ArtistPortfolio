@@ -78,3 +78,19 @@ describe("buyer-facing projection — timeline & token gating", () => {
     expect(view.phase).toBe("refunded");
   });
 });
+
+describe("historical order snapshots keep their OWN currency (USD default never reinterprets them)", () => {
+  it("a stored EUR order renders in EUR, not the new USD default", () => {
+    const view = publicOrderView(makeOrder({ currency: "EUR", item_price_minor: 242000, shipping_minor: 8000, total_minor: 250000 }));
+    expect(view.currency).toBe("EUR");
+    // The amount is the exact snapshot, formatted in its own currency — never re-labelled or re-valued.
+    expect(view.totalFormatted).toContain("€");
+    expect(view.totalFormatted).not.toContain("$");
+  });
+
+  it("a stored USD order renders in USD — the view reads order.currency, not any artwork's current currency", () => {
+    const view = publicOrderView(makeOrder({ currency: "USD", item_price_minor: 110000, shipping_minor: 34631, total_minor: 144631 }));
+    expect(view.currency).toBe("USD");
+    expect(view.totalFormatted).toContain("$");
+  });
+});

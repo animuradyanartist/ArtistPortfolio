@@ -121,9 +121,17 @@ describe("selectMerchantOriginals — serialised shape (matches PDP + checkout)"
 });
 
 describe("selectMerchantOriginals — per-item shipping (reuses the checkout estimator)", () => {
-  it("attaches shipping for EVERY launch country (DE, FR, IT, AT) to an eligible original", () => {
+  it("attaches shipping for EVERY launch country (US, DE, FR, IT, AT) to an eligible original", () => {
     const o = selectMerchantOriginals([artwork()])[0];
-    expect(o.shipping?.map((s) => s.country).sort()).toEqual(["AT", "DE", "FR", "IT"]);
+    expect(o.shipping?.map((s) => s.country).sort()).toEqual(["AT", "DE", "FR", "IT", "US"]);
+  });
+
+  it("emits the EXACT US shipping the authoritative checkout estimator returns", () => {
+    const a = artwork();
+    const quote = estimateShipping(a, "US");
+    expect(quote.ok).toBe(true);
+    const us = selectMerchantOriginals([a])[0].shipping?.find((s) => s.country === "US");
+    expect(us?.priceMinor).toBe(quote.ok ? quote.amountMinor : -1);
   });
 
   it("emits the EXACT DE shipping the authoritative checkout estimator returns", () => {
@@ -197,7 +205,7 @@ describe("selectMerchantOriginals — USD works ship in USD (converted from the 
   it("converts the EUR estimate to USD at the fixed rate for every launch country", () => {
     const a = artwork({ websiteCurrency: "USD", dimensions: "70x90cm" });
     const o = selectMerchantOriginals([a])[0];
-    for (const country of ["DE", "FR", "IT", "AT"] as const) {
+    for (const country of ["US", "DE", "FR", "IT", "AT"] as const) {
       const eur = estimateShipping(a, country);
       expect(eur.ok).toBe(true);
       const line = o.shipping?.find((s) => s.country === country);

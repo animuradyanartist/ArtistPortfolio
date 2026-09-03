@@ -178,4 +178,16 @@ describe("row → shippable", () => {
   it("falls back to the default currency (USD) for an unrecognised currency rather than throwing", () => {
     expect(currencyOf(artwork({ websiteCurrency: "XYZ" }))).toBe("USD");
   });
+
+  it("does NOT reinterpret an existing EUR row as USD just because the default is now USD (CRITICAL)", async () => {
+    // A row storing websitePriceMinor=100000 / websiteCurrency="EUR" is €1000 and must stay €1000
+    // until an explicit price+currency data update happens — the default change must never touch it.
+    const eurRow = artwork({ websitePriceMinor: 100000, websiteCurrency: "EUR" });
+    expect(currencyOf(eurRow)).toBe("EUR");
+    const r = await priceOrder([eurRow], "DE");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.currency).toBe("EUR");
+    expect(r.itemsMinor).toBe(100000); // still €1000.00, unchanged
+  });
 });

@@ -346,9 +346,15 @@ export function registerPrintRoutes(app: Express): void {
       // policy violation). Flip this flag ON only AFTER Merchant Center is configured for the originals'
       // currency + real shipping (see the PR notes / owner decisions). Prints are unaffected either way.
       const includeOriginals = process.env.MERCHANT_INCLUDE_ORIGINALS === "true";
+      // OPTIONAL: once the owner creates an "original paintings" return policy in Merchant Center and
+      // knows its label, set MERCHANT_ORIGINAL_RETURN_POLICY_LABEL to that exact label and originals
+      // will carry g:return_policy_label. Unset (the default) → nothing emitted → account default policy.
+      const returnPolicyLabel = process.env.MERCHANT_ORIGINAL_RETURN_POLICY_LABEL || undefined;
       const originals = includeOriginals
         ? selectMerchantOriginals(
             (await storage.getAllArtworks()) as unknown as Parameters<typeof selectMerchantOriginals>[0],
+            undefined,
+            { returnPolicyLabel },
           )
         : [];
       const xml = buildMerchantFeed(items, baseUrlOf(req), originals);

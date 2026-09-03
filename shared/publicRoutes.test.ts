@@ -29,10 +29,17 @@ const SHELL =
 describe('1 · every known public route is still a route', () => {
   it.each([
     '/', '/artworks', '/about', '/path', '/exhibitions', '/gallery', '/contact', '/blog',
+    '/shipping', '/returns', '/privacy',
     '/cart', '/checkout',
     '/admin', '/admin/create-artwork', '/admin/create-print', '/admin/orders',
   ])('%s is routed', (p) => {
     expect(isKnownRouteShape(p)).toBe(true);
+  });
+
+  it('the policy pages that were soft-404ing are now known routes (return 200, not 404)', () => {
+    for (const p of ['/shipping', '/returns', '/privacy']) {
+      expect(isKnownRouteShape(p)).toBe(true);
+    }
   });
 
   it('tolerates one trailing slash — same page, not a 404', () => {

@@ -163,6 +163,11 @@ export interface MerchantOriginalItem {
   /** Per-destination shipping rates, one per launch country — each the checkout estimator's exact
    *  figure for this work. Emitted as g:shipping so Google shows the true shipping, never a flat guess. */
   shipping?: MerchantShipping[];
+  /** OPTIONAL: the exact Merchant Center return-policy label to map this work to a non-default return
+   *  policy (originals use a different policy from made-to-order prints). Emitted as g:return_policy_label
+   *  ONLY when set to a real, existing Merchant-side label; empty/undefined → the account default policy.
+   *  Never hard-coded here — the value comes from config once the owner creates the policy. */
+  returnPolicyLabel?: string | null;
 }
 
 /** "Blue Drift — Original Oil Painting". */
@@ -227,6 +232,11 @@ function originalItemXml(item: MerchantOriginalItem, baseUrl: string): string {
     `      <g:identifier_exists>no</g:identifier_exists>`,
     `      <g:google_product_category>${e(MERCHANT_GOOGLE_CATEGORY)}</g:google_product_category>`,
     `      <g:product_type>${e(MERCHANT_ORIGINAL_PRODUCT_TYPE)}</g:product_type>`,
+    // Maps originals to their own Merchant return policy — emitted ONLY when a real label is configured;
+    // otherwise nothing is written and Google applies the account default policy.
+    ...((item.returnPolicyLabel ?? "").trim()
+      ? [`      <g:return_policy_label>${e((item.returnPolicyLabel ?? "").trim())}</g:return_policy_label>`]
+      : []),
     "    </item>",
   ].join("\n");
 }

@@ -38,6 +38,12 @@ const EXACT_ROUTES: ReadonlySet<string> = new Set([
   "/exhibitions",
   "/gallery",
   "/contact",
+  // Policy pages. Real routes in App.tsx with server-rendered bodies — they were missing here, so
+  // the catch-all served their SSR content under a 404 status (a soft-404 that also hid them from
+  // indexing). Listed so they answer 200 like every other real page; unknown URLs still 404.
+  "/shipping",
+  "/returns",
+  "/privacy",
   "/blog",
   // Direct sales. Public, deliberately not indexed, and they must keep working.
   "/cart",
