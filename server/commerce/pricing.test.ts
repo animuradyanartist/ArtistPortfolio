@@ -6,6 +6,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { priceOrder, parseDestinationOverrides, toShippable, currencyOf } from "./pricing";
+import { estimateShipping, shippingMinorInCurrency } from "@shared/commerce/shipping";
 import type { Artwork } from "@shared/schema";
 
 const artwork = (over: Partial<Artwork> = {}): Artwork => ({
@@ -32,6 +33,29 @@ describe("priceOrder", () => {
     expect(r.totalMinor).toBe(r.itemsMinor + r.shippingMinor);
     expect(r.currency).toBe("EUR");
     expect(r.shippingEstimated).toBe(true);
+  });
+
+  it("charges a USD work's shipping in USD, converted from the EUR estimate at the fixed rate", async () => {
+    const a = artwork({ websitePriceMinor: 108000, websiteCurrency: "USD" });
+    const r = await priceOrder([a], "DE");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.currency).toBe("USD");
+    const eur = estimateShipping(toShippable(a), "DE");
+    expect(eur.ok).toBe(true);
+    // Shipping is the EUR estimate converted to USD — the SAME helper the Merchant feed uses,
+    // so the charged shipping equals the advertised shipping (feed↔checkout parity by construction).
+    expect(r.shippingMinor).toBe(shippingMinorInCurrency(eur.ok ? eur.amountMinor : -1, "USD"));
+    expect(r.totalMinor).toBe(r.itemsMinor + r.shippingMinor);
+  });
+
+  it("leaves an EUR work's shipping unconverted (identity) — no regression for EUR orders", async () => {
+    const a = artwork({ websiteCurrency: "EUR" });
+    const r = await priceOrder([a], "DE");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const eur = estimateShipping(toShippable(a), "DE");
+    expect(r.shippingMinor).toBe(eur.ok ? eur.amountMinor : -1);
   });
 
   it("ships the production-test item FREE — exactly $1.00 total in USD (test harness)", async () => {
@@ -151,7 +175,7 @@ describe("row → shippable", () => {
   it("treats a null shippingEnabled as enabled, matching the column default", () => {
     expect(toShippable(artwork({ shippingEnabled: null as unknown as boolean })).shippingEnabled).toBe(true);
   });
-  it("falls back to EUR for an unrecognised currency rather than throwing", () => {
-    expect(currencyOf(artwork({ websiteCurrency: "XYZ" }))).toBe("EUR");
+  it("falls back to the default currency (USD) for an unrecognised currency rather than throwing", () => {
+    expect(currencyOf(artwork({ websiteCurrency: "XYZ" }))).toBe("USD");
   });
 });

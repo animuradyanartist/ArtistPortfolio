@@ -151,7 +151,7 @@ export function artworkOffer(a: SsrArtwork, baseUrl: string): Record<string, unk
     return {
       "@type": "Offer",
       price: websiteMinor / 100,
-      priceCurrency: a.websiteCurrency || "EUR",
+      priceCurrency: a.websiteCurrency || "USD",
       availability: "https://schema.org/InStock",
       url,
     };
@@ -177,7 +177,7 @@ export function artworkOffer(a: SsrArtwork, baseUrl: string): Record<string, unk
  */
 export function artworkPublicPrice(a: SsrArtwork): { amount: number; currency: string } | null {
   if (a.directSaleEnabled && typeof a.websitePriceMinor === "number" && a.websitePriceMinor > 0) {
-    return { amount: a.websitePriceMinor / 100, currency: a.websiteCurrency || "EUR" };
+    return { amount: a.websitePriceMinor / 100, currency: a.websiteCurrency || "USD" };
   }
   if (a.availability === "available" && typeof a.price === "number" && a.price > 0) {
     return { amount: a.price, currency: ARTWORK_PRICE_CURRENCY };

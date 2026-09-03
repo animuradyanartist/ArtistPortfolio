@@ -11,7 +11,7 @@
 import type { Artwork } from "@shared/schema";
 import { purchasability, type NotPurchasableReason } from "@shared/commerce/purchasable";
 import { DEFAULT_CURRENCY, isCurrency, type Currency } from "@shared/commerce/money";
-import type { ShippableArtwork, ShippingQuote } from "@shared/commerce/shipping";
+import { shippingMinorInCurrency, type ShippableArtwork, type ShippingQuote } from "@shared/commerce/shipping";
 import { shippingProvider } from "./providers";
 
 /** The artwork row, reduced to what shipping needs — including the parsed overrides. */
@@ -133,7 +133,17 @@ export async function priceOrder(
     shipping: cart.perArtwork[i]!,
   }));
   const itemsMinor = lines.reduce((t, l) => t + l.priceMinor, 0);
-  const shippingMinor = isTestItem ? 0 : (cart.ok ? cart.amountMinor : 0);
+  // The estimator returns EUR; a USD order must charge shipping in USD. Convert EACH line at the
+  // fixed rate and sum — the same per-work conversion the Merchant feed applies — so the charged
+  // shipping equals the advertised shipping to the cent. EUR orders pass through unchanged.
+  const shippingMinor = isTestItem
+    ? 0
+    : cart.ok
+      ? lines.reduce(
+          (t, l) => t + (l.shipping.ok ? shippingMinorInCurrency(l.shipping.amountMinor, currency) : 0),
+          0,
+        )
+      : 0;
 
   // "Estimated" is true if ANY line was estimated — a total is only as certain as its least
   // certain part, and the label the buyer sees must not overstate.

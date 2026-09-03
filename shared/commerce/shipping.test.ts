@@ -7,7 +7,7 @@
  * refuses rather than inventing a figure.
  */
 import { describe, it, expect } from "vitest";
-import { estimateShipping, estimateShippingForCart, type ShippableArtwork } from "./shipping";
+import { estimateShipping, estimateShippingForCart, shippingMinorInCurrency, SHIPPING_EUR_TO_USD, type ShippableArtwork } from "./shipping";
 import { parseArtworkSize } from "./dimensions";
 import { packArtwork } from "./packing";
 import { zoneFor } from "./zones";
@@ -226,5 +226,39 @@ describe("packing arithmetic is the documented formula", () => {
     expect(p.packedDepthCm).toBe(12);
     expect(p.rawVolumetricKg).toBeCloseTo((90 * 70 * 12) / 5000, 3);
     expect(p.chargeableWeightKg).toBe(Math.ceil(p.rawVolumetricKg / 0.5) * 0.5);
+  });
+});
+
+describe("shippingMinorInCurrency — deterministic EUR→order-currency conversion", () => {
+  it("passes EUR through untouched (the tariff's own currency)", () => {
+    expect(shippingMinorInCurrency(31482, "EUR")).toBe(31482);
+    expect(shippingMinorInCurrency(0, "EUR")).toBe(0);
+  });
+
+  it("converts EUR→USD at the fixed rate, rounded UP (never in the buyer's favour)", () => {
+    expect(SHIPPING_EUR_TO_USD).toBe(1.1);
+    // 31482 × 1.10 = 34630.2 → ceil → 34631
+    expect(shippingMinorInCurrency(31482, "USD")).toBe(Math.ceil(31482 * 1.1));
+    expect(shippingMinorInCurrency(31482, "USD")).toBe(34631);
+  });
+
+  it("is deterministic — no live FX, same input always same output", () => {
+    const a = shippingMinorInCurrency(18000, "USD");
+    const b = shippingMinorInCurrency(18000, "USD");
+    expect(a).toBe(b);
+    expect(a).toBe(Math.ceil(18000 * 1.1));
+  });
+
+  it("never underprices: the USD figure is >= the EUR figure it came from", () => {
+    for (const eur of [3500, 18000, 31482, 47736]) {
+      expect(shippingMinorInCurrency(eur, "USD")).toBeGreaterThanOrEqual(eur);
+    }
+  });
+
+  it("does NOT alter the estimator itself — estimateShipping still returns the EUR tariff amount", () => {
+    // The conversion lives at the boundary; the tariff/calibration source of truth stays EUR.
+    const q = estimateShipping(art({ dimensions: MEDIUM }), "DE");
+    expect(q.ok).toBe(true);
+    if (q.ok) expect(shippingMinorInCurrency(q.amountMinor, "USD")).toBe(Math.ceil(q.amountMinor * 1.1));
   });
 });

@@ -15,7 +15,7 @@
  * referenced). Pure over its input, so it is unit-tested without a database.
  */
 import { isPurchasableArtwork, type PurchasableArtwork } from "./purchasable";
-import { estimateShipping, type ShippableArtwork } from "./shipping";
+import { estimateShipping, shippingMinorInCurrency, type ShippableArtwork } from "./shipping";
 import { artworkCanonicalPath, type CanonicalArtwork } from "../canonical";
 import type { MerchantOriginalItem, MerchantShipping } from "./merchantFeed";
 
@@ -57,7 +57,9 @@ function shippingForLaunchCountries(a: MerchantOriginalArtwork): MerchantShippin
   for (const country of MERCHANT_ORIGINAL_SHIP_COUNTRIES) {
     const q = estimateShipping(a, country);
     if (!q.ok) return null; // a refusal to any launch country → not automatically purchasable there
-    out.push({ country, priceMinor: q.amountMinor, currency });
+    // The estimator is EUR; convert to the work's own currency (USD) at the fixed rate the
+    // checkout uses, so the advertised shipping equals what the buyer is charged.
+    out.push({ country, priceMinor: shippingMinorInCurrency(q.amountMinor, currency), currency });
   }
   return out;
 }
