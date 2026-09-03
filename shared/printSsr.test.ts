@@ -57,6 +57,41 @@ describe("printJsonLd — Product with an honest Offer", () => {
     const ld = printJsonLd(detail({ startingPriceMinor: 12000 }), BASE) as any;
     expect(ld.offers.price).toBe("120.00");
   });
+
+  it("a USD print Offer carries shippingDetails + hasMerchantReturnPolicy (Merchant-listing completeness)", () => {
+    const ld = printJsonLd(detail({ currency: "USD", startingPriceMinor: 6900 }), BASE) as any;
+    // shippingDetails — real US Standard rate matching checkout, never fabricated
+    expect(ld.offers.shippingDetails).toMatchObject({
+      "@type": "OfferShippingDetails",
+      shippingRate: { "@type": "MonetaryAmount", value: "11.85", currency: "USD" },
+      shippingDestination: { "@type": "DefinedRegion", addressCountry: "US" },
+    });
+    expect(ld.offers.shippingDetails.deliveryTime["@type"]).toBe("ShippingDeliveryTime");
+    // hasMerchantReturnPolicy — the /returns "Fine-art prints" terms: 14-day, free, by mail
+    expect(ld.offers.hasMerchantReturnPolicy).toEqual({
+      "@type": "MerchantReturnPolicy",
+      applicableCountry: "US",
+      returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+      merchantReturnDays: 14,
+      returnMethod: "https://schema.org/ReturnByMail",
+      returnFees: "https://schema.org/FreeReturn",
+    });
+  });
+
+  it("hasMerchantReturnPolicy is present whenever there is an Offer", () => {
+    const ld = printJsonLd(detail({ currency: "EUR" }), BASE) as any;
+    expect(ld.offers.hasMerchantReturnPolicy).toBeDefined();
+  });
+
+  it("does NOT invent a shipping rate for a non-USD market (no shippingDetails then)", () => {
+    const ld = printJsonLd(detail({ currency: "EUR" }), BASE) as any;
+    expect(ld.offers.shippingDetails).toBeUndefined();
+  });
+
+  it("an unpurchasable print has NO offer, hence no shipping/return fields", () => {
+    const ld = printJsonLd(detail({ purchasable: false }), BASE) as any;
+    expect(ld.offers).toBeUndefined();
+  });
 });
 
 describe("indexability + image", () => {

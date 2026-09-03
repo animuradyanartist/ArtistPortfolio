@@ -26,6 +26,51 @@ export interface PrintSsrDetail {
 
 export const PRINT_BRAND = "Ani Muradyan";
 
+// ── PRINT MERCHANT STRUCTURED-DATA FACTS (single source, so shippingDetails + returns never drift
+//    apart across the Product Offer). Prints sell and ship to the United States in USD, exactly like
+//    the Merchant feed (US target, USD) and checkout. These are NOT invented: the shipping figure is
+//    the same US "Standard" rate checkout charges for the starting print (Prodigi), and the return
+//    terms are the /returns "Fine-art prints" policy verbatim (14-day free replacement/refund for a
+//    damaged/defective/not-as-described print; made to order, so no change-of-mind returns). ────────
+export const PRINT_SHIP_COUNTRY = "US";
+/** US "Standard" shipping for the starting print, in minor units — mirrors checkout's Prodigi quote
+ *  for the cheapest variant (unit 6900 → ship 1185). Keep in step with that rate if it changes. */
+export const PRINT_US_SHIPPING_MINOR = 1185;
+export const PRINT_RETURN_DAYS = 14;
+
+/** OfferShippingDetails for a USD (US-market) print — a real destination + rate, never a guess. */
+function printShippingDetails(currency: string): Record<string, unknown> | null {
+  if (currency !== "USD") return null; // prints ship to the US in USD; no honest rate for other markets
+  return {
+    "@type": "OfferShippingDetails",
+    shippingRate: {
+      "@type": "MonetaryAmount",
+      value: (PRINT_US_SHIPPING_MINOR / 100).toFixed(2),
+      currency: "USD",
+    },
+    shippingDestination: { "@type": "DefinedRegion", addressCountry: PRINT_SHIP_COUNTRY },
+    deliveryTime: {
+      "@type": "ShippingDeliveryTime",
+      // Made to order (production) then standard transit — conservative ranges, not exact promises.
+      handlingTime: { "@type": "QuantitativeValue", minValue: 2, maxValue: 5, unitCode: "DAY" },
+      transitTime: { "@type": "QuantitativeValue", minValue: 3, maxValue: 8, unitCode: "DAY" },
+    },
+  };
+}
+
+/** MerchantReturnPolicy for a print — the /returns "Fine-art prints" terms: a 14-day, free,
+ *  by-mail return for a damaged/defective/not-as-described print (the merchant covers the cost). */
+function printReturnPolicy(): Record<string, unknown> {
+  return {
+    "@type": "MerchantReturnPolicy",
+    applicableCountry: PRINT_SHIP_COUNTRY,
+    returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+    merchantReturnDays: PRINT_RETURN_DAYS,
+    returnMethod: "https://schema.org/ReturnByMail",
+    returnFees: "https://schema.org/FreeReturn",
+  };
+}
+
 export function escapeHtml(value: string): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -86,14 +131,20 @@ export function printJsonLd(d: PrintSsrDetail, baseUrl: string): Record<string, 
   if (image) node.image = image;
 
   if (d.purchasable && d.startingPriceMinor != null && d.startingPriceMinor > 0) {
-    node.offers = {
+    const offer: Record<string, unknown> = {
       "@type": "Offer",
       priceCurrency: d.currency,
       price: (d.startingPriceMinor / 100).toFixed(2),
       availability: "https://schema.org/InStock",
       url,
       seller: { "@type": "Person", "@id": `${baseUrl.replace(/\/+$/, "")}/#person`, name: PRINT_BRAND },
+      // Google Merchant-listing completeness: real shipping + return terms, consistent with the feed
+      // (US/USD), checkout (the US Standard rate) and the /returns policy — no fabricated values.
+      hasMerchantReturnPolicy: printReturnPolicy(),
     };
+    const shipping = printShippingDetails(d.currency);
+    if (shipping) offer.shippingDetails = shipping;
+    node.offers = offer;
   }
   return node;
 }
