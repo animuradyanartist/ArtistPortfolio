@@ -10,12 +10,14 @@ import {
   publicMaterialCategories,
   sizesForCategory,
   seedSelection,
+  cheapestPurchasableSelection,
   firstOptionInCategory,
   retainedSizeOnCategoryChange,
   materialCategoryLabel,
   sizeOptionLabel,
   printCheckoutHref,
   type SelectorOption,
+  type PricedSelectorOption,
   type SizeOption,
 } from "./printSelector";
 
@@ -94,6 +96,60 @@ describe("seed + category switch pick a valid, purchasable-first option", () => 
   it("firstOptionInCategory prefers a purchasable size in that category", () => {
     const cat = [opt({ material: "german-etching", sizeLabel: "A3", state: "provisional" }), opt({ material: "german-etching", sizeLabel: "A2", state: "purchasable" })];
     expect(firstOptionInCategory(cat, "fine-art-paper")?.sizeLabel).toBe("A2");
+  });
+});
+
+describe("cheapestPurchasableSelection — land on the cheapest orderable variant (feed 'from $X')", () => {
+  const priced = (over: Partial<PricedSelectorOption>): PricedSelectorOption => ({
+    material: "stretched-canvas", sizeLabel: "A3", framed: false, frameColour: null, state: "purchasable", priceMinor: 9900, ...over,
+  });
+
+  // The real Road-Through-Gold shape: canvas variants come FIRST in the array (the old bug seeded
+  // canvas $99), but the genuine cheapest is Fine Art Paper 12×16 at $69.
+  const ROAD_THROUGH_GOLD: PricedSelectorOption[] = [
+    priced({ material: "stretched-canvas", sizeLabel: "A3", priceMinor: 9900 }),
+    priced({ material: "german-etching", sizeLabel: "12×16 in", priceMinor: 6900 }),
+    priced({ material: "stretched-canvas", sizeLabel: "12×16 in", priceMinor: 9900 }),
+    priced({ material: "german-etching", sizeLabel: "16×20 in", priceMinor: 8900 }),
+    priced({ material: "stretched-canvas", sizeLabel: "24×36 in", priceMinor: 22900 }),
+  ];
+
+  it("lands on Fine Art Paper 12×16 at $69 even though canvas $99 is first in the list", () => {
+    const seed = cheapestPurchasableSelection(ROAD_THROUGH_GOLD);
+    expect(seed?.category).toBe("fine-art-paper");
+    expect(seed?.option.sizeLabel).toBe("12×16 in");
+    expect(seed?.option.priceMinor).toBe(6900);
+  });
+
+  it("picks the cheapest PURCHASABLE variant, ignoring a cheaper non-purchasable one", () => {
+    const opts = [
+      priced({ material: "german-etching", sizeLabel: "A6", priceMinor: 3900, state: "preview" }), // cheaper but not orderable
+      priced({ material: "german-etching", sizeLabel: "12×16 in", priceMinor: 6900, state: "purchasable" }),
+      priced({ material: "stretched-canvas", sizeLabel: "A3", priceMinor: 9900, state: "purchasable" }),
+    ];
+    const seed = cheapestPurchasableSelection(opts);
+    expect(seed?.option.priceMinor).toBe(6900);
+    expect(seed?.category).toBe("fine-art-paper");
+  });
+
+  it("ignores a zero/nullish price and never selects it as 'cheapest'", () => {
+    const opts = [
+      priced({ material: "german-etching", sizeLabel: "free?", priceMinor: 0 }),
+      priced({ material: "german-etching", sizeLabel: "12×16 in", priceMinor: 6900 }),
+    ];
+    expect(cheapestPurchasableSelection(opts)?.option.priceMinor).toBe(6900);
+  });
+
+  it("falls back to the cheapest priced option when NONE is purchasable", () => {
+    const opts = [
+      priced({ sizeLabel: "big", priceMinor: 22900, state: "provisional" }),
+      priced({ sizeLabel: "small", priceMinor: 9900, state: "provisional" }),
+    ];
+    expect(cheapestPurchasableSelection(opts)?.option.priceMinor).toBe(9900);
+  });
+
+  it("returns null for an empty option set", () => {
+    expect(cheapestPurchasableSelection([])).toBeNull();
   });
 });
 

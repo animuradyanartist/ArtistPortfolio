@@ -21,7 +21,7 @@ import {
   categoryOfMaterial,
   publicMaterialCategories,
   sizesForCategory,
-  seedSelection,
+  cheapestPurchasableSelection,
   retainedSizeOnCategoryChange,
   materialCategoryLabel,
   printCheckoutHref,
@@ -143,12 +143,19 @@ export default function PrintDetailPage() {
     [options, category],
   );
 
-  // Seed the MATERIAL once options arrive (prefer a purchasable one). Size stays unset so the dropdown
-  // opens on "Select a size" — the customer explicitly picks a size.
+  // Seed the FULL selection once options arrive to the cheapest genuinely orderable variant, so the
+  // landing state shows that price (matching the feed's "from $X") with Add to cart ready — instead of
+  // opening on "Select a size" at a higher default (canvas) price. Material + size + frame are all set
+  // from that one variant; the customer can still switch material and size freely afterwards. Seeds
+  // once (guarded by `category`), so a later manual "Select a size" clear is never re-seeded.
   useEffect(() => {
     if (!options.length || category) return;
-    const seed = seedSelection(options);
-    if (seed) setCategory(seed.category);
+    const seed = cheapestPurchasableSelection(options);
+    if (seed) {
+      setCategory(seed.category);
+      setSize(seed.option.sizeLabel);
+      setFrame(frameKeyOf(seed.option));
+    }
   }, [options, category]);
 
   // Choose a size from the dropdown; carry the matching frame so `selected` resolves. Null → cleared.

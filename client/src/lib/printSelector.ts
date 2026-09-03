@@ -65,6 +65,35 @@ export function seedSelection<T extends SelectorOption>(
   return { category: categoryOfMaterial(seed.material), sizeLabel: seed.sizeLabel, option: seed };
 }
 
+/** A selector option that also carries its retail price — needed to pick the cheapest variant. */
+export interface PricedSelectorOption extends SelectorOption {
+  priceMinor?: number | null;
+}
+
+/**
+ * THE INITIAL PDP SELECTION — the CHEAPEST genuinely orderable variant.
+ *
+ * A shopper who arrives from a "from $X" listing must land with that $X variant already selected, so
+ * the visible price and the Add-to-cart state match the promise instead of opening on "Select a size"
+ * (which, with the options ordered canvas-first, showed a higher canvas price by default). We pick the
+ * cheapest option whose `state` is "purchasable" (server-confirmed orderable / fulfillable) and whose
+ * price is a positive number; if none is purchasable we fall back to the cheapest priced option, then
+ * the first option. This ONLY chooses which existing variant is selected first — no price is changed,
+ * and the customer can still switch material and size freely afterwards. Ties keep the first-seen
+ * cheapest, so the result is deterministic for a given option order.
+ */
+export function cheapestPurchasableSelection<T extends PricedSelectorOption>(
+  options: T[],
+): { category: PrintCategory; sizeLabel: string; option: T } | null {
+  if (!options.length) return null;
+  const priceOf = (o: T): number =>
+    typeof o.priceMinor === "number" && o.priceMinor > 0 ? o.priceMinor : Number.POSITIVE_INFINITY;
+  const purchasable = options.filter((o) => o.state === "purchasable" && priceOf(o) !== Number.POSITIVE_INFINITY);
+  const pool = purchasable.length ? purchasable : options;
+  const pick = pool.reduce((best, o) => (priceOf(o) < priceOf(best) ? o : best), pool[0]);
+  return { category: categoryOfMaterial(pick.material), sizeLabel: pick.sizeLabel, option: pick };
+}
+
 /** When the customer switches category, pick a valid size within it (purchasable-first). */
 export function firstOptionInCategory<T extends SelectorOption>(options: T[], category: PrintCategory): T | null {
   const inCat = options.filter((o) => categoryOfMaterial(o.material) === category);
