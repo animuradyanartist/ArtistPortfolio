@@ -27,6 +27,12 @@ const APPROVED_USD_MAJOR: Record<number, number> = {
   53: 450, 58: 450, 60: 450, 55: 500, 14: 550, 56: 550,
   48: 750, 50: 750, 43: 900, 44: 900, 40: 1000, 69: 1100, 74: 1100,
   41: 1200, 42: 1200, 70: 1300, 71: 1300, 72: 1300, 73: 1300, 51: 1550, 62: 1650,
+  // id 79 "No Measure for Distance" — migrated to USD for site-wide currency consistency (all
+  // direct-sale originals are USD). It stays FREIGHT-ONLY and Merchant-INELIGIBLE: it has no
+  // automatic parcel quote (parcel-too-large), so selectMerchantOriginals still excludes it from
+  // the Google Merchant feed and checkout still routes it to a manual/freight quote. Only the
+  // website price currency changes here (€3000 → $3300); shipping behaviour is untouched.
+  79: 3300,
 };
 
 async function main() {
