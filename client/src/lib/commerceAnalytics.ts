@@ -167,6 +167,15 @@ export function trackSelectItemPrint(i: Omit<ItemInput, "category">): void {
   });
 }
 
+/** add_to_cart when a shopper adds a print to the cart. Mirrors `trackAddToCart` for the print funnel. */
+export function trackAddToCartPrint(i: Omit<ItemInput, "category">): void {
+  gtag()?.("event", "add_to_cart", {
+    currency: i.currency ?? "EUR",
+    value: typeof i.priceMinor === "number" ? i.priceMinor / 100 : undefined,
+    items: [toItem(printItem(i))],
+  });
+}
+
 /** begin_checkout when a shopper starts buying a print. */
 export function trackBeginCheckoutPrint(i: Omit<ItemInput, "category">, totalMinor: number, currency: string): void {
   gtag()?.("event", "begin_checkout", {

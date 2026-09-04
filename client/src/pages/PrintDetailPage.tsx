@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   trackViewItemPrint,
   trackSelectItemPrint,
+  trackAddToCartPrint,
 } from "@/lib/commerceAnalytics";
 
 interface Option {
@@ -370,6 +371,22 @@ function BuyBlock({ detail, option, navigate }: { detail: PrintDetail; option: O
       materialLabel, sizeLabel: sizeText, unitPriceMinor: option.priceMinor, currency: option.currency,
       imageUrl: detail.artworkId != null ? `/img/artwork/${detail.artworkId}/0` : "",
     });
+    // GA4 add_to_cart for the print funnel (real products only — never demo prices).
+    if (!detail.preview) {
+      trackAddToCartPrint({
+        id: detail.id,
+        title: detail.title,
+        priceMinor: option.priceMinor,
+        currency: option.currency,
+        quantity: qty,
+        printProductId: detail.id,
+        printVariantId: option.id,
+        artworkId: detail.artworkId,
+        material: option.material,
+        size: option.sizeLabel,
+        frame: frameLabel(frameKeyOf(option)),
+      });
+    }
     toast({ title: "Added to cart", description: `${detail.title} · ${materialLabel} · ${sizeText}` });
   };
   const buyNow = () => {
