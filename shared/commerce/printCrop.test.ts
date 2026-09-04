@@ -134,3 +134,37 @@ describe("(8) a master change can invalidate a stored crop (no silent bad crop)"
     expect(a.reasonCode).toBe("crop-invalid");
   });
 });
+
+// ── REGRESSION (the reported bug): a 7272×8592 master (ratio ≈ 1.182, not within 3% of any offered size)
+//    was blocked as "Resolution too low". With crop-aware readiness the master is `status: "ready"`, so a
+//    16×20 variant is crop-required (not a dead end) and becomes eligible once a valid crop is set — at the
+//    ~429 PPI the file genuinely supports. Undersized masters must still fail on resolution.
+describe("§regression — 7272×8592 print master at 16×20 (crop, not low-resolution)", () => {
+  const M = ready(7272, 8592); // ready because it prints ≥150 PPI at ≥1 size (crop-aware readiness)
+
+  it("16×20 is crop-required, not permanently ineligible, and not a resolution failure", () => {
+    const a = assessVariantEligibility(M, "GLOBAL-HGE-16X20", null);
+    expect(a.verifiedSku).toBe(true);
+    expect(a.ratioMatches).toBe(false);
+    expect(a.cropRequired).toBe(true);
+    expect(a.reasonCode).toBe("crop-required"); // NOT "resolution"
+    expect(a.eligible).toBe(false);             // ...until a crop is chosen
+  });
+
+  it("with a valid crop the 16×20 variant becomes eligible at ~429 PPI (deadlock broken)", () => {
+    const crop = defaultCropForSku(M.widthPx, M.heightPx, getProdigiProduct("GLOBAL-HGE-16X20")!);
+    const a = assessVariantEligibility(M, "GLOBAL-HGE-16X20", crop);
+    expect(a.cropConfigured).toBe(true);
+    expect(a.eligible).toBe(true);
+    expect(a.reasonCode).toBeNull();
+    expect(a.effectiveDpi).toBeGreaterThanOrEqual(400);
+    expect(a.effectiveDpi).toBeLessThanOrEqual(430);
+  });
+
+  it("a provisional (genuinely low-res) master is NOT rescued by a crop", () => {
+    const tiny = { widthPx: 1000, heightPx: 1200, status: "provisional" as const };
+    const crop = defaultCropForSku(tiny.widthPx, tiny.heightPx, getProdigiProduct("GLOBAL-HGE-16X20")!);
+    const a = assessVariantEligibility(tiny, "GLOBAL-HGE-16X20", crop);
+    expect(a.eligible).toBe(false);
+  });
+});

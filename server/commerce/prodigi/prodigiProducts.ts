@@ -14,6 +14,9 @@ export {
   isSkuOfferedForNewVariant,
   eligibleSkusForMaster,
   assessMasterForSku,
+  maxCropEffectiveDpiForSku,
+  printableSkusForMaster,
+  classifyMasterResolution,
   skuAspect,
   MATERIAL_LABEL,
   DEFAULT_SKU_POLICY,
@@ -24,4 +27,5 @@ export {
   type PrintMaterial,
   type SkuEligibility,
   type SkuEligibilityPolicy,
+  type MasterResolutionKind,
 } from "@shared/commerce/prodigiProducts";
