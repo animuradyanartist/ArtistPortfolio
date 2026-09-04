@@ -2064,7 +2064,10 @@ Crawl-delay: 1
               const item: Record<string, unknown> = {
                 "@type": "VisualArtwork",
                 name: a.title,
-                artist: { "@type": "Person", name: "Ani Muradyan" },
+                // Same @id as the homepage Person, the /about ProfilePage and every artwork's
+                // creator, so the collection page's ~52 artist references resolve to the ONE
+                // canonical artist entity instead of minting a fresh Person per list item.
+                artist: { "@type": "Person", "@id": `${SEO_BASE_URL}/#person`, name: "Ani Muradyan" },
                 artMedium: medium,
                 artform: "Painting",
                 url: artworkCanonicalUrl(SEO_BASE_URL, a),
@@ -2416,8 +2419,11 @@ Crawl-delay: 1
                 const jsonld = {
                   '@context': 'https://schema.org', '@type': 'Article',
                   headline: post.title, description: post.excerpt,
-                  author: { '@type': 'Person', name: 'Ani Muradyan', url: SEO_BASE_URL },
-                  publisher: { '@type': 'Person', name: 'Ani Muradyan' },
+                  // Same canonical artist entity that authors the paintings — so an article's
+                  // authorship resolves to the ONE #person node (the author IS the subject), an
+                  // authorship signal for search/AI rather than a fresh, disconnected Person.
+                  author: { '@type': 'Person', '@id': `${SEO_BASE_URL}/#person`, name: 'Ani Muradyan', url: SEO_BASE_URL },
+                  publisher: { '@type': 'Person', '@id': `${SEO_BASE_URL}/#person`, name: 'Ani Muradyan' },
                   datePublished: (post.publishedAt ?? post.createdAt)?.toISOString?.() ?? undefined,
                   dateModified: post.updatedAt?.toISOString?.() ?? undefined,
                   mainEntityOfPage: url,
@@ -2560,9 +2566,14 @@ Crawl-delay: 1
               // Measured from the actual bytes, or absent. Never inferred from the physical
               // canvas size — that is centimetres of painting, not pixels of photograph.
               const imageSize = await measurePrimaryImage(artwork.images as (string | null)[] | null);
+              // Original → print cross-link for crawlers/no-JS/AI. Same gate the client cross-link
+              // uses (a genuinely purchasable print of THIS painting), so the SSR link is factual and
+              // deterministic. Null for the ~50 artworks without a purchasable print — no link added.
+              const { purchasablePrintSlugForArtwork } = await import('./commerce/prints/printRepo');
+              const relatedPrintSlug = await purchasablePrintSlugForArtwork(artwork.id).catch(() => null);
               html = html.replace(
                 '<div id="root"></div>',
-                `<div id="root">${renderArtworkHtml(artworkRef, SEO_BASE_URL, imageSize)}</div>`,
+                `<div id="root">${renderArtworkHtml(artworkRef, SEO_BASE_URL, imageSize, relatedPrintSlug)}</div>`,
               );
 
               // THE PAINTING IS ALREADY IN THIS RESPONSE — SO DO NOT MAKE THE BROWSER ASK FOR IT.
