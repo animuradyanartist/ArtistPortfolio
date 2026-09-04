@@ -11,7 +11,7 @@ import express, { type Express, type Response } from "express";
 import multer from "multer";
 import { requireAdminAuth } from "../../auth";
 import { hasDatabase } from "../../db";
-import { PRODIGI_LAUNCH_PRODUCTS, eligibleSkusForMaster, getProdigiProduct, isSkuOfferedForNewVariant } from "../prodigi/prodigiProducts";
+import { PRODIGI_LAUNCH_PRODUCTS, printableSkusForMaster, getProdigiProduct, isSkuOfferedForNewVariant } from "../prodigi/prodigiProducts";
 import { printReadiness } from "@shared/commerce/printProduct";
 import { isValidCropShape, cropFitsSku, type NormalizedCrop } from "@shared/commerce/printCrop";
 import { validateVariantSave, type VariantSaveInput } from "./adminPrintService";
@@ -42,8 +42,12 @@ import { prodigiMode } from "../prodigi/prodigiClient";
 async function commitMaster(printId: number, stagedPath: string, originalName: string, mime: string) {
   const oldKey = (await getPrintMaster(printId))?.assetKey ?? null;
   const stored = await storeMasterFromStaging(printId, stagedPath, originalName, mime);
-  const eligibleSkus = eligibleSkusForMaster({ widthPx: stored.widthPx, heightPx: stored.heightPx });
-  const status = eligibleSkus.length > 0 ? "ready" : "provisional";
+  // A master is READY when it can print at ≥1 offered size at/above the 150-PPI floor — NATIVELY or via a
+  // valid crop. Resolution is judged from real pixels; a native aspect-ratio mismatch alone (which a crop
+  // resolves) must NOT mark a high-resolution master "provisional". (The no-crop `eligibleSkusForMaster`
+  // still exists for judging *native* fits elsewhere.)
+  const printableSkus = printableSkusForMaster({ widthPx: stored.widthPx, heightPx: stored.heightPx });
+  const status = printableSkus.length > 0 ? "ready" : "provisional";
   try {
     await upsertPrintMasterFile(printId, {
       widthPx: stored.widthPx, heightPx: stored.heightPx, assetKey: stored.assetKey,
@@ -73,7 +77,7 @@ async function commitMaster(printId: number, stagedPath: string, originalName: s
   await reassessVariantsForMaster(printId, master).catch((e) =>
     console.error(`[master] variant reassessment failed for print ${printId}:`, e instanceof Error ? e.message : e),
   );
-  return { master, eligibleSizeCount: eligibleSkus.length };
+  return { master, eligibleSizeCount: printableSkus.length };
 }
 
 /** Map a master-commit failure to a controlled HTTP response (validation → 400, storage → 502, else 500). */

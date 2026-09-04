@@ -336,3 +336,67 @@ export function eligibleSkusForMaster(
     return Boolean(e?.eligible);
   });
 }
+
+// ── CROP-AWARE RESOLUTION (readiness must not fail on aspect ratio alone) ──────────────────────────
+//
+// `assessMasterForSku` / `eligibleSkusForMaster` are NO-CROP: a native aspect-ratio mismatch disqualifies
+// a size regardless of how high the DPI is. That is correct for judging a *native* fit, but it must NOT be
+// what decides whether a high-resolution master is usable at all — a master whose ratio matches no offered
+// size can still print beautifully once a crop is chosen. The helpers below answer the resolution question
+// crop-aware, from real PIXELS only (embedded DPI metadata is irrelevant).
+
+/**
+ * The HIGHEST effective DPI this master can reach at a SKU using an optimal centre crop to the SKU's
+ * aspect ratio (equal to the native DPI when the ratios already match). A centre crop trims whichever
+ * edge is proportionally too long, so the binding edge is `min(masterLong/skuLong, masterShort/skuShort)`;
+ * print areas are defined at 300 DPI. Returns null for an unknown SKU. Pixels only — never embedded DPI.
+ */
+export function maxCropEffectiveDpiForSku(
+  master: { widthPx: number; heightPx: number },
+  sku: string,
+): number | null {
+  const p = getProdigiProduct(sku);
+  if (!p) return null;
+  const mLong = Math.max(master.widthPx, master.heightPx);
+  const mShort = Math.min(master.widthPx, master.heightPx);
+  const skuLong = Math.max(p.printAreaWidthPx, p.printAreaHeightPx);
+  const skuShort = Math.min(p.printAreaWidthPx, p.printAreaHeightPx);
+  if (skuLong <= 0 || skuShort <= 0) return null;
+  return Math.floor(300 * Math.min(mLong / skuLong, mShort / skuShort));
+}
+
+/**
+ * Every active-launch SKU this master can PRINT at ≥ the floor — NATIVELY **or via a valid crop**. The
+ * crop-aware companion to `eligibleSkusForMaster`: a master whose native aspect ratio matches no offered
+ * size is still printable here as long as an optimal crop clears the floor. Aspect-ratio mismatch alone
+ * never excludes a size; only genuinely insufficient resolution does.
+ */
+export function printableSkusForMaster(
+  master: { widthPx: number; heightPx: number },
+  policy: SkuEligibilityPolicy = DEFAULT_SKU_POLICY,
+): ProdigiLaunchProduct[] {
+  return PRODIGI_LAUNCH_PRODUCTS.filter((p) => {
+    if (!p.activeForLaunch) return false;
+    const dpi = maxCropEffectiveDpiForSku(master, p.sku);
+    return dpi != null && dpi >= policy.minimumDpi;
+  });
+}
+
+/**
+ * Coarse resolution classification for the master-level admin summary, so the UI never mislabels a crop
+ * situation as a resolution failure:
+ *   - "native"        — prints at ≥1 offered size with NO crop (ratio matches within tolerance, ≥ floor).
+ *   - "crop-required" — resolution is fine (≥1 size prints ≥ floor with a crop) but none fits natively.
+ *   - "insufficient"  — even an optimal crop is below the floor at EVERY offered size → genuinely too low.
+ * A master is "ready" for `printableSkusForMaster().length > 0`, i.e. anything but "insufficient".
+ */
+export type MasterResolutionKind = "native" | "crop-required" | "insufficient";
+
+export function classifyMasterResolution(
+  master: { widthPx: number; heightPx: number },
+  policy: SkuEligibilityPolicy = DEFAULT_SKU_POLICY,
+): MasterResolutionKind {
+  if (eligibleSkusForMaster(master, policy).length > 0) return "native";
+  if (printableSkusForMaster(master, policy).length > 0) return "crop-required";
+  return "insufficient";
+}

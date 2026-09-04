@@ -7,6 +7,9 @@ import {
   productsForMaterial,
   assessMasterForSku,
   eligibleSkusForMaster,
+  maxCropEffectiveDpiForSku,
+  printableSkusForMaster,
+  classifyMasterResolution,
   skuAspect,
 } from "./prodigiProducts";
 
@@ -123,5 +126,51 @@ describe("assessMasterForSku — eligibility against REAL print-area pixels", ()
 
   it("skuAspect is orientation-agnostic (>= 1)", () => {
     expect(skuAspect(getProdigiProduct("GLOBAL-HGE-12X16")!)).toBeCloseTo(4800 / 3600, 3);
+  });
+});
+
+// ── REGRESSION: a high-resolution master whose native aspect ratio matches NO offered size within the
+//    3% no-crop tolerance must NOT be treated as low-resolution. It is crop-required, not "too low".
+//    Exact reported case: a 7272×8592 px production master (ratio ≈ 1.182 ≈ 5:6, ~429 PPI at 16×20).
+describe("crop-aware master resolution — 7272×8592 must be crop-required, not low-resolution", () => {
+  const MASTER = { widthPx: 7272, heightPx: 8592 }; // ratio 8592/7272 ≈ 1.1815
+
+  it("is NOT classified low-resolution — it is crop-required", () => {
+    expect(classifyMasterResolution(MASTER)).toBe("crop-required");
+  });
+
+  it("prints at 16×20 with ~429 effective PPI (via a crop)", () => {
+    // GLOBAL-HGE-16X20 print area 4800×6000 (long edge 6000).
+    expect(maxCropEffectiveDpiForSku(MASTER, "GLOBAL-HGE-16X20")).toBe(429);
+    expect(maxCropEffectiveDpiForSku(MASTER, "GLOBAL-CAN-16X20")).toBe(425);
+  });
+
+  it("16×20 fails the NATIVE (no-crop) fit on ASPECT RATIO, never on resolution", () => {
+    const e = assessMasterForSku(MASTER, "GLOBAL-HGE-16X20")!;
+    expect(e.ratioMatches).toBe(false);         // 1.182 vs 1.25 is ~5.5% > 3% tolerance
+    expect(e.reasonCode).toBe("aspect-ratio");  // NOT "resolution"
+    expect(e.effectiveDpi).toBe(429);           // resolution is excellent
+    expect(e.meetsFloor).toBe(true);
+  });
+
+  it("matches no size natively, yet is printable (with a crop) at real offered sizes", () => {
+    expect(eligibleSkusForMaster(MASTER)).toHaveLength(0);          // no no-crop match
+    const printable = printableSkusForMaster(MASTER).map((p) => p.sku);
+    expect(printable.length).toBeGreaterThan(0);
+    expect(printable).toContain("GLOBAL-HGE-16X20");                // 16×20 is printable via crop
+    // Every offered size clears the 150 floor here (smallest is Canvas 24×36 at 237 PPI).
+    expect(maxCropEffectiveDpiForSku(MASTER, "GLOBAL-CAN-24X36")).toBe(237);
+  });
+
+  it("a genuinely undersized master still fails as insufficient resolution", () => {
+    const tiny = { widthPx: 1000, heightPx: 1200 };                // ~62 PPI at the smallest size
+    expect(classifyMasterResolution(tiny)).toBe("insufficient");
+    expect(printableSkusForMaster(tiny)).toHaveLength(0);
+    expect(maxCropEffectiveDpiForSku(tiny, "GLOBAL-HGE-12X16")).toBeLessThan(150);
+  });
+
+  it("a native-ratio, above-floor master is classified native (unchanged behaviour)", () => {
+    // 3:4 master matching GLOBAL-HGE-12X16 exactly at 300 PPI.
+    expect(classifyMasterResolution({ widthPx: 3600, heightPx: 4800 })).toBe("native");
   });
 });

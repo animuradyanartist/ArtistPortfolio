@@ -43,6 +43,7 @@ import {
   offeredMaterialsForCategory,
   offeredProductsForMaterial,
   getProdigiProduct,
+  classifyMasterResolution,
   type PrintMaterial,
   type PrintCategory,
 } from "@shared/commerce/prodigiProducts";
@@ -250,10 +251,17 @@ export default function PrintEditorPage() {
         return false;
       }
       const m = result.master;
+      // Classify from real pixels so the message matches reality: a crop-only fit is NOT "too low".
+      const kind = (m?.widthPx && m?.heightPx)
+        ? classifyMasterResolution({ widthPx: m.widthPx, heightPx: m.heightPx })
+        : "insufficient";
+      const n = result.eligibleSizeCount;
+      const sizes = `${n} size${n === 1 ? "" : "s"}`;
       toast({
-        title: m?.status === "ready" ? "Master uploaded — resolution is eligible" : "Master uploaded",
-        description: m?.status === "ready"
-          ? `${m.widthPx}×${m.heightPx}px · fits ${result.eligibleSizeCount} size${result.eligibleSizeCount === 1 ? "" : "s"}`
+        title: kind === "insufficient" ? "Master uploaded" : "Master uploaded — resolution is eligible",
+        description:
+          kind === "native"        ? `${m!.widthPx}×${m!.heightPx}px · fits ${sizes}`
+          : kind === "crop-required" ? `${m!.widthPx}×${m!.heightPx}px · prints at ${sizes} (crop required for the offered sizes)`
           : `${m?.widthPx}×${m?.heightPx}px · resolution too low to print at the offered sizes`,
       });
       return true;
@@ -506,7 +514,11 @@ function MasterPanel({ master, uploading, onUpload, onRemove }: {
       </button>
     );
   }
-  const ready = master!.status === "ready";
+  // Distinguish the three real cases from the master's real PIXELS, so a high-resolution file whose
+  // aspect ratio simply needs a crop is never mislabelled "Resolution too low to print".
+  const resKind = (master!.widthPx && master!.heightPx)
+    ? classifyMasterResolution({ widthPx: master!.widthPx, heightPx: master!.heightPx })
+    : (master!.status === "ready" ? "native" : "insufficient");
   return (
     <div className="rounded-lg border border-slate-200 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -516,8 +528,10 @@ function MasterPanel({ master, uploading, onUpload, onRemove }: {
             {master!.widthPx}×{master!.heightPx}px{humanSize(master!.byteSize) ? ` · ${humanSize(master!.byteSize)}` : ""}
           </p>
           <div className="mt-2">
-            {ready
+            {resKind === "native"
               ? <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100"><Check className="w-3 h-3 mr-1" /> Resolution eligible</Badge>
+              : resKind === "crop-required"
+              ? <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100"><AlertTriangle className="w-3 h-3 mr-1" /> Crop required for the offered print sizes</Badge>
               : <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100"><AlertTriangle className="w-3 h-3 mr-1" /> Resolution too low to print</Badge>}
           </div>
         </div>
