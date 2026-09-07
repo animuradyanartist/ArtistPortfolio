@@ -296,3 +296,35 @@ export function renderPrivacyHtml(): string {
     `</section>`
   );
 }
+
+/**
+ * TERMS OF SALE & USE — every clause describes how the site actually behaves; no company
+ * registration, tax number, phone or legal guarantee is invented. Prints are made to order and
+ * printed by fulfilment partners; originals are unique studio works; prices are in US dollars and
+ * paid through Stripe (the site never sees card numbers); shipping is quoted at checkout; returns
+ * follow the /returns policy. It cross-links Shipping, Returns, Privacy and Contact.
+ */
+export function renderTermsHtml(): string {
+  return (
+    `<section id="terms-ssr" style="${WRAP}">` +
+    `<h1 style="${H1}">Terms &amp; Conditions</h1>` +
+    `<p style="${LEAD}">These terms govern your use of animuradyan.com and any purchase of an original painting or fine-art print from Ani Muradyan. By using the site or placing an order you agree to them.</p>` +
+    `<h2>Using this site</h2>` +
+    `<p style="${BODY}">This is the personal website of the Armenian contemporary artist Ani Muradyan. You may browse it and buy the works offered for sale. The content is provided as-is for that purpose.</p>` +
+    `<h2>Artworks &amp; prints</h2>` +
+    `<p style="${BODY}">Original paintings are unique, one-of-a-kind works; once one is sold it is no longer available. Fine-art prints are <strong>made to order</strong> — produced individually for you by professional printing partners on archival Hahnemühle fine-art paper or stretched canvas, and are open editions, so buying a print never affects the uniqueness of the original.</p>` +
+    `<h2>Prices &amp; payment</h2>` +
+    `<p style="${BODY}">Prices are shown in US dollars (USD) and are the amount charged for the item. Payment is processed securely by <strong>Stripe</strong>; your full card details are entered on Stripe's systems and are never seen or stored by this site. An order is confirmed once payment is completed.</p>` +
+    `<h2>Shipping</h2>` +
+    `<p style="${BODY}">Shipping is <strong>calculated at checkout</strong> for your destination, so the exact cost is shown before you pay. Prints are produced within a few business days and then shipped with tracked delivery; originals are packed and shipped from the studio in Yerevan, Armenia. See the <a href="/shipping" style="${LINK}">Shipping</a> page for details.</p>` +
+    `<h2>Returns &amp; refunds</h2>` +
+    `<p style="${BODY}">Damaged, defective, or not-as-described items are replaced or refunded. Made-to-order prints are generally not eligible for change-of-mind returns once in production; an original bought and delivered within the EU carries a 14-day right to change your mind. Full terms are on the <a href="/returns" style="${LINK}">Returns &amp; Refunds</a> page, which forms part of these terms.</p>` +
+    `<h2>Intellectual property</h2>` +
+    `<p style="${BODY}">All images, paintings, prints, text and other content on this site are the intellectual property of Ani Muradyan and are protected by copyright. Buying a work transfers the physical piece, not the copyright: it may not be reproduced, resold as a reproduction, or used commercially without written permission.</p>` +
+    `<h2>Limitation of liability</h2>` +
+    `<p style="${BODY}">The site is provided without warranties beyond those required by law. To the extent permitted by law, liability for any claim relating to a purchase is limited to the amount paid for the item concerned. Nothing here limits your statutory consumer rights.</p>` +
+    `<h2>Contact</h2>` +
+    `<p style="${BODY}">Questions about these terms or an order: Ani Muradyan · Yerevan, Armenia · ${mailto}. See also our <a href="/privacy" style="${LINK}">Privacy</a> policy and <a href="/contact" style="${LINK}">Contact</a> page.</p>` +
+    `</section>`
+  );
+}

@@ -24,6 +24,9 @@ import {
   artworkNarrative,
   artworkOffer,
   artworkPublicPrice,
+  artworkAvailabilityLine,
+  isDirectSalePurchasableOriginal,
+  originalShippingDetails,
   formatArtworkPrice,
   isPurchasable,
   renderArtworkHtml,
@@ -262,5 +265,98 @@ describe("the artwork image is an ImageObject a crawler can read", () => {
     expect(img.caption).toContain("Blue Detachment");
     expect(img.caption).toContain("Ani Muradyan");
     expect(img.representativeOfPage).toBe(true);
+  });
+});
+
+// ── MERCHANT PARITY FOR PURCHASABLE ORIGINALS ────────────────────────────────────────────────────
+// A genuinely purchasable direct-sale original must present to a crawler exactly like a print does:
+// a shoppable Product/Offer with the website USD price, InStock, real shipping and a return policy —
+// and its server body must NOT say "inquire to acquire". Enquiry-only originals are unchanged.
+describe("purchasable original — Merchant-complete SSR (parity with prints)", () => {
+  const buyable = (over: Partial<SsrArtwork> = {}): SsrArtwork =>
+    artwork({
+      id: 69,
+      title: "Road to Tuscany",
+      seoSlug: "road-to-tuscany-69",
+      dimensions: "61x71cm",
+      price: 2420, // the marketplace figure — must NOT become the offer price
+      directSaleEnabled: true,
+      websitePriceMinor: 110000,
+      websiteCurrency: "USD",
+      availability: "available",
+      shippingEnabled: true,
+      ...over,
+    });
+
+  it("the gate accepts a fully-eligible direct-sale original and fails closed otherwise", () => {
+    expect(isDirectSalePurchasableOriginal(buyable())).toBe(true);
+    expect(isDirectSalePurchasableOriginal(buyable({ shippingEnabled: false }))).toBe(false);
+    expect(isDirectSalePurchasableOriginal(buyable({ availability: "reserved" }))).toBe(false);
+    expect(isDirectSalePurchasableOriginal(buyable({ directSaleEnabled: false }))).toBe(false);
+    expect(isDirectSalePurchasableOriginal(buyable({ websitePriceMinor: null }))).toBe(false);
+  });
+
+  it("the server-rendered body does NOT say 'inquire to acquire' — it says buy online", () => {
+    const html = renderArtworkHtml(buyable(), BASE);
+    expect(html.toLowerCase()).not.toContain("inquire to acquire");
+    expect(html.toLowerCase()).toContain("buy online");
+    expect(artworkAvailabilityLine(buyable())).not.toMatch(/inquire to acquire/i);
+  });
+
+  it("represents the direct-sale WEBSITE price (1100 USD), never the marketplace 2420", () => {
+    const offer = artworkOffer(buyable(), BASE) as Record<string, any>;
+    expect(offer.price).toBe(1100);
+    expect(offer.priceCurrency).toBe("USD");
+    expect(offer.availability).toBe("https://schema.org/InStock");
+  });
+
+  it("is a Product (multi-typed with VisualArtwork) with brand + condition", () => {
+    const ld = artworkJsonLd(buyable(), BASE) as Record<string, any>;
+    expect(ld["@type"]).toEqual(["VisualArtwork", "Product"]);
+    expect(ld.brand).toMatchObject({ "@type": "Brand", name: "Ani Muradyan" });
+    expect(ld.itemCondition).toBe("https://schema.org/NewCondition");
+    expect(ld.offers["@type"]).toBe("Offer");
+  });
+
+  it("the Offer carries OfferShippingDetails with a real US rate", () => {
+    const offer = artworkOffer(buyable(), BASE) as Record<string, any>;
+    expect(Array.isArray(offer.shippingDetails)).toBe(true);
+    expect(offer.shippingDetails.length).toBeGreaterThan(0);
+    const us = offer.shippingDetails.find(
+      (s: any) => s.shippingDestination?.addressCountry === "US",
+    );
+    expect(us["@type"]).toBe("OfferShippingDetails");
+    expect(us.shippingRate.currency).toBe("USD");
+    expect(Number(us.shippingRate.value)).toBeGreaterThan(0);
+    // The same authoritative estimator the Merchant feed + checkout use.
+    expect(originalShippingDetails(buyable()).length).toBeGreaterThan(0);
+  });
+
+  it("the Offer carries a MerchantReturnPolicy (14-day, by mail)", () => {
+    const offer = artworkOffer(buyable(), BASE) as Record<string, any>;
+    expect(offer.hasMerchantReturnPolicy["@type"]).toBe("MerchantReturnPolicy");
+    expect(offer.hasMerchantReturnPolicy.merchantReturnDays).toBe(14);
+    expect(offer.hasMerchantReturnPolicy.returnMethod).toBe("https://schema.org/ReturnByMail");
+  });
+
+  it("an enquiry-only original is unchanged: 'inquire', VisualArtwork only, no shipping/return fields", () => {
+    const enquiry = artwork({ directSaleEnabled: false, availability: "available" });
+    expect(isDirectSalePurchasableOriginal(enquiry)).toBe(false);
+    expect(renderArtworkHtml(enquiry, BASE).toLowerCase()).toContain("inquire to acquire");
+    const ld = artworkJsonLd(enquiry, BASE) as Record<string, any>;
+    expect(ld["@type"]).toBe("VisualArtwork");
+    expect(ld.offers?.shippingDetails).toBeUndefined();
+    expect(ld.offers?.hasMerchantReturnPolicy).toBeUndefined();
+  });
+
+  it("a direct-sale work with shipping disabled is not advertised as buyable (fails closed)", () => {
+    const noShip = buyable({ shippingEnabled: false });
+    expect(renderArtworkHtml(noShip, BASE).toLowerCase()).toContain("inquire to acquire");
+    const offer = artworkOffer(noShip, BASE) as Record<string, any>;
+    // Still the honest website offer, but WITHOUT the merchant-completeness fields.
+    expect(offer.price).toBe(1100);
+    expect(offer.shippingDetails).toBeUndefined();
+    expect(offer.hasMerchantReturnPolicy).toBeUndefined();
+    expect(originalShippingDetails(noShip)).toHaveLength(0);
   });
 });

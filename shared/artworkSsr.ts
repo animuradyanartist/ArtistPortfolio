@@ -28,6 +28,9 @@
  */
 import { artworkCanonicalUrl, type CanonicalArtwork } from "./canonical";
 import { isLandscape } from "./collections";
+import { isPurchasableArtwork } from "./commerce/purchasable";
+import { estimateShipping, shippingMinorInCurrency, type ShippableArtwork } from "./commerce/shipping";
+import { MERCHANT_ORIGINAL_SHIP_COUNTRIES } from "./commerce/merchantOriginals";
 
 /**
  * The currency the stored `price` integer is denominated in.
@@ -57,6 +60,21 @@ export interface SsrArtwork extends CanonicalArtwork {
   directSaleEnabled?: boolean | null;
   websitePriceMinor?: number | null;
   websiteCurrency?: string | null;
+  // Purchasability + shipping inputs, so the server-rendered Offer for a genuinely purchasable
+  // original can carry the SAME merchant-completeness data (shipping + return policy) the print
+  // Offer and the Merchant feed already carry. All optional and read through the ONE authoritative
+  // gate/estimator below, so a missing field fails closed (the work is treated as not purchasable
+  // here rather than advertised as buyable). Column names match the artwork row the SSR route passes.
+  shippingEnabled?: boolean | null;
+  reservedUntil?: Date | string | null;
+  hasCommitment?: boolean | null;
+  commitmentUntil?: string | null;
+  shippingOverrideMinor?: number | null;
+  // The artwork row stores this as a JSON TEXT column (string); tests pass an already-parsed object.
+  // Accept both and normalise in shippableOfArtwork, so the raw row is assignable here.
+  shippingDestinationOverrides?: Record<string, number> | string | null;
+  packedDepthCm?: number | null;
+  packingMarginCm?: number | null;
 }
 
 export function escapeHtml(value: unknown): string {
@@ -100,11 +118,17 @@ export function artworkFactLine(a: SsrArtwork): string {
     .join(" · ");
 }
 
-/** The one-line availability statement, in the words the meta description already uses. */
+/** The one-line availability statement, in the words the meta description already uses.
+ *  A genuinely purchasable direct-sale original states that it CAN be bought online — the same fact
+ *  the client checkout, the Offer and the Merchant feed assert — so a crawl of the server HTML no
+ *  longer reads "inquire to acquire" on a work that is actually for sale. Enquiry-only and sold
+ *  works are unchanged. */
 export function artworkAvailabilityLine(a: SsrArtwork): string {
-  return a.availability === "sold"
-    ? "This original work is in a private collection."
-    : "Original painting available — inquire to acquire.";
+  if (a.availability === "sold") return "This original work is in a private collection.";
+  if (isDirectSalePurchasableOriginal(a)) {
+    return "Original painting available to buy online — shipping is calculated at checkout.";
+  }
+  return "Original painting available — inquire to acquire.";
 }
 
 /**
@@ -131,6 +155,114 @@ export function artworkDimensions(a: SsrArtwork): { width: number; height: numbe
   return m ? { width: Number(m[1]), height: Number(m[2]) } : null;
 }
 
+// ── ORIGINAL-ART MERCHANT PARITY ─────────────────────────────────────────────────────────────────
+//
+// Prints already emit a Product Offer with OfferShippingDetails + MerchantReturnPolicy so Google
+// Merchant reads the server HTML as a complete, shoppable listing (see shared/printSsr.ts). A
+// genuinely purchasable ORIGINAL was emitting a VisualArtwork with a bare Offer and an "inquire"
+// body, so Merchant read its landing page as not-for-sale. The helpers below give an original the
+// SAME merchant-completeness — reusing the ONE authoritative purchasability gate, the ONE shipping
+// estimator, and the SAME launch countries the Merchant feed uses, so feed ↔ SSR ↔ checkout agree.
+// Nothing is invented: the shipping figure is the estimator's own quote (the checkout charge) and
+// the return terms are the /returns "Original paintings" policy.
+
+/** Normalise the per-destination shipping overrides — the row stores JSON text, tests pass an object.
+ *  Mirrors server/commerce/pricing.ts `parseDestinationOverrides` (kept in step): only 2-letter
+ *  country keys mapping to positive integer minor amounts survive, so a malformed value is ignored. */
+function normaliseDestinationOverrides(
+  raw: Record<string, number> | string | null | undefined,
+): Record<string, number> | null {
+  if (!raw) return null;
+  let parsed: unknown = raw;
+  if (typeof raw === "string") {
+    try { parsed = JSON.parse(raw); } catch { return null; }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+    if (/^[A-Za-z]{2}$/.test(k) && typeof v === "number" && Number.isInteger(v) && v > 0) {
+      out[k.toUpperCase()] = v;
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** Map an SsrArtwork to the ShippableArtwork the estimator needs (row column names already match). */
+function shippableOfArtwork(a: SsrArtwork): ShippableArtwork {
+  return {
+    id: a.id,
+    title: a.title,
+    dimensions: a.dimensions ?? null,
+    shippingEnabled: !!a.shippingEnabled,
+    shippingOverrideMinor: a.shippingOverrideMinor ?? null,
+    shippingDestinationOverrides: normaliseDestinationOverrides(a.shippingDestinationOverrides),
+    packedDepthCm: a.packedDepthCm ?? null,
+    packingMarginCm: a.packingMarginCm ?? null,
+  };
+}
+
+/**
+ * Is this a direct-sale original a buyer can actually purchase online right now? Decided by the ONE
+ * canonical `isPurchasableArtwork` gate the feed, cart and Stripe checkout use (direct sale on, a
+ * positive website price + currency, availability exactly "available", not reserved, not committed,
+ * shipping enabled). A missing field fails closed. This is what upgrades the SSR to a shoppable
+ * Product/Offer + a "buy online" body — never a work the checkout would refuse.
+ */
+export function isDirectSalePurchasableOriginal(a: SsrArtwork): boolean {
+  if (!a.directSaleEnabled) return false;
+  return isPurchasableArtwork({
+    id: a.id,
+    availability: a.availability ?? "",
+    directSaleEnabled: !!a.directSaleEnabled,
+    websitePriceMinor: a.websitePriceMinor ?? null,
+    websiteCurrency: a.websiteCurrency ?? null,
+    shippingEnabled: !!a.shippingEnabled,
+    reservedUntil: a.reservedUntil ?? null,
+    hasCommitment: a.hasCommitment ?? null,
+    commitmentUntil: a.commitmentUntil ?? null,
+  });
+}
+
+/** MerchantReturnPolicy for an original — the /returns "Original paintings" terms: a 14-day return
+ *  window in the launch markets; for a change-of-mind return the buyer arranges and pays the return
+ *  shipping (a damaged/defective work is put right at no cost, handled directly). Not invented. */
+function originalReturnPolicy(): Record<string, unknown> {
+  return {
+    "@type": "MerchantReturnPolicy",
+    applicableCountry: [...MERCHANT_ORIGINAL_SHIP_COUNTRIES],
+    returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+    merchantReturnDays: 14,
+    returnMethod: "https://schema.org/ReturnByMail",
+    returnFees: "https://schema.org/ReturnShippingFees",
+  };
+}
+
+/**
+ * OfferShippingDetails for an original, one per launch country that the authoritative estimator can
+ * quote — the SAME per-country figure the Merchant feed advertises and checkout charges (converted
+ * from the EUR estimator into the work's own currency by `shippingMinorInCurrency`, exactly as the
+ * feed does). A country the estimator refuses (e.g. freight-only) is simply omitted; never a guess.
+ */
+export function originalShippingDetails(a: SsrArtwork): Record<string, unknown>[] {
+  const currency = a.websiteCurrency || "USD";
+  const shippable = shippableOfArtwork(a);
+  const out: Record<string, unknown>[] = [];
+  for (const country of MERCHANT_ORIGINAL_SHIP_COUNTRIES) {
+    const q = estimateShipping(shippable, country);
+    if (!q.ok) continue;
+    out.push({
+      "@type": "OfferShippingDetails",
+      shippingRate: {
+        "@type": "MonetaryAmount",
+        value: (shippingMinorInCurrency(q.amountMinor, currency) / 100).toFixed(2),
+        currency,
+      },
+      shippingDestination: { "@type": "DefinedRegion", addressCountry: country },
+    });
+  }
+  return out;
+}
+
 /** The Offer node — or null when the work is not for sale, so the site never promises
  *  something it cannot deliver. */
 export function artworkOffer(a: SsrArtwork, baseUrl: string): Record<string, unknown> | null {
@@ -148,13 +280,23 @@ export function artworkOffer(a: SsrArtwork, baseUrl: string): Record<string, unk
   // here. Everywhere else the marketplace Offer is untouched.
   const websiteMinor = a.websitePriceMinor;
   if (a.directSaleEnabled && typeof websiteMinor === "number" && websiteMinor > 0) {
-    return {
+    const offer: Record<string, unknown> = {
       "@type": "Offer",
       price: websiteMinor / 100,
       priceCurrency: a.websiteCurrency || "USD",
       availability: "https://schema.org/InStock",
       url,
     };
+    // Merchant-listing completeness — added ONLY for a genuinely purchasable original: a seller, the
+    // originals return policy, and the SAME per-country shipping the feed + checkout use. Price,
+    // currency, availability and url are unchanged; nothing here is invented.
+    if (isDirectSalePurchasableOriginal(a)) {
+      offer.seller = { "@type": "Person", "@id": `${baseUrl.replace(/\/+$/, "")}/#person`, name: "Ani Muradyan" };
+      offer.hasMerchantReturnPolicy = originalReturnPolicy();
+      const shipping = originalShippingDetails(a);
+      if (shipping.length) offer.shippingDetails = shipping;
+    }
+    return offer;
   }
 
   return {
@@ -240,6 +382,17 @@ export function artworkJsonLd(a: SsrArtwork, baseUrl: string): Record<string, un
 
   const offer = artworkOffer(a, baseUrl);
   if (offer) jsonld.offers = offer;
+
+  // A genuinely purchasable original is ALSO a Product, so Google Merchant reads the landing page
+  // as a shoppable listing (parity with prints). Multi-typed so the art semantics (artMedium,
+  // artform, dimensions) are kept while the Product type + brand + condition are added — exactly
+  // the fields the feed states (brand "Ani Muradyan", condition new). Non-purchasable works are
+  // left as a plain VisualArtwork, unchanged.
+  if (isDirectSalePurchasableOriginal(a)) {
+    jsonld["@type"] = ["VisualArtwork", "Product"];
+    jsonld.brand = { "@type": "Brand", name: "Ani Muradyan" };
+    jsonld.itemCondition = "https://schema.org/NewCondition";
+  }
   return jsonld;
 }
 

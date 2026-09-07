@@ -44,6 +44,7 @@ const EXACT_ROUTES: ReadonlySet<string> = new Set([
   "/shipping",
   "/returns",
   "/privacy",
+  "/terms",
   "/blog",
   // Direct sales. Public, deliberately not indexed, and they must keep working.
   "/cart",
