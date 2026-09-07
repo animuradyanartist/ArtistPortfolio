@@ -1,47 +1,10 @@
-<!--
-READY-TO-PUBLISH ARTICLE — paste into Admin → Articles → "New article", then press Publish.
-
-Articles live in the production database (blog_posts). This environment has no DATABASE_URL and does
-not deploy, so this is the finished content; publishing is one admin action. Once the row is
-published, the blog index, /blog/:slug route, sitemap, canonical, meta and Article JSON-LD are all
-generated automatically from it — no code change registers an article.
-
-Admin field → value
--------------------------------------------------------------------------------
-Title            : Wall Art Size Guide: How to Choose the Right Size for Your Space
-Address (slug)   : wall-art-size-guide
-Summary (excerpt): A practical wall art size guide: how to measure your wall, what size art to hang above a sofa or bed, choosing between print sizes, and paper vs canvas scale.
-Author           : Ani Muradyan (system default)
-Cover image      : /img/print/19/0
-Cover image alt  : Road Through Gold, a wide horizontal landscape fine-art print by Ani Muradyan
-The article      : everything below the line (no leading H1 — the Title becomes the page H1)
-
-Target primary keyword : wall art size guide (US 880/mo, KD 0, informational)
-Secondary keyword      : wall art sizes (US 720/mo, KD 6, informational)
-Contextual secondary   : canvas size guide (US 390/mo, KD 0, informational) — used once, in the canvas section
-Deliberately NOT target: canvas sizes (too broad), exact-size transactional terms, wall art size calculator
-Search intent          : informational, pre-transactional (a buyer resolving size right before purchase)
-Intended URL           : https://animuradyan.com/blog/wall-art-size-guide
-Canonical              : https://animuradyan.com/blog/wall-art-size-guide (self-referencing, auto)
-Internal links (all verified live 200 on 2026-09-07):
-                         /blog/how-to-choose-landscape-wall-art-for-your-living-room  (the pillar; this is its sizing cluster)
-                         /prints  ×2
-                         /prints/road_through_gold   (Road Through Gold)
-                         /prints/beyond_every_limit  (Beyond Every Limit)
-                         /prints/found_in_silance    (Found in Silence — note the site's real slug spelling)
-                         /prints/rebirth             (Rebirth)
-                         /blog/how-to-choose-an-original-painting-for-your-space
-Schema                 : Article JSON-LD is emitted automatically by the blog SSR (headline, description,
-                         author, dates, mainEntityOfPage). BreadcrumbList and FAQPage are NOT part of the
-                         current blog article schema layer — adding them is a separate, deliberate platform
-                         change (affecting all articles), not part of this content publish. No Product /
-                         Review / AggregateRating schema (none is supported by the page).
-Cannibalization        : Scoped strictly to SIZE and links up to the living-room pillar
-                         (/blog/how-to-choose-landscape-wall-art-for-your-living-room), forming a cluster
-                         rather than a competitor. Do not let the title/H1/headings drift into a second
-                         general "how to choose wall art" guide.
--------------------------------------------------------------------------------
--->
+---
+title: Wall Art Size Guide: How to Choose the Right Size for Your Space
+slug: wall-art-size-guide
+excerpt: A practical wall art size guide: how to measure your wall, what size art to hang above a sofa or bed, choosing between print sizes, and paper vs canvas scale.
+coverImage: /img/print/19/0
+coverImageAlt: Road Through Gold, a wide horizontal landscape fine-art print by Ani Muradyan
+---
 
 Here's the short answer, before the detail: a piece hung over furniture usually looks best at **about two-thirds the width of the furniture below it**, and on a bare wall you want the art to fill roughly **60–75% of the usable width**. In practice, that puts most living-room wall art somewhere between a 16×20-inch print and a 24×36-inch canvas. If you take nothing else from this wall art size guide, size *up* when you're unsure — the most common mistake is going too small.
 
