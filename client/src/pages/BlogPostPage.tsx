@@ -24,13 +24,36 @@ import type { FigureArtwork } from "@shared/articleMarkdown";
  * The cover is resolved, not stored: the first artwork the article names, through the same
  * resolver the index uses.
  */
+
+/**
+ * The server's own copy of THIS post, embedded in the initial HTML by the /blog/:slug SSR
+ * (`window.__PRELOADED_POST__ = …` in server/routes.ts). Used as React Query initialData so the
+ * full article renders on the very FIRST client render: createRoot clears the server-rendered body
+ * on mount, and without this the page shows "Loading…" until the /api/blog/:slug XHR returns — the
+ * empty window Google's smartphone renderer captured and filed as a Soft 404. The normal query
+ * still runs and revalidates after mount. Same pattern as __PRELOADED_ARTWORK__ / __PRELOADED_PRINT__.
+ */
+const _preloadedPost: BlogPost | undefined =
+  typeof window !== "undefined" ? (window as { __PRELOADED_POST__?: BlogPost }).__PRELOADED_POST__ : undefined;
+
+/**
+ * The preloaded post ONLY when it is the post this route is showing — so an inlined post for one
+ * slug is never reused for another during client-side navigation. Pure, so it is unit-tested.
+ */
+export function pickPreloadedPost(preloaded: BlogPost | undefined, slug: string): BlogPost | undefined {
+  return preloaded && preloaded.slug === slug ? preloaded : undefined;
+}
+
 export default function BlogPostPage() {
   const [, params] = useRoute("/blog/:slug");
   const slug = params?.slug ?? "";
+  const preloaded = pickPreloadedPost(_preloadedPost, slug);
 
   const { data: post, isLoading, isError } = useQuery<BlogPost>({
     queryKey: [`/api/blog/${slug}`],
     enabled: Boolean(slug),
+    // First-paint content, revalidated by the query above after mount (see _preloadedPost).
+    initialData: preloaded,
   });
   const { data: artworks = [] } = useQuery<Artwork[]>({ queryKey: ["/api/artworks"] });
   const works = artworks as unknown as FigureArtwork[];

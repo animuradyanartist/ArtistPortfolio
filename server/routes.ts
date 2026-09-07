@@ -2437,6 +2437,16 @@ Crawl-delay: 1
                 };
                 html = html.replace('</head>',
                   `  <script type="application/ld+json">${JSON.stringify(jsonld).replace(/<\/script>/gi, '<\\/script>')}</script>\n</head>`);
+
+                // FIRST-PAINT DATA — so the article renders on the FIRST client render, with no wait
+                // on the /api/blog/:slug XHR. createRoot() clears the SSR body on mount (see the note
+                // below); without this the page falls to its "Loading…" state until the fetch returns,
+                // and Google's smartphone renderer captured that empty state and filed the page as a
+                // Soft 404. Same React Query initialData pattern as __PRELOADED_ARTWORK__ — the `<`→\u003c
+                // escaping makes the JSON safe to embed in a <script> (a `</script>` in the body cannot
+                // close the tag). BlogPostPage uses it only when its slug matches the route.
+                html = html.replace('</head>',
+                  `  <script>window.__PRELOADED_POST__=${JSON.stringify(post).replace(/</g, '\\u003c')};</script>\n</head>`);
                 const bodyArtworks = await storage.getAllArtworks().catch(() => []);
                 // INSIDE #root, NOT BEFORE IT.
                 //
