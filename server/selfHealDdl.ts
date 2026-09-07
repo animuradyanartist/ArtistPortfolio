@@ -348,5 +348,21 @@ export const SELF_HEAL_DDL: readonly string[] = [
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_discount_type text`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_discount_value integer`,
   `ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code_id integer`,
-  `CREATE INDEX IF NOT EXISTS orders_promo_code_idx ON orders (promo_code)`
+  `CREATE INDEX IF NOT EXISTS orders_promo_code_idx ON orders (promo_code)`,
+  // -- Collector list signups --------------------------------------------------------------------
+  // The "Join the Collector List" table. Its legacy inline CREATE (server/index.ts) predates the
+  // source column that per-surface attribution added to shared/schema.ts, so a production table
+  // created before that shipped is MISSING the source column. storage.addCollector writes email +
+  // source and reads every column, so on such a database each INSERT/SELECT throws a
+  // column-does-not-exist error -- which surfaced as HTTP 500 on POST /api/collectors and a
+  // "Something went wrong" on the signup form. Healed here (idempotent) so BOTH boot and
+  // scripts/sync-dev-schema.mjs bring prod and dev to the schema the code already expects. It only
+  // ever ADDS the column; existing rows are untouched.
+  `CREATE TABLE IF NOT EXISTS collectors (
+        id serial PRIMARY KEY,
+        email text NOT NULL,
+        source text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )`,
+  `ALTER TABLE collectors ADD COLUMN IF NOT EXISTS source text`
 ];
