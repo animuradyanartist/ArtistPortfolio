@@ -313,10 +313,13 @@ app.use((req, res, next) => {
         console.error("[boot] blog_posts canary failed (non-fatal):", err);
       }
 
-      // Collector List signups (homepage "Join the Collector List" form).
+      // Collector List signups (homepage "Join the Collector List" form). `source` records WHERE the
+      // signup converted (per-surface attribution) and MUST be present — storage.addCollector writes
+      // it. SELF_HEAL_DDL also adds it via ADD COLUMN IF NOT EXISTS for tables that predate it.
       await pool.query(`CREATE TABLE IF NOT EXISTS collectors (
         id serial PRIMARY KEY,
         email text NOT NULL,
+        source text,
         created_at timestamp NOT NULL DEFAULT now()
       )`);
       // Contact-page messages.

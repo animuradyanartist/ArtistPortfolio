@@ -37,7 +37,27 @@ export default function CollectorSignup({ source, variant = "section", heading, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), source }),
       });
-      if (!res.ok) throw new Error("Request failed");
+      // An already-subscribed email is NOT an error — the API is idempotent and returns 201 with the
+      // existing record, so a duplicate lands in the success state below, never a scary message.
+      if (!res.ok) {
+        // Surface the reason instead of a blanket "something went wrong": a bad address is a 400 with
+        // a clear message the visitor can act on; anything else is a genuine server problem to retry.
+        if (res.status === 400) {
+          const body = (await res.json().catch(() => null)) as { message?: string } | null;
+          toast({
+            title: "Check your email address",
+            description: body?.message ?? "Please enter a valid email address.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Something went wrong",
+            description: "We couldn't add you just now. Please try again in a moment, or email animuradyan.artist@gmail.com directly.",
+            variant: "destructive",
+          });
+        }
+        return; // do not show the success state, and do not swallow the failure
+      }
       setJoined(true);
       setEmail("");
       // Make the signup measurable per surface — GA4 is live on the site (G-J1RN8P4KHY),
@@ -48,9 +68,11 @@ export default function CollectorSignup({ source, variant = "section", heading, 
         description: "You'll receive new paintings and studio updates before public release.",
       });
     } catch {
+      // Network-level failure (offline, DNS, request aborted) — reachable neither as ok nor as a
+      // status. Report it plainly rather than swallowing it.
       toast({
-        title: "Something went wrong",
-        description: "Please try again, or email animuradyan.artist@gmail.com directly.",
+        title: "Network problem",
+        description: "We couldn't reach the server. Please try again, or email animuradyan.artist@gmail.com directly.",
         variant: "destructive",
       });
     } finally {
