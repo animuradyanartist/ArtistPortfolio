@@ -26,6 +26,7 @@ import {
   renderShippingHtml,
   renderReturnsHtml,
   renderPrivacyHtml,
+  renderTermsHtml,
   type PrerenderExhibition,
   type PrerenderPhoto,
 } from './staticPagePrerender';
@@ -72,6 +73,7 @@ describe('trust & policy pages (shipping / returns / privacy) are crawlable and 
     ['shipping', renderShippingHtml()],
     ['returns', renderReturnsHtml()],
     ['privacy', renderPrivacyHtml()],
+    ['terms', renderTermsHtml()],
   ];
 
   it.each(policy)('%s has one <h1> and substantive text', (_name, html) => {
@@ -109,6 +111,24 @@ describe('trust & policy pages (shipping / returns / privacy) are crawlable and 
       expect(html.toLowerCase()).not.toMatch(/\bvat\b|tax id|company (number|registration)|reg\. no/);
       expect(html).not.toMatch(/\+\d[\d\s()-]{7,}/); // no phone number
     }
+  });
+
+  it('terms covers the required sections and cross-links the other policy pages', () => {
+    const html = renderTermsHtml();
+    const t = readable(html).toLowerCase();
+    // Every section the Terms page must, per scope, describe — grounded in real behaviour.
+    expect(t).toContain('using this site');
+    expect(t).toMatch(/prices?.*payment|prices &amp; payment|prices & payment/);
+    expect(t).toContain('made to order');            // print fulfilment disclosed
+    expect(t).toContain('stripe');                   // payment processor
+    expect(t).toContain('calculated at checkout');   // shipping model matches feed/checkout
+    expect(t).toContain('intellectual property');
+    expect(t).toContain('limitation of liability');
+    // Cross-links to Shipping, Returns, Privacy, Contact.
+    expect(html).toContain('href="/shipping"');
+    expect(html).toContain('href="/returns"');
+    expect(html).toContain('href="/privacy"');
+    expect(html).toContain('href="/contact"');
   });
 });
 

@@ -16,6 +16,7 @@ import {
   artworkJsonLd,
   artworkNarrative,
   artworkOffer,
+  artworkAvailabilityLine,
   renderArtworkHtml,
   artworkSitemapImageLocs,
 } from "@shared/artworkSsr";
@@ -34,7 +35,7 @@ import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "
 import { checkLoginAllowed, recordLoginFailure, recordLoginSuccess, clientIpOf } from "./loginRateLimit";
 import { requireBlogAgent, agentFields, agentReadable, agentMayEdit, blogAgentConfigured } from "./blogAgent";
 import { PATH_NARRATIVE } from "@shared/pathNarrative";
-import { renderAboutHtml, renderExhibitionsHtml, renderGalleryHtml, renderContactHtml, renderShippingHtml, renderReturnsHtml, renderPrivacyHtml } from "./staticPagePrerender";
+import { renderAboutHtml, renderExhibitionsHtml, renderGalleryHtml, renderContactHtml, renderShippingHtml, renderReturnsHtml, renderPrivacyHtml, renderTermsHtml } from "./staticPagePrerender";
 import { buildInfo } from "./buildInfo";
 import { registerCommerceRoutes } from "./commerce/routes";
 import { registerTestCheckoutRoutes } from "./commerce/testCheckout";
@@ -1456,6 +1457,7 @@ Allow: /contact
 Allow: /shipping
 Allow: /returns
 Allow: /privacy
+Allow: /terms
 
 Disallow: /admin
 Disallow: /api
@@ -1554,6 +1556,7 @@ Crawl-delay: 1
         { url: '/shipping', priority: '0.5', changefreq: 'yearly' },
         { url: '/returns', priority: '0.5', changefreq: 'yearly' },
         { url: '/privacy', priority: '0.4', changefreq: 'yearly' },
+        { url: '/terms', priority: '0.4', changefreq: 'yearly' },
         // Buyer-intent collection landing pages — commercial-intent surfaces, high priority.
         ...COLLECTIONS.map((c) => ({ url: `/collections/${c.slug}`, priority: '0.9', changefreq: 'weekly' as const })),
       ];
@@ -1872,10 +1875,9 @@ Crawl-delay: 1
     const injectArtworkMeta = (html: string, a: any) => {
       const medium = a.medium || 'oil on canvas';
       const bits = [a.dimensions, a.year ? String(a.year) : null].filter(Boolean).join(', ');
-      const availLine =
-        a.availability === 'sold'
-          ? 'This original work is in a private collection.'
-          : 'Original painting available — inquire to acquire.';
+      // One source for the availability sentence, so the meta description, the crawlable body and
+      // the JSON-LD never disagree — and a genuinely purchasable original never reads "inquire".
+      const availLine = artworkAvailabilityLine(a);
       const title = `${a.title} — Original ${medium} Painting by Ani Muradyan`;
       // Her published description when she wrote one, otherwise the stated facts of the
       // row — the same sentence the crawlable body and the JSON-LD use, so the three
@@ -2156,6 +2158,10 @@ Crawl-delay: 1
             title: "Privacy \u2014 Ani Muradyan",
             description: "How animuradyan.com handles your personal information: order and contact data only, Stripe for payments, and never sold.",
           },
+          "/terms": {
+            title: "Terms & Conditions \u2014 Ani Muradyan",
+            description: "Terms of sale and use for animuradyan.com: original paintings and made-to-order fine-art prints, USD pricing, Stripe payments, shipping, returns, and copyright.",
+          },
         };
         const pageMeta = PAGE_META[req.path.replace(/\/+$/, "") || "/"];
         if (pageMeta) {
@@ -2220,7 +2226,7 @@ Crawl-delay: 1
         // The markup lives in ./staticPagePrerender as pure functions, because the local
         // sample store has no gallery photographs: the branch that emits <img> and its alt
         // text cannot be reached by running the server, so it is covered by tests instead.
-        if (['/about', '/exhibitions', '/gallery', '/contact', '/shipping', '/returns', '/privacy'].includes(req.path)) {
+        if (['/about', '/exhibitions', '/gallery', '/contact', '/shipping', '/returns', '/privacy', '/terms'].includes(req.path)) {
           try {
             let ssr = '';
             if (req.path === '/about') {
@@ -2243,6 +2249,8 @@ Crawl-delay: 1
               ssr = renderReturnsHtml();
             } else if (req.path === '/privacy') {
               ssr = renderPrivacyHtml();
+            } else if (req.path === '/terms') {
+              ssr = renderTermsHtml();
             } else {
               ssr = renderContactHtml();
             }

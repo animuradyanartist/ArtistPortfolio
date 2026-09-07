@@ -37,7 +37,7 @@ describe('1 · every known public route is still a route', () => {
   });
 
   it('the policy pages that were soft-404ing are now known routes (return 200, not 404)', () => {
-    for (const p of ['/shipping', '/returns', '/privacy']) {
+    for (const p of ['/shipping', '/returns', '/privacy', '/terms']) {
       expect(isKnownRouteShape(p)).toBe(true);
     }
   });

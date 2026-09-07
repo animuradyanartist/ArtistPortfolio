@@ -20,6 +20,8 @@ import ContactPage from "@/pages/ContactPage";
 import ShippingPage from "@/pages/ShippingPage";
 import ReturnsPage from "@/pages/ReturnsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
+import TermsPage from "@/pages/TermsPage";
+import Footer from "@/components/Footer";
 import AdminPage from "@/pages/AdminPage";
 import CreateArtworkPage from "@/pages/CreateArtworkPage";
 import EditArtworkPage from "@/pages/EditArtworkPage";
@@ -72,6 +74,7 @@ function Router() {
       <Route path="/shipping" component={ShippingPage} />
       <Route path="/returns" component={ReturnsPage} />
       <Route path="/privacy" component={PrivacyPage} />
+      <Route path="/terms" component={TermsPage} />
       <Route path="/admin" component={AdminPage} />
       <Route path="/admin/create-artwork" component={CreateArtworkPage} />
       <Route path="/admin/edit-artwork/:id" component={EditArtworkPage} />
@@ -118,6 +121,7 @@ function App() {
           <main>
             <Router />
           </main>
+          <Footer />
           <Toaster />
         </div>
        </CartProvider>
