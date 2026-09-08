@@ -28,6 +28,19 @@ export const PAYMENT_STATUSES = ["unpaid", "paid", "failed", "refunded"] as cons
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 /**
+ * MAY A MANUAL "complete your payment" REMINDER BE SENT, AND A RETRY BE OFFERED?
+ *
+ * Only when money has NOT successfully arrived and the order is not closed: an `unpaid` or a
+ * `failed` order may be reminded and retried; a `paid` order needs nothing; a `refunded` order is
+ * closed. This is the SINGLE source of truth the admin button, the admin send route and the public
+ * retry endpoint all ask, so they can never disagree — and it never widens to `paid`/`refunded`,
+ * so a reminder or a retry can never be offered on an order that already has (or had) its money.
+ */
+export function canSendPaymentReminder(paymentStatus: PaymentStatus | string | null | undefined): boolean {
+  return paymentStatus === "unpaid" || paymentStatus === "failed";
+}
+
+/**
  * Allowed moves. Absent means forbidden.
  *
  * `paid → cancelled` is deliberately NOT here: money that arrived is refunded, not cancelled,

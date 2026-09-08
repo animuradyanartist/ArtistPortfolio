@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ORDER_STATUS_LABEL, type OrderStatus } from "@shared/commerce/orderStatus";
+import { ORDER_STATUS_LABEL, canSendPaymentReminder, type OrderStatus } from "@shared/commerce/orderStatus";
 import { useToast } from "@/hooks/use-toast";
 
 interface EmailRow { id: number; kind: string; to_email: string | null; subject: string | null; status: string; provider_id: string | null; error: string | null; created_at: string }
@@ -81,6 +81,19 @@ export default function AdminOrderDetailPage() {
       toast({ title: "Stripe checked", description: d?.note ?? `Stripe payment: ${d?.stripePaymentStatus ?? "unknown"}${d?.paymentIntentStatus ? ` · intent ${d.paymentIntentStatus}` : ""}` });
     },
     onError: (e: Error) => toast({ title: "Couldn't check Stripe", description: e.message, variant: "destructive" }),
+  });
+  const sendReminder = useMutation({
+    mutationFn: () => post(`/send-payment-reminder`, {}),
+    onSuccess: (d: { result?: { status: string; reason?: string } }) => {
+      done();
+      const s = d?.result?.status;
+      toast({
+        title: s === "sent" ? "Reminder sent" : s === "skipped" ? "Not sent" : "Reminder failed",
+        description: s === "sent" ? `A payment reminder was emailed to ${o?.buyer_email}.` : (d?.result?.reason ?? ""),
+        variant: s === "failed" ? "destructive" : undefined,
+      });
+    },
+    onError: (e: Error) => toast({ title: "Couldn't send reminder", description: e.message, variant: "destructive" }),
   });
   const reconcile = useMutation({
     mutationFn: () => post(`/reconcile`, {}),
@@ -198,6 +211,14 @@ export default function AdminOrderDetailPage() {
         <div className="flex flex-wrap gap-3">
           <button onClick={() => checkPayment.mutate()} disabled={checkPayment.isPending}
             className="border border-stone-800 px-4 py-2 text-[11px] tracking-[0.16em] uppercase hover:bg-stone-900 hover:text-white transition-colors disabled:opacity-50">Check Stripe status</button>
+          {canSendPaymentReminder(o.payment_status) && (
+            <button
+              onClick={() => { if (o.buyer_email && window.confirm(`Send payment reminder to ${o.buyer_email}?`)) sendReminder.mutate(); }}
+              disabled={sendReminder.isPending || o.emailConfigured === false || !o.buyer_email}
+              className="border border-stone-800 px-4 py-2 text-[11px] tracking-[0.16em] uppercase hover:bg-stone-900 hover:text-white transition-colors disabled:opacity-50">
+              {sendReminder.isPending ? "Sending…" : "Send payment reminder"}
+            </button>
+          )}
           {o.payment_status !== "paid" && (
             <button
               onClick={() => { if (window.confirm("Reconcile payment?\n\nThis queries Stripe and — ONLY if Stripe confirms the payment is genuinely paid — marks this order paid, marks the artwork sold, and sends one confirmation email. An unpaid/failed Stripe payment can never be marked paid.")) reconcile.mutate(); }}
@@ -205,6 +226,13 @@ export default function AdminOrderDetailPage() {
               className="bg-amber-600 text-white px-4 py-2 text-[11px] tracking-[0.16em] uppercase hover:bg-amber-700 transition-colors disabled:opacity-50">Reconcile payment (emergency)</button>
           )}
         </div>
+        {canSendPaymentReminder(o.payment_status) && (
+          <p className="mt-3 text-xs text-stone-500 max-w-2xl">
+            Emails the customer a polite “complete your payment” note with a secure retry link (valid for this order only).
+            It never changes payment status or charges anything — paying is what marks the order paid, via Stripe.
+            Limited to one reminder per 15 minutes.{o.buyer_email ? "" : " This order has no customer email."}
+          </p>
+        )}
         <p className="mt-3 text-xs text-stone-500 max-w-2xl">
           Payment is Stripe's fact. Reconcile is an emergency fallback for a failed webhook — it never marks an unpaid payment paid, and it can't double-sell or double-email: it shares the webhook's once-only guards, so whichever arrives second does nothing.
         </p>

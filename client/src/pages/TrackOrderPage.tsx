@@ -55,6 +55,7 @@ export default function TrackOrderPage() {
 
   const destination = [data.destination.city, data.destination.country].filter(Boolean).join(", ");
   const placed = formatDate(data.createdAt);
+  const payNote = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("pay");
 
   return (
     <Shell>
@@ -64,6 +65,7 @@ export default function TrackOrderPage() {
           {data.reference}{placed ? ` · placed ${placed}` : ""}
         </p>
 
+        <PayNote reason={payNote} />
         <ExceptionBanner o={data} />
         <ArtworkHeader o={data} />
 
@@ -99,6 +101,34 @@ export default function TrackOrderPage() {
         </div>
       </div>
     </Shell>
+  );
+}
+
+/**
+ * The calm note shown when a customer followed a "Complete payment" retry link that could not go to
+ * Stripe — the retry endpoint redirects here with ?pay=<reason>. Never alarming; always offers help.
+ */
+function PayNote({ reason }: { reason: string | null }) {
+  if (!reason) return null;
+  const msg: Record<string, string> = {
+    paid: "This order is already paid — there's nothing more to do.",
+    unavailable: "This work has since been sold, so this payment can no longer be completed. If you'd like something similar, just write to me.",
+    unconfigured: "Online payment isn't available right now. Please write to me and I'll help you complete your purchase.",
+    error: "Something went wrong starting your payment. Please try again in a moment, or write to me and I'll help.",
+  };
+  const text = msg[reason];
+  if (!text) return null;
+  const positive = reason === "paid";
+  return (
+    <div className={`mb-8 border px-5 py-4 text-sm leading-relaxed ${positive ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-amber-300 bg-amber-50 text-amber-900"}`}>
+      {text}
+      {!positive && (
+        <>
+          {" "}
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="border-b border-current hover:opacity-80">{SUPPORT_EMAIL}</a>.
+        </>
+      )}
+    </div>
   );
 }
 

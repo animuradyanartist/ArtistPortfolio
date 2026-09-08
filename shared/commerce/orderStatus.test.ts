@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   canTransition, ADMIN_SETTABLE, ORDER_STATUSES, BUYER_TIMELINE_STEPS,
-  timelineReachedIndex, isExceptionState, adminMayManageStatus,
+  timelineReachedIndex, isExceptionState, adminMayManageStatus, canSendPaymentReminder,
 } from "./orderStatus";
 
 describe("adminMayManageStatus — manual lifecycle is originals-only", () => {
@@ -51,6 +51,22 @@ describe("buyer timeline", () => {
   it("keeps cancelled/refunded off the ladder (the UI shows a banner instead)", () => {
     expect(timelineReachedIndex("cancelled")).toBe(-1);
     expect(timelineReachedIndex("refunded")).toBe(-1);
+  });
+});
+
+describe("canSendPaymentReminder — the one gate the button, the send route and the retry endpoint share", () => {
+  it("is TRUE only for money-not-arrived states (drives the admin button being VISIBLE)", () => {
+    expect(canSendPaymentReminder("unpaid")).toBe(true);
+    expect(canSendPaymentReminder("failed")).toBe(true);
+  });
+  it("is FALSE for paid and refunded (drives the button being HIDDEN; a paid order can never be reminded/retried)", () => {
+    expect(canSendPaymentReminder("paid")).toBe(false);
+    expect(canSendPaymentReminder("refunded")).toBe(false);
+  });
+  it("is FALSE for missing/unknown values (fails closed)", () => {
+    expect(canSendPaymentReminder(null)).toBe(false);
+    expect(canSendPaymentReminder(undefined)).toBe(false);
+    expect(canSendPaymentReminder("whatever")).toBe(false);
   });
 });
 

@@ -29,6 +29,11 @@ export interface OrderRow {
   tracking_token: string | null;
   payment_source: string | null; stripe_payment_status: string | null; last_payment_check_at: Date | null;
   attribution: string | null;
+  // ── promo snapshot copied from the validated promo at checkout (null when no code was used).
+  //    A HISTORICAL RECORD, exactly like artwork_snapshot — used to re-verify the payable amount
+  //    on a payment retry, never re-fetched from the promo row. ──
+  promo_code: string | null; promo_discount_minor: number | null;
+  promo_discount_type: string | null; promo_discount_value: number | null; promo_code_id: number | null;
   // ── print fulfilment (Prodigi). Null on original-artwork orders. ──
   fulfilment_provider: string | null; print_variant_id: number | null; prodigi_order_id: string | null;
   fulfilment_status: string | null; fulfilment_idempotency_key: string | null;

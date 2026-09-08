@@ -9,8 +9,9 @@
  */
 import type { Express, Request, Response } from "express";
 import { storage } from "../storage";
-import { hasDatabase } from "../db";
+import { hasDatabase, pool } from "../db";
 import { purchasability, REASON_LABEL } from "@shared/commerce/purchasable";
+import { canSendPaymentReminder } from "@shared/commerce/orderStatus";
 import { formatMoney, type Currency } from "@shared/commerce/money";
 import { zoneFor, ZONE_LABEL, supportedCountries, isLikelyImportDutiable } from "@shared/commerce/zones";
 import { priceOrder, toShippable, currencyOf } from "./pricing";
@@ -23,7 +24,9 @@ import {
   createOrder, getOrder, getOrderByReference, getOrderBySession, getOrderByPaymentIntent,
   getOrderByTrackingToken, ensureTrackingToken, nextReference, recentUnpaidOrderCount,
   markOrderPaid, markOrderCancelled, markOrderFailed, markOrderRefunded, claimStripeEvent,
+  logOrderAudit,
 } from "./orders";
+import { payableFromOrder, planRetrySession } from "./paymentRetry";
 import { sendOrderConfirmation } from "../email";
 import { resolvePromoForOrder, promoOrderSnapshot } from "./promoCheckout";
 import { publicOrderView, publicTrackingView } from "./orderView";
@@ -671,6 +674,101 @@ export function registerCommerceRoutes(app: Express): void {
       // A cancel that cannot be processed must still land the visitor somewhere sensible.
     }
     return res.redirect(302, redirect);
+  });
+
+  // ── Retry payment: the STABLE link the reminder email points at. ──────────────────────
+  //
+  // Reached by the order's UNGUESSABLE tracking token (the same handle the tracking page uses),
+  // so the link never expires and only ever corresponds to the one intended order. Nothing is
+  // held or charged until the customer actually clicks: only then do we re-check availability,
+  // (re)take the reservation for an original, rebuild+verify the amount FROM THE ORDER ROW, and
+  // ask Stripe for a fresh session bound to the SAME order (metadata.orderId). No new order is
+  // created; no second reservation is planned. It never marks anything paid — the webhook remains
+  // the sole writer of `payment_status = 'paid'`. On any refusal the buyer lands on their tracking
+  // page with a calm, specific note (?pay=…), never a broken Stripe screen.
+  app.get("/api/commerce/pay/:token", async (req, res) => {
+    if (rateLimited(req, res, "pay")) return;
+    const token = String(req.params.token || "");
+    const trackBase = `/track/${encodeURIComponent(token)}`;
+    const bounce = (reason: "paid" | "unavailable" | "unconfigured" | "error") =>
+      res.redirect(302, `${trackBase}?pay=${reason}`);
+    try {
+      if (token.length < 16) return res.redirect(302, "/artworks");
+      const order = await getOrderByTrackingToken(token);
+      if (!order) return res.redirect(302, trackBase); // the tracking page shows a calm "not found"
+
+      // Never retry a paid/refunded order. (Same shared gate as the admin button + send route.)
+      if (!canSendPaymentReminder(order.payment_status)) return bounce("paid");
+
+      // Payment must be fully configured (BOTH secrets) before anything is created.
+      if (checkoutBlockedReason()) return bounce("unconfigured");
+      const stripe = stripeClient();
+      if (!stripe) return bounce("unconfigured");
+      if (!hasDatabase) return bounce("error");
+
+      // Rebuild + verify the payable amount ENTIRELY from the order row (never the client).
+      const built = payableFromOrder(order);
+      if (!built.ok) return built.refusal.kind === "closed" ? bounce("paid") : bounce("error");
+      const payable = built.payable;
+
+      // ORIGINALS: re-check availability and take the hold NOW. reserveArtwork is idempotent for
+      // THIS order and refuses if the work has since sold or is held by another checkout — so we
+      // never create a Stripe session for a work that is no longer available, and never double-hold.
+      if (payable.isOriginal && payable.artworkId != null) {
+        const held = await reserveArtwork(payable.artworkId, order.id, RESERVATION_MINUTES);
+        if (!held.ok) return bounce("unavailable");
+      }
+
+      const base = siteBaseUrl(req);
+      let session;
+      try {
+        session = await stripe.checkout.sessions.create(
+          planRetrySession(order, payable, {
+            baseUrl: base,
+            reservationMinutes: payable.isOriginal ? RESERVATION_MINUTES : undefined,
+          }),
+        );
+      } catch (e) {
+        // Stripe refused/unreachable — don't leave a hold we just took hanging on the work.
+        if (payable.isOriginal && payable.artworkId != null) await releaseReservation(payable.artworkId, order.id);
+        await logOrderAudit(order.id, "payment-retry", "stripe-error", e instanceof Error ? e.message.slice(0, 200) : "unknown");
+        return bounce("error");
+      }
+
+      // A VALID retry flow has started → attach the new session and reset failed→unpaid so a
+      // successful payment actually registers (markOrderPaid guards on payment_status='unpaid').
+      // The `payment_status IN ('unpaid','failed')` guard means a paid/refunded row is NEVER touched,
+      // and it also closes the race where a webhook flipped this order to paid a moment ago: then the
+      // update matches zero rows and we send the buyer to their (paid) order rather than a second charge.
+      const upd = payable.isOriginal
+        ? await pool.query(
+            `UPDATE orders
+                SET stripe_checkout_session_id = $2, payment_status = 'unpaid', status = 'checkout_created',
+                    reserved_at = now(), reservation_expires_at = now() + ($3 || ' minutes')::interval, updated_at = now()
+              WHERE id = $1 AND payment_status IN ('unpaid','failed')`,
+            [order.id, session.id, String(RESERVATION_MINUTES)],
+          )
+        : await pool.query(
+            `UPDATE orders
+                SET stripe_checkout_session_id = $2, payment_status = 'unpaid', status = 'checkout_created', updated_at = now()
+              WHERE id = $1 AND payment_status IN ('unpaid','failed')`,
+            [order.id, session.id],
+          );
+      if (upd.rowCount === 0) {
+        // The order resolved (paid/refunded) between our read and here — do NOT send them to pay again.
+        if (payable.isOriginal && payable.artworkId != null) await releaseReservation(payable.artworkId, order.id);
+        return bounce("paid");
+      }
+
+      await logOrderAudit(
+        order.id, "payment-retry", "session-created",
+        `New Stripe session ${session.id} for ${formatMoney(payable.totalMinor, payable.currency as Currency)}; awaiting payment.`,
+      );
+      if (!session.url) return bounce("error");
+      return res.redirect(302, session.url);
+    } catch {
+      return bounce("error");
+    }
   });
 
   // ── The webhook. The only thing in this system that may say "paid". ───────────────────
