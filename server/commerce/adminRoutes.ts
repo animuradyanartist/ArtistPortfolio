@@ -15,16 +15,18 @@ import {
   listOrders, getOrder, setOrderStatus, setFulfilmentDetails,
   setExceptionState, setCustomerMessage, setInternalNotes,
   markOrderPaid, setPaymentSource, recordPaymentCheck, logOrderAudit, listOrderAudit,
+  ensureTrackingToken,
 } from "./orders";
 import { releaseExpiredReservations, markSold } from "./reservation";
 import { fulfilPrintOrder, canRetryPrintFulfilment } from "./prints/printFulfilmentService";
+import { reminderRecentlySent, type ReminderLedgerRow } from "./paymentRetry";
 import { stripeMode, stripeClient } from "./stripeClient";
 import {
   sendOrderConfirmation, sendShippedEmail, sendDeliveredEmail, sendPreparingEmail, sendManualUpdate,
-  sendPreparingStatusEmail, sendPackedEmail, sendInTransitEmail,
-  resendConfirmation, listOrderEmails, emailConfigured,
+  sendPreparingStatusEmail, sendPackedEmail, sendInTransitEmail, sendPaymentReminder,
+  resendConfirmation, listOrderEmails, emailConfigured, emailBaseUrl,
 } from "../email";
-import { ADMIN_SETTABLE, nextStatuses, isExceptionState, adminMayManageStatus, type OrderStatus, type ExceptionState } from "@shared/commerce/orderStatus";
+import { ADMIN_SETTABLE, nextStatuses, isExceptionState, adminMayManageStatus, canSendPaymentReminder, type OrderStatus, type ExceptionState } from "@shared/commerce/orderStatus";
 import { formatMoney, type Currency } from "@shared/commerce/money";
 
 export function registerAdminCommerceRoutes(app: Express): void {
@@ -230,6 +232,49 @@ export function registerAdminCommerceRoutes(app: Express): void {
       res.json({ ok: result.status !== "failed", result });
     } catch {
       res.status(500).json({ message: "Could not send the email." });
+    }
+  });
+
+  // ── PAYMENT: manual reminder for an unpaid/failed order ──────────────────────────────────
+  //
+  // Emails the customer a short, polite "your payment wasn't completed" note with a Complete-payment
+  // button. It NEVER changes payment status and NEVER charges anything — the button is a stable link
+  // (the order's tracking token) that, only when the customer clicks it, mints a fresh Stripe session
+  // server-side. Manual only; guarded to unpaid/failed orders; throttled to at most one send per 15
+  // minutes (read from the existing email ledger — no schema change); every send is audited.
+  app.post("/api/admin/orders/:id/send-payment-reminder", requireAdminAuth, async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      const order = await getOrder(id);
+      if (!order) return res.status(404).json({ message: "Not found" });
+
+      // Only an order whose money has NOT arrived — never a paid or refunded one.
+      if (!canSendPaymentReminder(order.payment_status)) {
+        return res.status(409).json({ message: "This order's payment is already settled — a reminder can't be sent." });
+      }
+      if (!order.buyer_email) {
+        return res.status(409).json({ message: "This order has no customer email to send a reminder to." });
+      }
+
+      // 15-minute duplicate-reminder throttle, read from the existing email ledger.
+      const priorEmails = (await listOrderEmails(order.id)) as unknown as ReminderLedgerRow[];
+      if (reminderRecentlySent(priorEmails, new Date(), 15)) {
+        return res.status(429).json({ message: "A payment reminder was already sent for this order in the last 15 minutes." });
+      }
+
+      // The STABLE retry link, from the order's unguessable tracking token.
+      const token = await ensureTrackingToken(order.id);
+      if (!token) return res.status(500).json({ message: "Could not prepare the retry link." });
+      const payUrl = `${emailBaseUrl()}/api/commerce/pay/${token}`;
+
+      const result = await sendPaymentReminder(order, payUrl);
+      await logOrderAudit(
+        order.id, "payment-reminder", result.status,
+        `Reminder to ${order.buyer_email}: ${result.status}${result.reason ? ` (${result.reason})` : ""}.`,
+      );
+      return res.json({ ok: result.status !== "failed", result });
+    } catch {
+      return res.status(500).json({ message: "Could not send the reminder." });
     }
   });
 

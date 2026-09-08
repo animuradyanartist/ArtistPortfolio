@@ -365,6 +365,46 @@ Ani${textFooter()}`;
   return { subject: `Order confirmed — ${subjectTitle(m)}`, html: layout(`Your order ${m.reference} is confirmed. Thank you.`, inner), text };
 }
 
+/**
+ * MANUAL PAYMENT REMINDER — sent by Admin for an order whose payment did not complete.
+ *
+ * Short, polite, elegant, never aggressive: it states the fact, offers one button to try again, and
+ * makes clear no action is needed if they've changed their mind. `payUrl` is the STABLE retry link
+ * (the order's unguessable tracking token); clicking it re-checks availability and mints a fresh
+ * Stripe session server-side. It never contains an amount or any Stripe secret.
+ */
+export function buildPaymentReminderEmail(m: Model, opts: { payUrl: string }): EmailContent {
+  const inner = [
+    eyebrow("Complete your order"),
+    heading(`Hi ${m.firstName},`),
+    para(`It looks like the payment for your order wasn't completed.`),
+    para(`If you'd still like to continue with your purchase, you can try the payment again using the button below.`),
+    button("Complete payment", opts.payUrl),
+    para(`If you no longer wish to continue, no action is needed.`),
+    rule(),
+    para(`Best,<br><span style="font-family:${SERIF};font-style:italic;font-size:17px;color:${STONE_900}">Ani Muradyan</span>`),
+  ].join("");
+
+  const text =
+`Hi ${m.firstName},
+
+It looks like the payment for your order wasn't completed.
+
+If you'd still like to continue with your purchase, you can try the payment again here:
+${opts.payUrl}
+
+If you no longer wish to continue, no action is needed.
+
+Best,
+Ani Muradyan${textFooter()}`;
+
+  return {
+    subject: `Your payment wasn't completed`,
+    html: layout(`Your payment for order ${m.reference} wasn't completed — you can try again.`, inner),
+    text,
+  };
+}
+
 /** The noun for the purchased item in prose ("fine art print" / "painting"). */
 function itemNoun(m: Model): string {
   return m.isPrint ? "fine art print" : "painting";

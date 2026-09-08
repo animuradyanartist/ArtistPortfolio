@@ -16,13 +16,14 @@ import { emailConfigured, sendEmail } from "./provider";
 import { claimOrderEmail, finishOrderEmail, releaseOrderEmailClaim, logOrderEmail } from "./emailLog";
 import {
   toModel, buildConfirmationEmail, buildShippedEmail, buildDeliveredEmail,
-  buildPreparingEmail, buildPackedEmail, buildInTransitEmail, buildUpdateEmail, type EmailContent,
+  buildPreparingEmail, buildPackedEmail, buildInTransitEmail, buildUpdateEmail,
+  buildPaymentReminderEmail, type EmailContent,
 } from "./render";
 
 export { listOrderEmails } from "./emailLog";
 export { emailConfigured } from "./provider";
 
-export type EmailKind = "order_confirmation" | "shipped" | "delivered" | "preparing" | "packed" | "in_transit" | "delay" | "manual";
+export type EmailKind = "order_confirmation" | "shipped" | "delivered" | "preparing" | "packed" | "in_transit" | "delay" | "manual" | "payment_reminder";
 export interface EmailDispatchResult { status: "sent" | "failed" | "skipped"; reason?: string; id?: string }
 
 export function emailBaseUrl(): string {
@@ -110,6 +111,15 @@ export function sendInTransitEmail(order: OrderRow): Promise<EmailDispatchResult
 export function sendPreparingEmail(order: OrderRow): Promise<EmailDispatchResult> {
   return dispatch(order, "preparing", buildPreparingEmail, { once: false });
 }
+/**
+ * MANUAL payment reminder — admin-initiated for an unpaid/failed order. Repeatable (Ani may send
+ * more than one over time), and recorded in the ledger so a duplicate within the throttle window is
+ * caught by the caller. `payUrl` is the stable retry link; this never marks anything paid.
+ */
+export function sendPaymentReminder(order: OrderRow, payUrl: string): Promise<EmailDispatchResult> {
+  return dispatch(order, "payment_reminder", (m) => buildPaymentReminderEmail(m, { payUrl }), { once: false });
+}
+
 /** E. A hand-written buyer update (delay note or general message). Repeatable. */
 export function sendManualUpdate(
   order: OrderRow, opts: { subject: string; message: string; kind?: "delay" | "manual" },
