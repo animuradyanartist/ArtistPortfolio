@@ -182,3 +182,39 @@ export function trackBeginCheckoutPrint(i: Omit<ItemInput, "category">, totalMin
     currency, value: totalMinor / 100, items: [toItem(printItem(i))],
   });
 }
+
+/**
+ * PINTEREST SAVE — a lightweight engagement event on the SAME GA4 the site already loads. It is
+ * not an ecommerce/`items` event: saving a Pin is a share intent, not a cart action, so it stays a
+ * flat custom event and never touches value/currency/purchase. No cookie, no PII — the same rules
+ * as every other call here. Fired when a visitor clicks "Save to Pinterest" on an artwork/print PDP.
+ */
+export function trackPinterestSaveClick(a: {
+  itemId: number | string;
+  itemName: string;
+  /** "original" for an artwork PDP, "print" for a print PDP. */
+  itemType: "original" | "print";
+  /**
+   * The SOURCE original artwork id. A print passes its `data.artworkId` here so `artwork_id` is the
+   * original the print reproduces — matching `toItem`'s convention — never the print product id.
+   * Omit for an original: `artwork_id` then falls back to its own (numeric) item id.
+   */
+  artworkId?: number | null;
+  pageLocation: string;
+}): void {
+  // print → the source artwork id (omitted when the print has no linked original);
+  // original → the artwork itself (its numeric item id), unchanged from before.
+  const artwork_id =
+    a.itemType === "print"
+      ? a.artworkId ?? undefined
+      : typeof a.itemId === "number"
+        ? a.itemId
+        : undefined;
+  gtag()?.("event", "pinterest_save_click", {
+    item_id: String(a.itemId),
+    artwork_id,
+    item_name: a.itemName,
+    item_type: a.itemType,
+    page_location: a.pageLocation,
+  });
+}

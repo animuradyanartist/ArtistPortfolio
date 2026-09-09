@@ -9,6 +9,8 @@ import { isKnownAddressFor } from "@shared/artworkAddress";
 import { artworkJsonLd, artworkDimensions, type SsrArtwork } from "@shared/artworkSsr";
 import { ArtworkMissingError, isMissingResponse, meansArtworkMissing, artworkViewState } from "@shared/artworkAvailability";
 import { ImageLightbox } from "@/components/ImageLightbox";
+import { PinterestSave } from "@/components/PinterestSave";
+import { originalPinImageRef } from "@/lib/pinterest";
 import { useAfterPaint } from "@/lib/afterPaint";
 import {
   updateCanonicalUrl,
@@ -204,6 +206,15 @@ export default function ArtworkDetailPage() {
 
   const moreWorks = relatedPool.filter((a) => a.id !== artwork.id).slice(0, 3);
 
+  // The exact canonical URL this page declares (SEO slug when present, else the id-suffixed path) —
+  // the SAME address used above for the canonical tag, so a saved Pin links back to it precisely.
+  const canonicalUrl = `${BASE_URL}${artwork.seoSlug ? `/${artwork.seoSlug}` : artworkPath(artwork)}`;
+  // A short, FACTUAL Pin description from existing metadata only — no marketing claims invented.
+  const pinDescription =
+    [`${artwork.title} — original ${artwork.medium || "painting"}`, artwork.dimensions, artwork.year ? String(artwork.year) : null]
+      .filter(Boolean)
+      .join(", ") + " by Ani Muradyan.";
+
   return (
     <div className="min-h-screen bg-[#f5f1ea]">
       <div className="mx-auto max-w-6xl px-6 py-10 md:py-14">
@@ -285,6 +296,25 @@ export default function ArtworkDetailPage() {
                     />
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Subtle "Save to Pinterest" — near the image, quiet by design. Pins the image the
+                visitor is currently viewing, linking back to this exact painting's canonical URL.
+                Only shown when there is a real image to pin. */}
+            {images.length > 0 && (
+              <div className="flex justify-end pt-3">
+                <PinterestSave
+                  pageUrl={canonicalUrl}
+                  title={artwork.title || "Original artwork"}
+                  description={pinDescription}
+                  /* First-party /img/artwork/:id/0 route (not the raw images[currentImageIndex],
+                     which may be an external marketplace URL). PDP image rendering is unchanged. */
+                  imageUrl={originalPinImageRef(artwork.id)}
+                  itemType="original"
+                  itemId={artwork.id}
+                  itemName={artwork.title || "Original artwork"}
+                />
               </div>
             )}
 

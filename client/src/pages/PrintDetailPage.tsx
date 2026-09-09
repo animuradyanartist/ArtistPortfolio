@@ -15,7 +15,9 @@ import { useQuery } from "@tanstack/react-query";
 import { printViewState } from "@shared/printAvailability";
 import { Eyebrow } from "@/components/editorial";
 import { ImageLightbox } from "@/components/ImageLightbox";
-import { updateCanonicalUrl, updateMetaDescription } from "@/lib/seo";
+import { PinterestSave } from "@/components/PinterestSave";
+import { updateCanonicalUrl, updateMetaDescription, BASE_URL } from "@/lib/seo";
+import { printCanonicalUrl } from "@shared/commerce/printProduct";
 import { type PrintCategory } from "@shared/commerce/prodigiProducts";
 import {
   categoryOfMaterial,
@@ -250,14 +252,34 @@ export default function PrintDetailPage() {
         {/* Image gallery — object-contain on a soft panel so any aspect ratio shows whole. */}
         <div>
           <PrintGallery images={galleryImages} title={data.title} />
-          {data.artworkId != null && (
-            <Link
-              href={data.artworkPath ?? `/artworks/${data.artworkId}`}
-              className="inline-block mt-4 text-[11px] tracking-[0.2em] uppercase text-stone-600 border-b border-stone-400 hover:border-stone-800"
-            >
-              View original artwork →
-            </Link>
-          )}
+          {/* Under the gallery: the existing "View original artwork" link on the left, and a subtle
+              "Save to Pinterest" action on the right. The Pin links back to this print's exact
+              canonical URL and pins the primary public storefront image (/img/print/:id/0 — never the
+              private master). Demo/preview products are excluded (their prices must not be promoted). */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            {data.artworkId != null ? (
+              <Link
+                href={data.artworkPath ?? `/artworks/${data.artworkId}`}
+                className="inline-block text-[11px] tracking-[0.2em] uppercase text-stone-600 border-b border-stone-400 hover:border-stone-800"
+              >
+                View original artwork →
+              </Link>
+            ) : (
+              <span />
+            )}
+            {!data.preview && (data.image || data.images?.[0]) && (
+              <PinterestSave
+                pageUrl={printCanonicalUrl(BASE_URL, data.slug)}
+                title={data.title}
+                description={`${data.title} — fine-art giclée print by Ani Muradyan.`}
+                imageUrl={data.image ?? data.images?.[0] ?? null}
+                itemType="print"
+                itemId={data.id}
+                itemName={data.title}
+                artworkId={data.artworkId}
+              />
+            )}
+          </div>
         </div>
 
         {/* Configurator */}
