@@ -19,6 +19,7 @@ import {
   type SelectorOption,
   type PricedSelectorOption,
   type SizeOption,
+  printPriceCurrency,
 } from "./printSelector";
 
 describe("printCheckoutHref — Buy now / cart line → dedicated checkout, identifiers only", () => {
@@ -197,5 +198,26 @@ describe("categoryOfMaterial", () => {
     expect(categoryOfMaterial("german-etching")).toBe("fine-art-paper");
     expect(categoryOfMaterial("stretched-canvas")).toBe("canvas");
     expect(categoryOfMaterial("photo-rag")).toBe("fine-art-paper"); // historical stock still maps sanely
+  });
+});
+
+describe("printPriceCurrency — the currency the starting price is quoted in (fixes the EUR default)", () => {
+  it("returns the purchasable variant's currency (Road Through Gold → USD)", () => {
+    const options = [
+      { state: "preview", currency: "USD" },
+      { state: "purchasable", currency: "USD" },
+      { state: "provisional", currency: "USD" },
+    ];
+    expect(printPriceCurrency(options)).toBe("USD");
+  });
+
+  it("prefers a purchasable option over an earlier non-purchasable one", () => {
+    const options = [{ state: "provisional", currency: "GBP" }, { state: "purchasable", currency: "USD" }];
+    expect(printPriceCurrency(options)).toBe("USD");
+  });
+
+  it("falls back to the first option when none is purchasable, and to undefined when empty", () => {
+    expect(printPriceCurrency([{ state: "preview", currency: "EUR" }])).toBe("EUR");
+    expect(printPriceCurrency([])).toBeUndefined();
   });
 });
