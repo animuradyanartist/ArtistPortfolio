@@ -12,6 +12,7 @@ import {
   trackBeginCheckout,
   trackPurchaseOnce,
   printItem,
+  createViewOnceGate,
 } from "./commerceAnalytics";
 
 let calls: unknown[][];
@@ -195,5 +196,73 @@ describe("Meta Pixel commerce events (Road Through Gold print, ride alongside GA
     expect(() => trackAddToCartPrint({ id: 19, title: "Road Through Gold", printVariantId: 101 })).not.toThrow();
     expect(gtagCalls.some((c) => c[1] === "add_to_cart")).toBe(true);
     expect(fbqCalls).toHaveLength(0);
+  });
+});
+
+/**
+ * REGRESSION: the print PDP fired view_item / ViewContent TWICE on a direct load, because its effect
+ * ran once for the SSR-preloaded `data` and again for the fetched `data` (same print). The PDP now
+ * gates the product view through `createViewOnceGate`; this proves the preload→fetch sequence yields
+ * exactly ONE view, and that navigating to a different print re-arms it.
+ */
+describe("createViewOnceGate — print view fires once per id (preload→fetch no longer doubles)", () => {
+  it("preloaded data then fetched data for the SAME print = ONE view", () => {
+    const gate = createViewOnceGate();
+    expect(gate(19)).toBe(true); // 1st effect run: SSR-preloaded copy → fires
+    expect(gate(19)).toBe(false); // 2nd effect run: fetched copy (same print) → suppressed
+    expect(gate(19)).toBe(false); // any further data settle → still suppressed
+  });
+
+  it("navigating to a DIFFERENT print re-arms the view", () => {
+    const gate = createViewOnceGate();
+    expect(gate(19)).toBe(true); // Road Through Gold (preload)
+    expect(gate(19)).toBe(false); // fetched
+    expect(gate(28)).toBe(true); // SPA-nav to another print → fires
+    expect(gate(28)).toBe(false); // its own fetched copy → suppressed
+    expect(gate(19)).toBe(true); // back to the first print later → a genuine new view
+  });
+
+  it("ignores null/undefined ids (never fires a view with no product)", () => {
+    const gate = createViewOnceGate();
+    expect(gate(null)).toBe(false);
+    expect(gate(undefined)).toBe(false);
+    expect(gate(19)).toBe(true);
+  });
+});
+
+/**
+ * The fix must NOT change what a print view SENDS. This proves the deduped view still carries the
+ * exact Road Through Gold payload to BOTH GA4 and Meta (content id 19, value 69, USD).
+ */
+describe("deduped print view payload is unchanged (Road Through Gold, 69 USD)", () => {
+  let gtagCalls: unknown[][];
+  let fbqCalls: unknown[][];
+  beforeEach(() => {
+    gtagCalls = [];
+    fbqCalls = [];
+    (globalThis as { window?: unknown }).window = {
+      gtag: (...a: unknown[]) => gtagCalls.push(a),
+      fbq: (...a: unknown[]) => fbqCalls.push(a),
+    };
+  });
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window;
+  });
+
+  it("one gated view fires exactly one GA4 view_item + one Meta ViewContent, both 69 USD", () => {
+    const gate = createViewOnceGate();
+    const fireIfNew = () => {
+      if (!gate(19)) return;
+      trackViewItemPrint({ id: 19, title: "Road Through Gold", priceMinor: 6900, currency: "USD", printProductId: 19, artworkId: 59 });
+    };
+    fireIfNew(); // preloaded data
+    fireIfNew(); // fetched data (same print)
+
+    const ga = gtagCalls.filter((c) => c[1] === "view_item");
+    const meta = fbqCalls.filter((c) => c[0] === "track" && c[1] === "ViewContent");
+    expect(ga).toHaveLength(1);
+    expect(meta).toHaveLength(1);
+    expect((ga[0] as [string, string, Record<string, unknown>])[2]).toMatchObject({ currency: "USD", value: 69 });
+    expect((meta[0] as [string, string, Record<string, unknown>])[2]).toMatchObject({ content_ids: ["19"], content_name: "Road Through Gold", value: 69, currency: "USD" });
   });
 });

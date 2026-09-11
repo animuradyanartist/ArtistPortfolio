@@ -71,6 +71,25 @@ export function printItem(i: Omit<ItemInput, "category">): ItemInput {
   return { ...i, category: "fine-art-print" };
 }
 
+/**
+ * A once-per-key gate for product-view events. Returns `true` the FIRST time a key (a product id) is
+ * seen, `false` for repeats of the SAME key, and `true` again when the key changes. A PDP holds one
+ * of these in a ref: on a direct load `data` transitions from the SSR-preloaded copy to the fetched
+ * copy (SAME id) — without this gate the view_item / ViewContent effect fired twice; with it the
+ * product view fires exactly once, while navigating to a different product re-arms it. Pure + tested.
+ */
+export function createViewOnceGate(): (key: number | string | null | undefined) => boolean {
+  let last: number | string | null | undefined;
+  let armed = false;
+  return (key) => {
+    if (key == null) return false;
+    if (armed && last === key) return false;
+    last = key;
+    armed = true;
+    return true;
+  };
+}
+
 // ── Meta Pixel params from the SAME items GA4 uses — product ids / value / currency only, no PII.
 //    The Meta content id matches GA4's item_id (printVariantId ?? id), so the two systems agree. ──
 const metaContentIds = (items: ItemInput[]): string[] => items.map((i) => String(i.printVariantId ?? i.id));
