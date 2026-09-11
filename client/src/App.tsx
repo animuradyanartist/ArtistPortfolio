@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -37,6 +37,7 @@ import AdminOrdersPage from "@/pages/AdminOrdersPage";
 import AdminOrderDetailPage from "@/pages/AdminOrderDetailPage";
 import { CartProvider } from "@/lib/cart";
 import { captureAttribution } from "@/lib/commerceAnalytics";
+import { metaPageView } from "@/lib/metaPixel";
 import SeoArtworkPage from "@/pages/SeoArtworkPage";
 import BlogPage from "@/pages/BlogPage";
 import BlogPostPage from "@/pages/BlogPostPage";
@@ -54,6 +55,24 @@ function ScrollToTop() {
   const [location] = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [location]);
+  return null;
+}
+
+/**
+ * Meta PageView on SPA navigation. The INITIAL page's PageView is fired once by the pixel snippet in
+ * index.html, so this fires only on SUBSEQUENT client-side route changes. `lastPath` skips the first
+ * location and never fires twice for the same path, so React hydration and StrictMode's double-invoke
+ * cannot produce a duplicate. No-op entirely when the pixel didn't load (non-campaign session or an ad blocker).
+ */
+function MetaPageView() {
+  const [location] = useLocation();
+  const lastPath = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastPath.current === null) { lastPath.current = location; return; } // initial load: snippet did it
+    if (lastPath.current === location) return; // same URL (hydration / StrictMode re-run)
+    lastPath.current = location;
+    metaPageView();
   }, [location]);
   return null;
 }
@@ -117,6 +136,7 @@ function App() {
           <CanonicalManager />
           <AttributionCapture />
           <ScrollToTop />
+          <MetaPageView />
           <Navigation />
           <main>
             <Router />

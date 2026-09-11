@@ -160,3 +160,15 @@ export function sizeOptionLabel(o: SizeOption): string {
   const price = o.priceMinor != null ? ` — ${retail(o.priceMinor, o.currency)}` : "";
   return `${name}${dims}${price}`;
 }
+
+/**
+ * The currency the starting price is quoted in. A print's variants all share one currency, so the
+ * first purchasable option (else the first option) is authoritative. Used by the PDP's product-view
+ * event so GA4 `view_item` and Meta `ViewContent` carry the REAL currency (e.g. USD) instead of the
+ * analytics default — the print PDP's view fires before a variant is chosen, so the price/currency
+ * must come from the catalogue, not the selection.
+ */
+export function printPriceCurrency(options: Array<{ state?: string; currency?: string | null }>): string | undefined {
+  const o = options.find((x) => x.state === "purchasable") ?? options[0];
+  return o?.currency ?? undefined;
+}

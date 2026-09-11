@@ -130,6 +130,39 @@
         gtag('js', new Date());
         gtag('config', 'G-J1RN8P4KHY');
     </script>
+
+    <!-- Meta Pixel (dataset 2175937903158191) — TEST-SCOPED, NOT site-wide. It loads ONLY for a session
+         that arrived from the Meta paid test ad (landing UTMs utm_source=meta & utm_campaign=us_print_test_sep2026),
+         and stays active for the rest of that session via sessionStorage (so events continue across SPA
+         navigation and the Stripe return). A NORMAL visitor never loads fbevents.js, sets no _fbp cookie
+         and sends no events. GA4 + Clarity above are unaffected. This rule is mirrored (and unit-tested)
+         in src/lib/metaPixel.ts (metaCampaignActive) — keep the two in sync. Full consent management is a
+         later decision if Meta tracking ever goes site-wide. -->
+    <script type="text/javascript">
+      (function () {
+        var KEY = "am.meta.optin.v1";
+        function fromMetaCampaign() {
+          try {
+            var p = new URLSearchParams(window.location.search);
+            return p.get("utm_source") === "meta" && p.get("utm_campaign") === "us_print_test_sep2026";
+          } catch (e) { return false; }
+        }
+        var active = false;
+        try {
+          if (fromMetaCampaign()) { sessionStorage.setItem(KEY, "1"); active = true; }
+          else { active = sessionStorage.getItem(KEY) === "1"; }
+        } catch (e) { active = fromMetaCampaign(); }
+        if (!active) { window.__metaPixelAllowed = false; return; }
+        window.__metaPixelAllowed = true;
+        !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+        n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
+        (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init','2175937903158191');
+        fbq('track','PageView');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

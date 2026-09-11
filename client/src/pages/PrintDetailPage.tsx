@@ -27,6 +27,7 @@ import {
   retainedSizeOnCategoryChange,
   materialCategoryLabel,
   printCheckoutHref,
+  printPriceCurrency,
 } from "@/lib/printSelector";
 import { SizeSelect } from "@/components/SizeSelect";
 import { useCart } from "@/lib/cart";
@@ -208,6 +209,9 @@ export default function PrintDetailPage() {
       id: data.id,
       title: data.title,
       priceMinor: data.startingPriceMinor,
+      // Real product currency from the catalogue (e.g. USD) — the view fires before a variant is
+      // chosen, so without this GA4 view_item + Meta ViewContent fell back to the EUR default.
+      currency: printPriceCurrency(options),
       printProductId: data.id,
       artworkId: data.artworkId,
     });
