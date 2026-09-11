@@ -27,6 +27,7 @@ import {
   renderReturnsHtml,
   renderPrivacyHtml,
   renderTermsHtml,
+  renderHomeHtml,
   type PrerenderExhibition,
   type PrerenderPhoto,
 } from './staticPagePrerender';
@@ -65,6 +66,37 @@ describe('every page carries a heading and real words', () => {
 
   it.each(pages)('%s links onward into the site', (_name, html) => {
     expect(html).toContain('href="/artworks"');
+  });
+});
+
+describe('the homepage server-renders links to the money page and articles (Phase 1)', () => {
+  const html = renderHomeHtml();
+
+  it('is present in the server HTML before any JavaScript runs (single <h1>, real words)', () => {
+    expect(html.match(/<h1/g) ?? []).toHaveLength(1);
+    expect(readable(html).length).toBeGreaterThan(120);
+  });
+
+  it('server-renders a crawlable link to /prints', () => {
+    expect(html).toContain('href="/prints"');
+  });
+
+  it('server-renders a crawlable link to /blog', () => {
+    expect(html).toContain('href="/blog"');
+  });
+
+  it('still links /artworks and /about (no existing link dropped)', () => {
+    expect(html).toContain('href="/artworks"');
+    expect(html).toContain('href="/about"');
+  });
+
+  it('uses the site’s own vocabulary, not keyword-stuffed anchor text', () => {
+    const text = readable(html);
+    // The four links read as one natural sentence-row: Originals · Prints · Articles · About.
+    expect(text).toContain('See all original paintings');
+    expect(text).toContain('Fine-art prints');
+    expect(text).toContain('Articles');
+    expect(text).toContain('About Ani Muradyan');
   });
 });
 

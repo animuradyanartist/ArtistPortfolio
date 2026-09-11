@@ -35,7 +35,7 @@ import { requireAdminAuth, authenticateAdminSession, logoutAdminSession } from "
 import { checkLoginAllowed, recordLoginFailure, recordLoginSuccess, clientIpOf } from "./loginRateLimit";
 import { requireBlogAgent, agentFields, agentReadable, agentMayEdit, blogAgentConfigured } from "./blogAgent";
 import { PATH_NARRATIVE } from "@shared/pathNarrative";
-import { renderAboutHtml, renderExhibitionsHtml, renderGalleryHtml, renderContactHtml, renderShippingHtml, renderReturnsHtml, renderPrivacyHtml, renderTermsHtml } from "./staticPagePrerender";
+import { renderAboutHtml, renderExhibitionsHtml, renderGalleryHtml, renderContactHtml, renderShippingHtml, renderReturnsHtml, renderPrivacyHtml, renderTermsHtml, renderHomeHtml } from "./staticPagePrerender";
 import { buildInfo } from "./buildInfo";
 import { registerCommerceRoutes } from "./commerce/routes";
 import { registerTestCheckoutRoutes } from "./commerce/testCheckout";
@@ -2200,13 +2200,10 @@ Crawl-delay: 1
         //
         // Copy, markup and styling are byte-for-byte what shipped; only the placement moved.
         if (req.path === "/") {
-          const homeSsr =
-            `<section id="prerender-home" style="padding:3rem 1.5rem;max-width:820px;margin:0 auto;font-family:system-ui,sans-serif">` +
-            `<h1 style="font-size:2.5rem;font-weight:700;color:#0f172a;margin-bottom:1rem">Ani Muradyan</h1>` +
-            `<p style="font-size:1.1rem;line-height:1.7;color:#475569;margin-bottom:1.5rem">Ani Muradyan is an Armenian contemporary oil painter creating figurative works and landscapes \u2014 original oil paintings on canvas, available to collectors.</p>` +
-            `<p><a href="/artworks" style="color:#1d4ed8;text-decoration:underline">See all original paintings</a> \u00b7 <a href="/about" style="color:#1d4ed8;text-decoration:underline">About Ani Muradyan</a></p>` +
-            `</section>`;
-          html = html.replace('<div id="root"></div>', `<div id="root">${homeSsr}</div>`);
+          // The markup lives in ./staticPagePrerender (renderHomeHtml) as a pure function, like the
+          // other prerendered pages, so "the homepage server-renders links to /prints and /blog" is
+          // an assertable test, not a claim. Injected inside #root, where React's first render wipes it.
+          html = html.replace('<div id="root"></div>', `<div id="root">${renderHomeHtml()}</div>`);
         }
 
         // THE FOUR PAGES A CRAWLER COULD NOT READ AT ALL.

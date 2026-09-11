@@ -328,3 +328,27 @@ export function renderTermsHtml(): string {
     `</section>`
   );
 }
+
+/**
+ * THE HOMEPAGE, FOR A CRAWLER (and the first paint before React hydrates).
+ *
+ * Byte-for-byte the block that already shipped from routes.ts — same section id, same copy, same
+ * styling — with two links added so the homepage server-renders a path to the money page (/prints)
+ * and the editorial index (/blog), not only /artworks. These sit in the SAME sentence-style link
+ * row the page already had (Originals · Prints · Articles · About), in the site's own vocabulary
+ * ("Fine-art prints", "Articles" — the footer's label for /blog) — no keyword stuffing, no new
+ * section, no redesign. The caller injects this INSIDE <div id="root">, where React's first client
+ * render replaces it (the home page needs no client-side remover — see the note in routes.ts).
+ */
+export function renderHomeHtml(): string {
+  return (
+    `<section id="prerender-home" style="${WRAP}">` +
+    `<h1 style="${H1}">Ani Muradyan</h1>` +
+    `<p style="${LEAD}">Ani Muradyan is an Armenian contemporary oil painter creating figurative works and landscapes — original oil paintings on canvas, available to collectors.</p>` +
+    `<p><a href="/artworks" style="${LINK}">See all original paintings</a> · ` +
+    `<a href="/prints" style="${LINK}">Fine-art prints</a> · ` +
+    `<a href="/blog" style="${LINK}">Articles</a> · ` +
+    `<a href="/about" style="${LINK}">About Ani Muradyan</a></p>` +
+    `</section>`
+  );
+}
