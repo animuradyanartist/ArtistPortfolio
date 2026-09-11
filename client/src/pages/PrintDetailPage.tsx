@@ -9,7 +9,7 @@
  *
  * Every route out links back to the ORIGINAL painting, keeping the print-vs-original line clear.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { printViewState } from "@shared/printAvailability";
@@ -36,6 +36,7 @@ import {
   trackViewItemPrint,
   trackSelectItemPrint,
   trackAddToCartPrint,
+  createViewOnceGate,
 } from "@/lib/commerceAnalytics";
 
 interface Option {
@@ -195,7 +196,12 @@ export default function PrintDetailPage() {
     return list.filter(Boolean);
   }, [data?.images, selected?.mockup]);
 
-  // SEO + view_item (once per print).
+  // SEO + view_item (once per print). SEO re-runs whenever `data` changes, but the product-view
+  // event fires ONCE per print id: on a direct PDP load `data` transitions from the SSR-preloaded
+  // copy to the fetched copy (same print), and without this guard that fired view_item / ViewContent
+  // twice. `viewedIdRef` persists across the preload→fetch swap and across SPA navigation, so a
+  // different print (new id) still gets its own view.
+  const viewGate = useRef(createViewOnceGate());
   useEffect(() => {
     if (!data) return;
     document.title = `${data.title} — Fine-Art Print · Ani Muradyan`;
@@ -205,6 +211,7 @@ export default function PrintDetailPage() {
     updateCanonicalUrl(`/prints/${data.slug}`);
     // NO GA for preview/demo products — demo prices must never enter analytics.
     if (data.preview) return;
+    if (!viewGate.current(data.id)) return; // fire the product view ONCE per print (preload→fetch is one view)
     trackViewItemPrint({
       id: data.id,
       title: data.title,
