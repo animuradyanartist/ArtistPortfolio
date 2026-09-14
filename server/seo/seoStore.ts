@@ -8,6 +8,7 @@
 
 import { pool, hasDatabase } from "../db";
 import { cacheKey, decideCache, TTL_HOURS, type SeoDataType } from "@shared/seo/cache";
+import { withBudgetHold } from "./dataForSeoBudget";
 
 // ── Keywords ──────────────────────────────────────────────────────────────────────────────
 export interface KeywordRow {
@@ -125,7 +126,9 @@ async function logUsage(dataType: string, endpoint: string, cost: number | null,
 
 /**
  * The ONE gate every DataForSEO call goes through. Serves fresh cache without paying (dedup),
- * otherwise calls `fetcher`, stores the raw response, and logs usage. `now` is injectable for tests.
+ * otherwise RESERVES the purchase in the shared DataForSEO budget (see ./dataForSeoBudget — fails
+ * closed when unconfigured or over the cap), calls `fetcher`, settles the real cost, stores the raw
+ * response, and logs usage. `now` is injectable for tests.
  */
 export async function cachedFetch<T>(
   dataType: SeoDataType,
@@ -146,7 +149,7 @@ export async function cachedFetch<T>(
     }
   }
 
-  const { data, cost } = await fetcher();
+  const { data, cost } = await withBudgetHold(dataType, params, endpoint, fetcher);
 
   if (hasDatabase) {
     const expiresAt = new Date(now + TTL_HOURS[dataType] * 3600 * 1000);
