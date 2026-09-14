@@ -105,7 +105,7 @@ export async function withBudgetHold<T>(
   }
   const f = opts.fetchImpl ?? fetch;
   const holdId = randomUUID();
-  const estimatedUsd = Number((estimateCostUsd(dataType, params) * RESERVE_MARGIN).toFixed(4));
+  const estimatedUsd = Number((estimateCostUsd(dataType, params) * RESERVE_MARGIN).toFixed(6));
   const reserved = await rpc(cfg, "dataforseo_budget_reserve", {
     p_token: cfg.token, p_hold_id: holdId, p_estimated_usd: estimatedUsd, p_endpoint: endpoint,
     p_request_key: dataType, p_max_total_usd: null, p_ttl_seconds: 900,

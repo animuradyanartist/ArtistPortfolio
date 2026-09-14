@@ -57,7 +57,7 @@ describe("settle / uncertain / release", () => {
     const b = fakeBudget();
     const out = await withBudgetHold("keyword_overview", params, "e", async () => ({ data: [1], cost: 0.01224 }), { env: ENV, fetchImpl: b.fetchImpl });
     expect(b.calls.map((c) => c.fn)).toEqual(["dataforseo_budget_reserve", "dataforseo_budget_settle"]);
-    expect(b.calls[0]!.body.p_estimated_usd).toBe(Number((0.01236 * RESERVE_MARGIN).toFixed(4)));
+    expect(b.calls[0]!.body.p_estimated_usd).toBe(Number((0.01236 * RESERVE_MARGIN).toFixed(6)));
     expect(b.calls[1]!.body.p_hold_id).toBe(b.calls[0]!.body.p_hold_id);
     expect(b.calls[1]!.body.p_actual_usd).toBe(0.01224);
     expect(out.settled).toBe(true);
