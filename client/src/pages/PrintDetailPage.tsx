@@ -30,6 +30,7 @@ import {
   printPriceCurrency,
 } from "@/lib/printSelector";
 import { SizeSelect } from "@/components/SizeSelect";
+import { activePrintPromo, promoPriceMinor } from "@/lib/printPromo";
 import { useCart } from "@/lib/cart";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -427,9 +428,33 @@ function BuyBlock({ detail, option, navigate }: { detail: PrintDetail; option: O
     navigate(printCheckoutHref(option.id, qty));
   };
 
+  // PROMO — DISPLAY ONLY. Shows the discounted price for THIS variant beside the normal one, plus the
+  // code to enter. The real discount is applied + re-validated server-side at checkout; this only
+  // mirrors it so a landing visitor sees the offer before checkout. Auto-hides once the promo ends.
+  const promo = activePrintPromo();
+  const priceMinor = option.priceMinor!;
+  const discountedMinor = promo ? promoPriceMinor(priceMinor, promo.percentOff) : null;
+
   return (
     <div>
-      <p className="font-playfair text-3xl text-stone-900 mb-1 tabular-nums">{money(option.priceMinor!, option.currency)}</p>
+      {promo && discountedMinor != null ? (
+        <div className="mb-1">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p className="font-playfair text-3xl text-stone-900 tabular-nums">{money(discountedMinor, option.currency)}</p>
+            <p className="font-playfair text-xl text-stone-400 line-through tabular-nums">
+              <span className="sr-only">Regular price </span>{money(priceMinor, option.currency)}
+            </p>
+            <span className="text-[10px] tracking-[0.15em] uppercase text-stone-600 border border-stone-300 px-1.5 py-0.5">
+              {promo.percentOff}% off
+            </span>
+          </div>
+          <p className="text-xs text-stone-600 mt-1.5">
+            Use code <span className="font-medium tracking-wide">{promo.code}</span> at checkout · offer ends {promo.endsLabel}
+          </p>
+        </div>
+      ) : (
+        <p className="font-playfair text-3xl text-stone-900 mb-1 tabular-nums">{money(priceMinor, option.currency)}</p>
+      )}
       <p className="text-xs text-stone-500 mb-5">Printed to order · ships worldwide · shipping calculated at checkout{option.effectiveDpi ? ` · ${option.effectiveDpi} DPI` : ""}</p>
 
       <div className="flex items-center gap-3 mb-5">
@@ -457,7 +482,17 @@ function BuyBlock({ detail, option, navigate }: { detail: PrintDetail; option: O
           In your <Link href="/cart" className="border-b border-stone-400 hover:border-stone-800">cart</Link> — each item is checked out on its own.
         </p>
       )}
-      <p className="text-xs text-stone-500 mt-3">Payment is handled by Stripe. Your card details never reach this website.</p>
+      {/* Buyer reassurance — every line is drawn from the site's own Shipping / Returns policy, never
+          an invented claim. Keeps the cold-visitor's three biggest questions (delivery, what-if-it's-
+          damaged, is-payment-safe) answered right at the point of purchase. */}
+      <ul className="mt-4 space-y-1.5 text-xs text-stone-500 leading-relaxed">
+        <li>Made to order, then shipped worldwide with tracked delivery.</li>
+        <li>
+          Arrives damaged or not as described?{" "}
+          <Link href="/returns" className="border-b border-stone-300 hover:border-stone-700">Free replacement or refund within 14 days</Link>.
+        </li>
+        <li>Secure checkout by Stripe — your card details never reach this website.</li>
+      </ul>
     </div>
   );
 }
